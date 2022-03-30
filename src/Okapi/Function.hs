@@ -51,6 +51,7 @@ module Okapi.Function
     abort,
     abort500,
     abort401,
+    abort403,
     abort404,
     abort422,
     (<!>),
@@ -425,6 +426,9 @@ abort500 = abort 500
 
 abort401 :: forall a m. MonadOkapi m => [HTTP.Header] -> LBS.ByteString -> m a
 abort401 = abort 401
+
+abort403 :: forall a m. MonadOkapi m => [HTTP.Header] -> LBS.ByteString -> m a
+abort403 = abort 403
 
 abort404 :: forall a m. MonadOkapi m => [HTTP.Header] -> LBS.ByteString -> m a
 abort404 = abort 404
