@@ -52,7 +52,7 @@ divOp = do
   seg "div"
   (x, y) <- getArgs
   if y == 0
-    then abort401 [] ""
+    then abort403 [] "Forbidden"
     else respondJSON [] $ DivResult {answer = x `div` y, remainder = x `mod` y}
 
 getArgs :: Okapi (Int, Int)
