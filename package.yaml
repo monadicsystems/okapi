@@ -74,6 +74,20 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - okapi
+  servant-exe:
+    main:                Main.hs
+    source-dirs:         examples/servant
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - lucid
+    - parser-combinators
+    - servant
+    - servant-lucid
+    - servant-server
 
 tests:
   okapi-test:

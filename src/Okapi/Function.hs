@@ -13,7 +13,7 @@ module Okapi.Function
   ( -- FOR RUNNING OKAPI
     runOkapi,
     runOkapiTLS,
-    makeApp,
+    makeOkapiApp,
     -- METHOD PARSERS
     get,
     post,
@@ -101,15 +101,15 @@ import Prelude hiding (head)
 runOkapi :: Monad m => (forall a. m a -> IO a) -> Int -> OkapiT m Response -> IO ()
 runOkapi hoister port okapiT = do
   print $ "Running servo on port " <> show port
-  Warp.run port $ makeApp hoister okapiT
+  Warp.run port $ makeOkapiApp hoister okapiT
 
 runOkapiTLS :: Monad m => (forall a. m a -> IO a) -> TLSSettings -> Settings -> OkapiT m Response -> IO ()
 runOkapiTLS hoister tlsSettings settings okapiT = do
   print "Running servo on port 43"
-  Warp.runTLS tlsSettings settings $ makeApp hoister okapiT
+  Warp.runTLS tlsSettings settings $ makeOkapiApp hoister okapiT
 
-makeApp :: Monad m => (forall a. m a -> IO a) -> OkapiT m Response -> Wai.Application
-makeApp hoister okapiT request respond = do
+makeOkapiApp :: Monad m => (forall a. m a -> IO a) -> OkapiT m Response -> Wai.Application
+makeOkapiApp hoister okapiT request respond = do
   (eitherErrorsOrResponse, state) <- (runStateT . runExceptT . unOkapiT $ hoist hoister okapiT) (False, False, request)
   case eitherErrorsOrResponse of
     Left Skip -> respond $ Wai.responseLBS HTTP.status404 [] ""
