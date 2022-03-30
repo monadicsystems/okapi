@@ -6,10 +6,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.Type where
@@ -115,13 +113,13 @@ type Response = Wai.Response
 
 data Error = Skip | Abort Response
 
-instance Semigroup Error where
-  Skip <> someError = someError
-  someError <> Skip = someError
-  abort1@(Abort _) <> abort2@(Abort _) = abort1
+-- instance Semigroup Error where
+--   Skip <> someError = someError
+--   someError <> Skip = someError
+--   abort1@(Abort _) <> abort2@(Abort _) = abort1
 
-instance Monoid Error where
-  mempty = Skip
+-- instance Monoid Error where
+--   mempty = Skip
 
 newtype OkapiT m a = OkapiT {unOkapiT :: ExceptT Error (StateT Request m) a}
   deriving newtype
@@ -206,10 +204,10 @@ instance MonadIO m => MonadIO (OkapiT m) where
 instance MonadReader r m => MonadReader r (OkapiT m) where
   ask = lift ask
   local = mapOkapiT . local
+    where
+      mapOkapiT :: (m (Either Error a, Request) -> n (Either Error b, Request)) -> OkapiT m a -> OkapiT n b
+      mapOkapiT f okapiT = OkapiT . ExceptT . StateT $ f . runStateT (runExceptT $ unOkapiT okapiT)
   reader = lift . reader
-
-mapOkapiT :: (m (Either Error a, Request) -> n (Either Error b, Request)) -> OkapiT m a -> OkapiT n b
-mapOkapiT f okapiT = OkapiT . ExceptT . StateT $ f . runStateT (runExceptT $ unOkapiT okapiT)
 
 instance MonadTrans OkapiT where
   lift :: Monad m => m a -> OkapiT m a

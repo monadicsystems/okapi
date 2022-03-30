@@ -3,16 +3,61 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Function where
+module Okapi.Function
+  ( -- FOR RUNNING OKAPI
+    runOkapi,
+    runOkapiTLS,
+    makeApp,
+    -- METHOD PARSERS
+    get,
+    post,
+    head,
+    put,
+    delete,
+    trace,
+    connect,
+    options,
+    patch,
+    -- PATH PARSERS
+    seg,
+    segs,
+    segParam,
+    segWith,
+    segParamAs,
+    path,
+    -- QUERY PARAM PARSERS
+    queryParam,
+    queryParamAs,
+    queryParamFlag,
+    -- HEADER PARSERS
+    header,
+    auth,
+    basicAuth,
+    -- BODY PARSERS
+    bodyJSON,
+    bodyForm,
+    -- RESPOND FUNCTIONS
+    respondPlainText,
+    respondJSON,
+    respondHTML,
+    -- ERROR FUNCTIONS
+    skip,
+    abort,
+    abort500,
+    abort401,
+    abort404,
+    abort422,
+    (<!>),
+    optionalAbort,
+    optionAbort,
+  )
+where
 
 import Control.Applicative
 import Control.Monad
@@ -22,7 +67,6 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Morph
 import Control.Monad.RWS (MonadReader (local), join)
 import Control.Monad.Reader.Class (MonadReader (ask, reader))
-import Control.Monad.State.Class (MonadState (..))
 import qualified Control.Monad.State.Class as State
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.State (StateT (..))
@@ -35,7 +79,7 @@ import Data.ByteString.Char8 (pack)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable
-import Data.List (delete, deleteBy)
+import qualified Data.List as List
 import Data.Maybe (isJust, listToMaybe)
 import Data.Text (Text, unpack)
 import Data.Text.Encoding (decodeUtf8, encodeUtf8)
@@ -50,8 +94,9 @@ import Okapi.Type
 import Text.Read (readMaybe)
 import Web.FormUrlEncoded (FromForm (fromForm), urlDecodeAsForm)
 import qualified Web.HttpApiData as HTTP
+import Prelude hiding (head)
 
--- FOR RUNNING SERVOS
+-- FOR RUNNING OKAPI
 
 runOkapi :: Monad m => (forall a. m a -> IO a) -> Int -> OkapiT m Response -> IO ()
 runOkapi hoister port okapiT = do
@@ -111,9 +156,9 @@ method method = do
       | isMethodParsed request = throwError Skip
       | not $ methodMatches request method = throwError Skip
       | otherwise = do
-          liftIO $ print $ "Method parsed: " <> decodeUtf8 method
-          State.put $ methodParsed request
-          pure ()
+        liftIO $ print $ "Method parsed: " <> decodeUtf8 method
+        State.put $ methodParsed request
+        pure ()
 
 -- PARSING PATHS
 
@@ -151,12 +196,12 @@ segWith predicate = do
     logic :: Request -> m ()
     logic request
       | not $ segMatches request predicate = do
-          liftIO $ print "Couldn't match seg"
-          throwError Skip
+        liftIO $ print "Couldn't match seg"
+        throwError Skip
       | otherwise = do
-          liftIO $ print $ "Path parsed: " <> show (getSeg request)
-          State.put $ segParsed request
-          pure ()
+        liftIO $ print $ "Path parsed: " <> show (getSeg request)
+        State.put $ segParsed request
+        pure ()
 
 -- | TODO: Change Read a constraint to custom typeclass or FromHTTPApiData
 -- | Parses a single seg segment, and returns the parsed seg segment as a value of the given type
@@ -185,8 +230,8 @@ path pathMatch = do
     logic request
       | getPath request /= pathMatch = throwError Skip
       | otherwise = do
-          State.put $ pathParsed request
-          pure ()
+        State.put $ pathParsed request
+        pure ()
 
 -- PARSING QUERY PARAMETERS
 
@@ -202,15 +247,15 @@ queryParam key = do
       | not $ isMethodParsed request = throwError Skip
       | not $ isPathParsed request = throwError Skip
       | otherwise =
-          case getQueryItem request (key ==) of
-            Nothing -> throwError Skip
-            Just queryItem -> case queryItem of
-              (_, Nothing) ->
-                throwError Skip
-              (_, Just valueBS) -> do
-                liftIO $ print $ "Query param parsed: " <> "(" <> key <> "," <> decodeUtf8 valueBS <> ")"
-                State.put $ queryParamParsed request queryItem
-                pure $ decodeUtf8 valueBS
+        case getQueryItem request (key ==) of
+          Nothing -> throwError Skip
+          Just queryItem -> case queryItem of
+            (_, Nothing) ->
+              throwError Skip
+            (_, Just valueBS) -> do
+              liftIO $ print $ "Query param parsed: " <> "(" <> key <> "," <> decodeUtf8 valueBS <> ")"
+              State.put $ queryParamParsed request queryItem
+              pure $ decodeUtf8 valueBS
 
 -- | Parses a query parameter with the given name and returns the value as the given type
 queryParamAs :: forall a m. (MonadOkapi m, Read a) => Text -> m a
@@ -224,18 +269,18 @@ queryParamAs key = do
       | not $ isMethodParsed request = throwError Skip
       | not $ isPathParsed request = throwError Skip
       | otherwise =
-          case getQueryItem request (key ==) of
-            Nothing -> throwError Skip
-            Just queryItem -> case queryItem of
-              (_, Nothing) ->
+        case getQueryItem request (key ==) of
+          Nothing -> throwError Skip
+          Just queryItem -> case queryItem of
+            (_, Nothing) ->
+              throwError Skip
+            (_, Just valueBS) -> case readBSMaybe valueBS of
+              Nothing ->
                 throwError Skip
-              (_, Just valueBS) -> case readBSMaybe valueBS of
-                Nothing ->
-                  throwError Skip
-                Just value -> do
-                  liftIO $ print $ "Query param parsed: " <> "(" <> key <> "," <> decodeUtf8 valueBS <> ")"
-                  State.put $ queryParamParsed request queryItem
-                  pure value
+              Just value -> do
+                liftIO $ print $ "Query param parsed: " <> "(" <> key <> "," <> decodeUtf8 valueBS <> ")"
+                State.put $ queryParamParsed request queryItem
+                pure value
 
 queryParamFlag :: forall m. MonadOkapi m => Text -> m Bool
 queryParamFlag key = do
@@ -248,12 +293,12 @@ queryParamFlag key = do
       | not $ isMethodParsed request = throwError Skip
       | not $ isPathParsed request = throwError Skip
       | otherwise =
-          case getQueryItem request (key ==) of
-            Nothing -> pure False
-            Just queryItem -> do
-              liftIO $ print $ "Query param exists: " <> key
-              State.put $ queryParamParsed request queryItem
-              pure True
+        case getQueryItem request (key ==) of
+          Nothing -> pure False
+          Just queryItem -> do
+            liftIO $ print $ "Query param exists: " <> key
+            State.put $ queryParamParsed request queryItem
+            pure True
 
 -- PARSING HEADERS
 
@@ -309,16 +354,16 @@ bodyJSON = do
       | not $ isMethodParsed request = throwError Skip
       | not $ isPathParsed request = throwError Skip
       | otherwise =
-          do
-            body <- liftIO $ getRequestBody request
-            case decode body of
-              Nothing -> do
-                liftIO $ print $ "Couldn't parse " <> (show body)
-                throwError Skip
-              Just value -> do
-                liftIO $ print "JSON body parsed"
-                State.put $ bodyParsed request
-                pure value
+        do
+          body <- liftIO $ getRequestBody request
+          case decode body of
+            Nothing -> do
+              liftIO $ print $ "Couldn't parse " <> (show body)
+              throwError Skip
+            Just value -> do
+              liftIO $ print "JSON body parsed"
+              State.put $ bodyParsed request
+              pure value
 
 bodyForm :: forall a m. (MonadOkapi m, FromForm a) => m a
 bodyForm = do
@@ -331,14 +376,14 @@ bodyForm = do
       | not $ isMethodParsed request = throwError Skip
       | not $ isPathParsed request = throwError Skip
       | otherwise =
-          do
-            body <- liftIO $ getRequestBody request
-            case eitherToMaybe $ urlDecodeAsForm body of
-              Nothing -> throwError Skip
-              Just value -> do
-                liftIO $ print "FormURLEncoded body parsed"
-                State.put $ bodyParsed request
-                pure value
+        do
+          body <- liftIO $ getRequestBody request
+          case eitherToMaybe $ urlDecodeAsForm body of
+            Nothing -> throwError Skip
+            Just value -> do
+              liftIO $ print "FormURLEncoded body parsed"
+              State.put $ bodyParsed request
+              pure value
 
 -- RESPONSE FUNCTIONS
 
@@ -364,8 +409,8 @@ respond waiResponse = do
       | not $ isQueryParamsParsed request = throwError Skip
       -- not $ isBodyParsed request = throwError Skip
       | otherwise = do
-          liftIO $ print "Responded from servo, passing off to WAI"
-          pure waiResponse
+        liftIO $ print "Responded from servo, passing off to WAI"
+        pure waiResponse
 
 -- ERROR FUNCTIONS
 
@@ -411,10 +456,10 @@ optionalAbort parser = (Just <$> parser) <!> pure Nothing
 
 optionAbort :: Monad m => a -> OkapiT m a -> OkapiT m a
 optionAbort value parser = do
-    mbValue <- optionalAbort parser
-    case mbValue of
-        Nothing -> pure value
-        Just value' -> pure value'
+  mbValue <- optionalAbort parser
+  case mbValue of
+    Nothing -> pure value
+    Just value' -> pure value'
 
 -- PARSING GUARDS AND SWITCHES
 
@@ -469,12 +514,12 @@ pathParsed (methodParsed, bodyParsed, waiRequest) =
 
 queryParamParsed :: Request -> HTTP.QueryItem -> Request
 queryParamParsed (methodParsed, bodyParsed, waiRequest) queryItem =
-  (methodParsed, bodyParsed, waiRequest {Wai.queryString = Data.List.delete queryItem (Wai.queryString waiRequest)})
+  (methodParsed, bodyParsed, waiRequest {Wai.queryString = List.delete queryItem (Wai.queryString waiRequest)})
 
--- TODO: Don't delete header??
+-- TODO: Don't List.delete header??
 headerParsed :: Request -> HTTP.Header -> Request
 headerParsed (methodParsed, bodyParsed, waiRequest) header =
-  (methodParsed, bodyParsed, waiRequest {Wai.requestHeaders = Data.List.delete header (Wai.requestHeaders waiRequest)})
+  (methodParsed, bodyParsed, waiRequest {Wai.requestHeaders = List.delete header (Wai.requestHeaders waiRequest)})
 
 bodyParsed :: Request -> Request
 bodyParsed (methodParsed, False, waiRequest) =
