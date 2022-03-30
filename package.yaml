@@ -39,9 +39,35 @@ library:
   source-dirs: src
 
 executables:
-  okapi-exe:
+  realworld-exe:
     main:                Main.hs
-    source-dirs:         app
+    source-dirs:         examples/realworld
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - containers
+    - hasql
+    - hasql-th
+    - jwt
+    - parser-combinators
+    - time
+    - vector
+    - profunctors
+  calc-exe:
+    main:                Main.hs
+    source-dirs:         examples/calc
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+  todo-exe:
+    main:                Main.hs
+    source-dirs:         examples/todo
     ghc-options:
     - -threaded
     - -rtsopts
