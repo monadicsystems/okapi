@@ -45,6 +45,7 @@ module Okapi.Function
     -- RESPOND FUNCTIONS
     respondPlainText,
     respondJSON,
+    respondJSONAp,
     respondHTML,
     -- ERROR FUNCTIONS
     skip,
@@ -101,7 +102,7 @@ import Prelude hiding (head)
 
 runOkapi :: Monad m => (forall a. m a -> IO a) -> Int -> OkapiT m Response -> IO ()
 runOkapi hoister port okapiT = do
-  print $ "Running servo on port " <> show port
+  print $ "Running Okapi App on port " <> show port
   Warp.run port $ makeOkapiApp hoister okapiT
 
 runOkapiTLS :: Monad m => (forall a. m a -> IO a) -> TLSSettings -> Settings -> OkapiT m Response -> IO ()
@@ -394,6 +395,9 @@ respondPlainText headers = respond . Wai.responseLBS HTTP.status200 ([("Content-
 respondJSON :: forall a m. (MonadOkapi m, ToJSON a) => [HTTP.Header] -> a -> m Response
 respondJSON headers = respond . Wai.responseLBS HTTP.status200 ([("Content-Type", "application/json")] <> headers) . encode
 
+respondJSONAp :: forall a m. (MonadOkapi m, ToJSON a) => [HTTP.Header] -> m a -> m Response
+respondJSONAp headers wrappedValue = respondAp $ Wai.responseLBS HTTP.status200 ([("Content-Type", "application/json")] <> headers) . encode <$> wrappedValue
+
 respondHTML :: forall m. MonadOkapi m => [HTTP.Header] -> LBS.ByteString -> m Response
 respondHTML headers = respond . Wai.responseLBS HTTP.status200 ([("Content-Type", "text/html")] <> headers)
 
@@ -412,6 +416,11 @@ respond waiResponse = do
       | otherwise = do
         liftIO $ print "Responded from servo, passing off to WAI"
         pure waiResponse
+
+respondAp :: forall m. MonadOkapi m => m Wai.Response -> m Response
+respondAp wrappedWaiResponse = do
+  waiResponse <- wrappedWaiResponse
+  respond waiResponse
 
 -- ERROR FUNCTIONS
 
