@@ -109,6 +109,7 @@ import qualified Web.Cookie as Cookie
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 import Prelude hiding (error, head)
+import Control.Applicative.Combinators
 
 -- FOR RUNNING OKAPI
 
@@ -230,8 +231,12 @@ queryParamRaw queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   maybe skip pure queryItemValue
 
-queryFlag :: forall a m. MonadOkapi m => Text.Text -> m ()
-queryFlag queryItemName = parseQueryItem queryItemName >> pure ()
+queryFlag :: forall a m. MonadOkapi m => Text.Text -> m Bool
+queryFlag queryItemName = do
+  maybeQueryItem <- optional $ parseQueryItem queryItemName
+  pure $ case maybeQueryItem of
+    Nothing -> False
+    Just _  -> True
 
 -- HEADER HELPERS
 
