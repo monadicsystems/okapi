@@ -19,6 +19,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - aeson >= 1.4.7
+- attoparsec
 - base >= 4.7 && < 5
 - base64
 - bytestring
@@ -33,6 +34,7 @@ dependencies:
 # - random
 - parser-combinators
 - stm
+- template-haskell
 - text
 - transformers
 - unagi-chan

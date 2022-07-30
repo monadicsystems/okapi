@@ -43,6 +43,7 @@ library
       src
   build-depends:
       aeson >=1.4.7
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , bytestring
@@ -56,6 +57,7 @@ library
     , mtl
     , parser-combinators
     , stm
+    , template-haskell
     , text
     , transformers
     , unagi-chan
@@ -76,6 +78,7 @@ executable calculator-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , bytestring
@@ -90,6 +93,7 @@ executable calculator-exe
     , okapi
     , parser-combinators
     , stm
+    , template-haskell
     , text
     , transformers
     , unagi-chan
@@ -110,6 +114,7 @@ executable todo-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , bytestring
@@ -125,6 +130,7 @@ executable todo-exe
     , parser-combinators
     , sqlite-simple
     , stm
+    , template-haskell
     , text
     , transformers
     , unagi-chan
@@ -146,6 +152,7 @@ test-suite okapi-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7
+    , attoparsec
     , base >=4.7 && <5
     , base64
     , bytestring
@@ -160,6 +167,7 @@ test-suite okapi-test
     , okapi
     , parser-combinators
     , stm
+    , template-haskell
     , text
     , transformers
     , unagi-chan

@@ -1,4 +1,87 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Okapi.QuasiQuotes where
+
+import Control.Applicative
+import Control.Applicative.Combinators
+import Control.Monad (forM)
+import Data.Attoparsec.Text
+import Data.Char (isAlpha, isAlphaNum, isUpper)
+import Data.Text
+import GHC.Unicode (isAscii)
+import Language.Haskell.TH
+import Language.Haskell.TH.Quote
+
+data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam CurlyExpr
+  deriving (Eq, Show)
+
+data CurlyExpr
+  = CurlyExpr
+      Text -- type name
+      [Text] -- transform function names
+      (Maybe Text) -- filter function name
+  deriving (Eq, Show)
+
+parseCurlyExpr :: Parser CurlyExpr
+parseCurlyExpr = do
+  between (char '{') (char '}') $ do
+    typeName <- Data.Attoparsec.Text.takeWhile (\char -> isAlphaNum char && '|' /= char && '-' /= char)
+    transformFunctionNames <- many $ do
+      string "->"
+      Data.Attoparsec.Text.takeWhile isAlphaNum
+    filterFunctionName <- optional $ do
+      char '|'
+      Data.Attoparsec.Text.takeWhile isAlphaNum
+    pure $ CurlyExpr typeName transformFunctionNames filterFunctionName
+
+routeParser :: Parser [RoutePart]
+routeParser = do
+  skipSpace
+  routePart <- parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam
+  (routePart :) <$> routeParser
+  where
+    parseMethod :: Parser RoutePart
+    parseMethod = do
+      method <- Data.Attoparsec.Text.takeWhile isUpper
+      case method of
+        "GET" -> pure $ Method "GET"
+        "POST" -> pure $ Method "POST"
+        "DELETE" -> pure $ Method "DELETE"
+        "PUT" -> pure $ Method "PUT"
+        "PATCH" -> pure $ Method "PATCH"
+        _ -> fail "Couldn't parse method"
+
+    parsePathSegMatch :: Parser RoutePart
+    parsePathSegMatch = do
+      char '/'
+      match <- Data.Attoparsec.Text.takeWhile isAlpha
+      pure $ PathSegMatch match
+
+    parseAnonPathSeg :: Parser RoutePart
+    parseAnonPathSeg = do
+      char '/'
+      curlyExpr <- parseCurlyExpr
+      pure $ AnonPathSeg curlyExpr
+
+    parseAnonQueryParam :: Parser RoutePart
+    parseAnonQueryParam = do
+      char '?'
+      queryParamName <- Data.Attoparsec.Text.takeWhile isAlphaNum
+      curlyExpr <- parseCurlyExpr
+      pure $ AnonQueryParam curlyExpr
+
+genRoute :: QuasiQuoter
+genRoute =
+  QuasiQuoter
+    { quoteExp = genRouteExp . pack,
+      quotePat = undefined,
+      quoteType = undefined,
+      quoteDec = undefined
+    }
+  where
+    genRouteExp :: Text -> Q Exp
+    genRouteExp txt = do
+      undefined
 
 {-
 newtype URL = URL Text
@@ -17,7 +100,7 @@ route1 <> route2 = Route
   { parser = do
       route1
       route2
-  , url = 
+  , url =
   }
 
 data RouteParams = forall a. RouteParams (Map Text a)
@@ -39,12 +122,14 @@ cons :: URL -> URL -> URL
 cons Empty Empty            = Empty
 cons Empty pp@(PathPiece _) = Path Empty pp
 cons Empty p@(Path _ _)     = p
-cons pp1@(Path _ _) 
+cons pp1@(Path _ _)
 
 -- Expand on type safe URL building. Will need it either way
 
 data Genre = Fantasy | SciFi | NonFiction | Romance
+-}
 
+{-
 -- booksRoute :: ? -- Type isn't known until code is generated at compile time
 booksRoute = [Okapi.route|GET /books /{Maybe BookID} ?author{Maybe Author} ?genre{Maybe Genre}|]
 
