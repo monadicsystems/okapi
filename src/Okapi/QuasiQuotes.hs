@@ -70,6 +70,10 @@ parseAnonQueryParam = do
   curlyExpr <- parseCurlyExpr
   pure $ AnonQueryParam curlyExpr
 
+routePartsToExp :: [RoutePart] -> Exp
+routePartsToExp [] = undefined
+routePartsToExp routeParts = undefined
+
 genRoute :: QuasiQuoter
 genRoute =
   QuasiQuoter
@@ -81,7 +85,10 @@ genRoute =
   where
     genRouteExp :: Text -> Q Exp
     genRouteExp txt = do
-      undefined
+      let parserResult = parseOnly routeParser txt
+      case parserResult of
+        Left _ -> undefined
+        Right routeParts -> pure $ routePartsToExp routeParts
 
 test1 :: IO ()
 test1 = do
