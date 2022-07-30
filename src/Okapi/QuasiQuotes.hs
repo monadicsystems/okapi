@@ -25,7 +25,7 @@ data CurlyExpr
 parseCurlyExpr :: Parser CurlyExpr
 parseCurlyExpr = do
   between (char '{') (char '}') $ do
-    typeName <- Data.Attoparsec.Text.takeWhile (\char -> isAlphaNum char && '|' /= char && '-' /= char)
+    typeName <- Data.Attoparsec.Text.takeWhile (\char -> isAlphaNum char || char == '[' || char == ']' || char == '(' || char == ')')
     transformFunctionNames <- many $ do
       string "->"
       Data.Attoparsec.Text.takeWhile isAlphaNum
@@ -35,40 +35,40 @@ parseCurlyExpr = do
     pure $ CurlyExpr typeName transformFunctionNames filterFunctionName
 
 routeParser :: Parser [RoutePart]
-routeParser = do
+routeParser = many $ do
   skipSpace
-  routePart <- parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam
-  (routePart :) <$> routeParser
-  where
-    parseMethod :: Parser RoutePart
-    parseMethod = do
-      method <- Data.Attoparsec.Text.takeWhile isUpper
-      case method of
-        "GET" -> pure $ Method "GET"
-        "POST" -> pure $ Method "POST"
-        "DELETE" -> pure $ Method "DELETE"
-        "PUT" -> pure $ Method "PUT"
-        "PATCH" -> pure $ Method "PATCH"
-        _ -> fail "Couldn't parse method"
+  parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam
 
-    parsePathSegMatch :: Parser RoutePart
-    parsePathSegMatch = do
-      char '/'
-      match <- Data.Attoparsec.Text.takeWhile isAlpha
-      pure $ PathSegMatch match
+parseMethod :: Parser RoutePart
+parseMethod = do
+  method <- Data.Attoparsec.Text.takeWhile isUpper
+  case method of
+    "GET" -> pure $ Method "GET"
+    "HEAD" -> pure $ Method "HEAD"
+    "POST" -> pure $ Method "POST"
+    "DELETE" -> pure $ Method "DELETE"
+    "PUT" -> pure $ Method "PUT"
+    "PATCH" -> pure $ Method "PATCH"
+    _ -> fail "Couldn't parse method"
 
-    parseAnonPathSeg :: Parser RoutePart
-    parseAnonPathSeg = do
-      char '/'
-      curlyExpr <- parseCurlyExpr
-      pure $ AnonPathSeg curlyExpr
+parsePathSegMatch :: Parser RoutePart
+parsePathSegMatch = do
+  char '/'
+  match <- Data.Attoparsec.Text.takeWhile1 isAlpha
+  pure $ PathSegMatch match
 
-    parseAnonQueryParam :: Parser RoutePart
-    parseAnonQueryParam = do
-      char '?'
-      queryParamName <- Data.Attoparsec.Text.takeWhile isAlphaNum
-      curlyExpr <- parseCurlyExpr
-      pure $ AnonQueryParam curlyExpr
+parseAnonPathSeg :: Parser RoutePart
+parseAnonPathSeg = do
+  char '/'
+  curlyExpr <- parseCurlyExpr
+  pure $ AnonPathSeg curlyExpr
+
+parseAnonQueryParam :: Parser RoutePart
+parseAnonQueryParam = do
+  char '?'
+  queryParamName <- Data.Attoparsec.Text.takeWhile isAlphaNum
+  curlyExpr <- parseCurlyExpr
+  pure $ AnonQueryParam curlyExpr
 
 genRoute :: QuasiQuoter
 genRoute =
@@ -82,6 +82,14 @@ genRoute =
     genRouteExp :: Text -> Q Exp
     genRouteExp txt = do
       undefined
+
+test1 :: IO ()
+test1 = do
+  let result = parseOnly routeParser "GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
+      goal = Right [Method "GET", Method "HEAD", PathSegMatch "movies", AnonPathSeg (CurlyExpr "Date" [] (Just "isModern")), AnonQueryParam (CurlyExpr "Director" [] Nothing), AnonQueryParam (CurlyExpr "[Actor]" ["childActors", "bornInIndiana"] (Just "notEmpty")), AnonQueryParam (CurlyExpr "Gender" [] Nothing)]
+  if result == goal
+    then print "PASSED!"
+    else print "FAILED!"
 
 {-
 newtype URL = URL Text
@@ -166,6 +174,8 @@ moviesRoute = [Okapi.route|
   ?actors{[Actor]->childActors->bornInIndiana|notEmpty}
   ?female
 |]
+
+"GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
 
 THE ABOVE MAY BE PARTIAL ROUTES WITHOUT EVERY PIECE OF A URL
 
