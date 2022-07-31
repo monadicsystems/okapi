@@ -2,9 +2,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE QuasiQuotes #-}
 
 --- !!!!!!TODO: HTTParser :TODO!!!!!!
 
@@ -13,6 +13,7 @@ module Okapi.QuasiQuotes where
 import Control.Applicative
 import Control.Applicative.Combinators
 import Control.Monad (forM)
+import Control.Monad.IO.Class
 import Data.Attoparsec.Text
 import Data.Char (isAlpha, isAlphaNum, isUpper)
 import Data.Maybe (catMaybes, mapMaybe)
@@ -23,7 +24,6 @@ import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Okapi (OkapiT, Response)
 import System.Random
-import Control.Monad.IO.Class
 
 data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr
   deriving (Eq, Show)
@@ -122,7 +122,7 @@ lambdaBody (combo : combos) = UInfixE (helper combo) (VarE $ mkName "<>") (lambd
     helper :: (Maybe Name, HTTPDataType) -> Exp
     helper (Nothing, PathSegType match) = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL $ "/" <> unpack match)
     helper (Just name, AnonPathParamType) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL "/") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toUrlPiece") (VarE name)))
-    helper (Just name, AnonQueryParamType queryParamName) = AppE (ConE (mkName "Okapi.URL"))(UInfixE (LitE $ StringL $ unpack $ "?" <> queryParamName <> "=") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toQueryParam") (VarE name)))
+    helper (Just name, AnonQueryParamType queryParamName) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL $ unpack $ "?" <> queryParamName <> "=") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toQueryParam") (VarE name)))
     helper _ = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
 
 routePartStmtAndBinding :: RoutePart -> Q (Maybe (Name, Type), Maybe HTTPDataType, Stmt)
