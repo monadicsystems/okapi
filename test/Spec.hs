@@ -29,7 +29,7 @@ someRoute = [genRoute|GET HEAD /movies /{Int|isModern} ?director{Text} ?actors{T
 testSomeRoute :: IO ()
 testSomeRoute = do
   let urlFunc = url someRoute
-  print $ urlFunc (5, "John Smith", "World", "true")
+  print $ urlFunc (5, "John", "World", "true")
 
 testServer :: Okapi Okapi.Response
 testServer = do
