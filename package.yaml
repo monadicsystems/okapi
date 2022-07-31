@@ -33,6 +33,7 @@ dependencies:
 - mtl
 # - random
 - parser-combinators
+- random
 - stm
 - template-haskell
 - text

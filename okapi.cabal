@@ -56,6 +56,7 @@ library
     , mmorph
     , mtl
     , parser-combinators
+    , random
     , stm
     , template-haskell
     , text
@@ -92,6 +93,7 @@ executable calculator-exe
     , mtl
     , okapi
     , parser-combinators
+    , random
     , stm
     , template-haskell
     , text
@@ -128,6 +130,7 @@ executable todo-exe
     , mtl
     , okapi
     , parser-combinators
+    , random
     , sqlite-simple
     , stm
     , template-haskell
@@ -166,6 +169,7 @@ test-suite okapi-test
     , mtl
     , okapi
     , parser-combinators
+    , random
     , stm
     , template-haskell
     , text

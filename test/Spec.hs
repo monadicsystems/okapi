@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Monad.Combinators
 import Control.Monad.IO.Class
@@ -14,10 +16,20 @@ import Network.Wai
 import Network.Wai.EventSource (ServerEvent (RetryEvent))
 import Network.Wai.Test
 import Okapi
-import qualified Okapi (Response)
+import qualified Okapi
 import Okapi.Test
+import Okapi.QuasiQuotes
+import qualified Okapi.QuasiQuotes as Okapi
+import Web.HttpApiData
 
 type Okapi = OkapiT IO
+
+someRoute = [genRoute|GET HEAD /movies /{Int|isModern} ?director{Text} ?actors{Text->childActors->bornInIndiana|notEmpty} ?female{Text}|]
+
+testSomeRoute :: IO ()
+testSomeRoute = do
+  let urlFunc = url someRoute
+  print $ urlFunc (5, "John Smith", "World", "true")
 
 testServer :: Okapi Okapi.Response
 testServer = do
@@ -95,4 +107,6 @@ testSession = do
 --   >>= assertStatus 200
 
 main :: IO ()
-main = Okapi.Test.runSession testSession liftIO testServer
+main = do
+  testSomeRoute
+  Okapi.Test.runSession testSession liftIO testServer

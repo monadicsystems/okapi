@@ -1,4 +1,12 @@
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE QuasiQuotes #-}
+
+--- !!!!!!TODO: HTTParser :TODO!!!!!!
 
 module Okapi.QuasiQuotes where
 
@@ -7,32 +15,37 @@ import Control.Applicative.Combinators
 import Control.Monad (forM)
 import Data.Attoparsec.Text
 import Data.Char (isAlpha, isAlphaNum, isUpper)
+import Data.Maybe (catMaybes, mapMaybe)
+import Data.String (IsString)
 import Data.Text
 import GHC.Unicode (isAscii)
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
+import Okapi (OkapiT, Response)
+import System.Random
+import Control.Monad.IO.Class
 
-data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam CurlyExpr
+data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr
   deriving (Eq, Show)
 
-data CurlyExpr
-  = CurlyExpr
-      Text -- type name
-      [Text] -- transform function names
-      (Maybe Text) -- filter function name
-  deriving (Eq, Show)
+newtype URL = URL {unURL :: Text}
+  deriving newtype (IsString, Semigroup, Monoid, Eq, Ord, Show)
+
+data Route input = Route
+  { parser :: forall m. (Monad m, MonadIO m) => OkapiT m Response,
+    url :: input -> URL
+  }
 
 parseCurlyExpr :: Parser CurlyExpr
-parseCurlyExpr = do
-  between (char '{') (char '}') $ do
-    typeName <- Data.Attoparsec.Text.takeWhile (\char -> isAlphaNum char || char == '[' || char == ']' || char == '(' || char == ')')
-    transformFunctionNames <- many $ do
-      string "->"
-      Data.Attoparsec.Text.takeWhile isAlphaNum
-    filterFunctionName <- optional $ do
-      char '|'
-      Data.Attoparsec.Text.takeWhile isAlphaNum
-    pure $ CurlyExpr typeName transformFunctionNames filterFunctionName
+parseCurlyExpr = between (char '{') (char '}') $ do
+  typeName <- Data.Attoparsec.Text.takeWhile (\char -> isAlphaNum char || char == '[' || char == ']' || char == '(' || char == ')')
+  transformFunctionNames <- many $ do
+    string "->"
+    Data.Attoparsec.Text.takeWhile isAlphaNum
+  filterFunctionName <- optional $ do
+    char '|'
+    Data.Attoparsec.Text.takeWhile isAlphaNum
+  pure $ CurlyExpr typeName transformFunctionNames filterFunctionName
 
 routeParser :: Parser [RoutePart]
 routeParser = many $ do
@@ -60,19 +73,89 @@ parsePathSegMatch = do
 parseAnonPathSeg :: Parser RoutePart
 parseAnonPathSeg = do
   char '/'
-  curlyExpr <- parseCurlyExpr
-  pure $ AnonPathSeg curlyExpr
+  AnonPathSeg <$> parseCurlyExpr
 
 parseAnonQueryParam :: Parser RoutePart
 parseAnonQueryParam = do
   char '?'
   queryParamName <- Data.Attoparsec.Text.takeWhile isAlphaNum
-  curlyExpr <- parseCurlyExpr
-  pure $ AnonQueryParam curlyExpr
+  AnonQueryParam queryParamName <$> parseCurlyExpr
 
-routePartsToExp :: [RoutePart] -> Exp
-routePartsToExp [] = undefined
-routePartsToExp routeParts = undefined
+routePartsToExp :: [RoutePart] -> Q Exp
+routePartsToExp [] =
+  pure $
+    RecConE
+      (mkName "Route")
+      [ (mkName "parser", VarE (mkName "Okapi.skip")),
+        (mkName "url", LamE [VarP $ mkName "unit"] (AppE (ConE $ mkName "Okapi.URL") (LitE $ StringL "")))
+      ]
+routePartsToExp routeParts = do
+  routePartStmtsAndBindings <- mapM routePartStmtAndBinding routeParts
+  let routePartStmts = Prelude.map (\(_, _, stmts) -> stmts) routePartStmtsAndBindings
+      bindingsAndTypes = mapMaybe (\(bandTs, _, _) -> bandTs) routePartStmtsAndBindings
+      bAndTHelper :: (Maybe (Name, Type), Maybe HTTPDataType, Stmt) -> Maybe (Maybe Name, HTTPDataType) = \case
+        (Nothing, Just pathSegType@(PathSegType seg), _) -> Just (Nothing, pathSegType)
+        (Just (name, _), Just httpDataType, _) -> Just (Just name, httpDataType)
+        _ -> Nothing
+      bindingsAndHTTPDataTypes :: [(Maybe Name, HTTPDataType)] = mapMaybe bAndTHelper routePartStmtsAndBindings
+      bindings = Prelude.map fst bindingsAndTypes
+      -- types = map snd bindingsAndTypes
+      returnStmt :: Stmt = NoBindS (AppE (VarE $ mkName "pure") (TupE (Prelude.map (Just . VarE) bindings)))
+  pure $
+    RecConE
+      (mkName "Okapi.Route")
+      [ (mkName "parser", UInfixE (ParensE (DoE Nothing $ routePartStmts <> [returnStmt])) (VarE $ mkName ">>") (AppE (VarE $ mkName "pure") (VarE $ mkName "Okapi.ok"))),
+        (mkName "url", LamE [lambdaPattern bindingsAndTypes] (lambdaBody bindingsAndHTTPDataTypes))
+      ]
+
+lambdaPattern :: [(Name, Type)] -> Pat
+lambdaPattern [] = WildP
+lambdaPattern [(n, t)] = SigP (VarP n) t
+lambdaPattern nAndTs = TupP $ Prelude.map (\(n, t) -> SigP (VarP n) t) nAndTs
+
+data HTTPDataType = PathSegType Text | AnonPathParamType | AnonQueryParamType Text
+
+lambdaBody :: [(Maybe Name, HTTPDataType)] -> Exp
+lambdaBody [] = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
+lambdaBody (combo : combos) = UInfixE (helper combo) (VarE $ mkName "<>") (lambdaBody combos)
+  where
+    helper :: (Maybe Name, HTTPDataType) -> Exp
+    helper (Nothing, PathSegType match) = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL $ "/" <> unpack match)
+    helper (Just name, AnonPathParamType) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL "/") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toUrlPiece") (VarE name)))
+    helper (Just name, AnonQueryParamType queryParamName) = AppE (ConE (mkName "Okapi.URL"))(UInfixE (LitE $ StringL $ unpack $ "?" <> queryParamName <> "=") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toQueryParam") (VarE name)))
+    helper _ = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
+
+routePartStmtAndBinding :: RoutePart -> Q (Maybe (Name, Type), Maybe HTTPDataType, Stmt)
+routePartStmtAndBinding rp = case rp of
+  Method m -> case m of
+    "GET" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.get"))
+    "HEAD" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.head"))
+    "POST" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.post"))
+    "DELETE" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.delete"))
+    "PUT" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.put"))
+    "PATCH" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.patch"))
+    _ -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.skip"))
+  PathSegMatch txt -> pure (Nothing, Just $ PathSegType txt, NoBindS (AppE (VarE $ mkName "Okapi.pathSeg") (LitE $ StringL $ unpack txt)))
+  AnonPathSeg (CurlyExpr typeName functionNamesToApply maybeGuardFunction) -> do
+    stmtBinding <- runIO randName
+    let stmt = BindS (SigP (VarP stmtBinding) (ConT $ mkName $ unpack typeName)) (VarE (mkName "Okapi.pathParam"))
+    pure (Just (stmtBinding, ConT $ mkName $ unpack typeName), Just AnonPathParamType, stmt)
+  AnonQueryParam queryParamName (CurlyExpr typeName functionNamesToApply maybeGuardFunction) -> do
+    stmtBinding <- runIO randName
+    let stmt = BindS (SigP (VarP stmtBinding) (ConT $ mkName $ unpack typeName)) (AppE (VarE (mkName "Okapi.queryParam")) (LitE $ StringL $ unpack queryParamName))
+    pure (Just (stmtBinding, ConT $ mkName $ unpack typeName), Just $ AnonQueryParamType queryParamName, stmt)
+
+randName :: IO Name
+randName = do
+  str <- fmap (Prelude.take 10 . randomRs ('a', 'z')) newStdGen
+  pure $ mkName str
+
+data CurlyExpr
+  = CurlyExpr
+      Text -- type name
+      [Text] -- transform function names
+      (Maybe Text) -- filter function name
+  deriving (Eq, Show)
 
 genRoute :: QuasiQuoter
 genRoute =
@@ -87,13 +170,22 @@ genRoute =
     genRouteExp txt = do
       let parserResult = parseOnly routeParser txt
       case parserResult of
-        Left _ -> undefined
-        Right routeParts -> pure $ routePartsToExp routeParts
+        Left _ -> routePartsToExp []
+        Right routeParts -> routePartsToExp routeParts
 
 test1 :: IO ()
 test1 = do
   let result = parseOnly routeParser "GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
-      goal = Right [Method "GET", Method "HEAD", PathSegMatch "movies", AnonPathSeg (CurlyExpr "Date" [] (Just "isModern")), AnonQueryParam (CurlyExpr "Director" [] Nothing), AnonQueryParam (CurlyExpr "[Actor]" ["childActors", "bornInIndiana"] (Just "notEmpty")), AnonQueryParam (CurlyExpr "Gender" [] Nothing)]
+      goal =
+        Right
+          [ Method "GET",
+            Method "HEAD",
+            PathSegMatch "movies",
+            AnonPathSeg (CurlyExpr "Date" [] (Just "isModern")),
+            AnonQueryParam "director" (CurlyExpr "Director" [] Nothing),
+            AnonQueryParam "actors" (CurlyExpr "[Actor]" ["childActors", "bornInIndiana"] (Just "notEmpty")),
+            AnonQueryParam "female" (CurlyExpr "Gender" [] Nothing)
+          ]
   if result == goal
     then print "PASSED!"
     else print "FAILED!"
