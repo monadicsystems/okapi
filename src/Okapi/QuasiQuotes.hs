@@ -105,7 +105,7 @@ routePartsToExp routeParts = do
     RecConE
       (mkName "Okapi.Route")
       [ (mkName "parser", UInfixE (ParensE (DoE Nothing $ routePartStmts <> [returnStmt])) (VarE $ mkName ">>") (AppE (VarE $ mkName "pure") (VarE $ mkName "Okapi.ok"))),
-        (mkName "url", LamE [lambdaPattern bindingsAndTypes] (lambdaBody bindingsAndHTTPDataTypes))
+        (mkName "url", LamE [lambdaPattern bindingsAndTypes] (lambdaBody True bindingsAndHTTPDataTypes))
       ]
 
 lambdaPattern :: [(Name, Type)] -> Pat
@@ -115,15 +115,29 @@ lambdaPattern nAndTs = TupP $ Prelude.map (\(n, t) -> SigP (VarP n) t) nAndTs
 
 data HTTPDataType = PathSegType Text | AnonPathParamType | AnonQueryParamType Text
 
-lambdaBody :: [(Maybe Name, HTTPDataType)] -> Exp
-lambdaBody [] = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
-lambdaBody (combo : combos) = UInfixE (helper combo) (VarE $ mkName "<>") (lambdaBody combos)
+isQueryParamType :: HTTPDataType -> Bool
+isQueryParamType (AnonQueryParamType _) = True
+isQueryParamType _ = False
+
+lambdaBody :: Bool -> [(Maybe Name, HTTPDataType)] -> Exp
+lambdaBody _ [] = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
+lambdaBody isFirstQueryParam (combo@(_, httpDataType) : combos) =
+  UInfixE
+    (helper isFirstQueryParam combo)
+    (VarE $ mkName "<>")
+    ( lambdaBody
+        ( if isQueryParamType httpDataType && isFirstQueryParam
+            then False
+            else isFirstQueryParam
+        )
+        combos
+    )
   where
-    helper :: (Maybe Name, HTTPDataType) -> Exp
-    helper (Nothing, PathSegType match) = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL $ "/" <> unpack match)
-    helper (Just name, AnonPathParamType) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL "/") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toUrlPiece") (VarE name)))
-    helper (Just name, AnonQueryParamType queryParamName) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL $ unpack $ "?" <> queryParamName <> "=") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toQueryParam") (VarE name)))
-    helper _ = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
+    helper :: Bool -> (Maybe Name, HTTPDataType) -> Exp
+    helper _ (Nothing, PathSegType match) = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL $ "/" <> unpack match)
+    helper _ (Just name, AnonPathParamType) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL "/") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toUrlPiece") (VarE name)))
+    helper isFirstQueryParam' (Just name, AnonQueryParamType queryParamName) = AppE (ConE (mkName "Okapi.URL")) (UInfixE (LitE $ StringL $ unpack $ (if isFirstQueryParam' then "?" else "&") <> queryParamName <> "=") (VarE $ mkName "<>") (ParensE $ AppE (VarE $ mkName "toQueryParam") (VarE name)))
+    helper _ _ = AppE (ConE (mkName "Okapi.URL")) (LitE $ StringL "")
 
 routePartStmtAndBinding :: RoutePart -> Q (Maybe (Name, Type), Maybe HTTPDataType, Stmt)
 routePartStmtAndBinding rp = case rp of
