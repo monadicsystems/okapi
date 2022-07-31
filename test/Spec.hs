@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Control.Monad.Combinators
 import Control.Monad.IO.Class
@@ -17,19 +17,35 @@ import Network.Wai.EventSource (ServerEvent (RetryEvent))
 import Network.Wai.Test
 import Okapi
 import qualified Okapi
-import Okapi.Test
 import Okapi.QuasiQuotes
 import qualified Okapi.QuasiQuotes as Okapi
+import Okapi.Test
 import Web.HttpApiData
 
 type Okapi = OkapiT IO
 
 someRoute = [genRoute|GET HEAD /movies /{Int|isModern} ?director{Text} ?actors{Text->childActors->bornInIndiana|notEmpty} ?female{Text}|]
 
+someRoute2 =
+  [genRoute|
+  GET
+  HEAD
+  /movies
+  /{Int|isModern}
+  ?director{Text}
+  ?actors{Text->childActors->bornInIndiana|notEmpty}
+  ?female{Text}
+  >>= Okapi.respond
+  |]
+
+myResponse = undefined
+
 testSomeRoute :: IO ()
 testSomeRoute = do
   let urlFunc = url someRoute
   putStrLn $ show $ urlFunc (5, "John", "World", "true")
+  let urlFunc2 = url someRoute2
+  putStrLn $ show $ urlFunc (5, "John", "World", "true") == urlFunc2 (5, "John", "World", "true")
 
 testServer :: Okapi Okapi.Response
 testServer = do
@@ -103,6 +119,9 @@ testSession = do
   send (TestRequest methodGet [] "/a" "")
     >>= assertStatus 200
 
+-- testSession2 = do
+--   send (TestRequest methodGet [] "/")
+
 -- send (TestRequest methodGet [] "/" "") ?? Maybe because of how path is stored in srequest
 --   >>= assertStatus 200
 
@@ -110,3 +129,5 @@ main :: IO ()
 main = do
   testSomeRoute
   Okapi.Test.runSession testSession liftIO testServer
+
+-- Okapi.Test.runSession testSession2 liftIO (parser someRoute2)

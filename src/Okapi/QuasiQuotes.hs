@@ -2,7 +2,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -16,6 +15,7 @@ import Control.Monad (forM)
 import Control.Monad.IO.Class
 import Data.Attoparsec.Text
 import Data.Char (isAlpha, isAlphaNum, isUpper)
+import Data.List.NonEmpty
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.String (IsString)
 import Data.Text
@@ -25,7 +25,7 @@ import Language.Haskell.TH.Quote
 import Okapi (OkapiT, Response)
 import System.Random
 
-data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr
+data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr | Bind Text
   deriving (Eq, Show)
 
 newtype URL = URL {unURL :: Text}
@@ -50,7 +50,7 @@ parseCurlyExpr = between (char '{') (char '}') $ do
 routeParser :: Parser [RoutePart]
 routeParser = many $ do
   skipSpace
-  parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam
+  parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam <|> parseBind
 
 parseMethod :: Parser RoutePart
 parseMethod = do
@@ -81,6 +81,13 @@ parseAnonQueryParam = do
   queryParamName <- Data.Attoparsec.Text.takeWhile isAlphaNum
   AnonQueryParam queryParamName <$> parseCurlyExpr
 
+parseBind :: Parser RoutePart
+parseBind = do
+  string ">>="
+  skipSpace
+  functionName <- Data.Attoparsec.Text.takeWhile1 isAlphaNum
+  pure $ Bind functionName
+
 routePartsToExp :: [RoutePart] -> Q Exp
 routePartsToExp [] =
   pure $
@@ -90,7 +97,9 @@ routePartsToExp [] =
         (mkName "url", LamE [VarP $ mkName "unit"] (AppE (ConE $ mkName "Okapi.URL") (LitE $ StringL "")))
       ]
 routePartsToExp routeParts = do
-  routePartStmtsAndBindings <- mapM routePartStmtAndBinding routeParts
+  let notBinds = Prelude.dropWhile isBind routeParts
+      binds = Prelude.takeWhile isBind routeParts
+  routePartStmtsAndBindings <- mapM routePartStmtAndBinding notBinds
   let routePartStmts = Prelude.map (\(_, _, stmts) -> stmts) routePartStmtsAndBindings
       bindingsAndTypes = mapMaybe (\(bandTs, _, _) -> bandTs) routePartStmtsAndBindings
       bAndTHelper :: (Maybe (Name, Type), Maybe HTTPDataType, Stmt) -> Maybe (Maybe Name, HTTPDataType) = \case
@@ -101,12 +110,35 @@ routePartsToExp routeParts = do
       bindings = Prelude.map fst bindingsAndTypes
       -- types = map snd bindingsAndTypes
       returnStmt :: Stmt = NoBindS (AppE (VarE $ mkName "pure") (TupE (Prelude.map (Just . VarE) bindings)))
+      leftSide = ParensE (DoE Nothing $ routePartStmts <> [returnStmt])
+      (middle, rightSide) =
+        case nonEmpty binds of
+          Nothing -> (VarE $ mkName ">>", AppE (VarE $ mkName "return") (VarE $ mkName "Okapi.ok"))
+          Just ((Bind functionName) :| []) -> (VarE $ mkName ">>=", VarE $ mkName $ unpack functionName)
+          Just ((Bind functionName) :| bs) -> (VarE $ mkName ">>=", loop bs)
+          _ -> (VarE $ mkName ">>", AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError"))
+      loop :: [RoutePart] -> Exp
+      loop [] = VarE $ mkName "return"
+      loop ((Bind functionName) : rps') = UInfixE (VarE $ mkName $ unpack functionName) (VarE $ mkName ">>=") (loop rps')
+      loop _ = LamE [WildP] $ AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError")
   pure $
     RecConE
       (mkName "Okapi.Route")
-      [ (mkName "parser", UInfixE (ParensE (DoE Nothing $ routePartStmts <> [returnStmt])) (VarE $ mkName ">>") (AppE (VarE $ mkName "pure") (VarE $ mkName "Okapi.ok"))),
+      [ (mkName "parser", UInfixE leftSide middle rightSide),
         (mkName "url", LamE [lambdaPattern bindingsAndTypes] (lambdaBody True bindingsAndHTTPDataTypes))
       ]
+
+isBind :: RoutePart -> Bool
+isBind (Bind _) = True
+isBind _ = False
+
+-- bindsExp :: NonEmpty RoutePart -> Exp
+-- bindsExp (Bind functionName) = VarE $ mkName $ unpack functionName
+-- bindsExp ((Bind functionName) :| rps) = UInfixE (VarE $ mkName $ unpack functionName) (VarE $ mkName ">>=") (loop rps)
+--   where
+--     loop :: [RoutePart] -> Exp
+--     loop [] = LamE [WildP] (VarE $ mkName "Okapi.skip")
+--     loop ((Bind functionName) : rps) = undefined
 
 lambdaPattern :: [(Name, Type)] -> Pat
 lambdaPattern [] = WildP
@@ -126,9 +158,7 @@ lambdaBody isFirstQueryParam (combo@(_, httpDataType) : combos) =
     (helper isFirstQueryParam combo)
     (VarE $ mkName "<>")
     ( lambdaBody
-        ( if isQueryParamType httpDataType && isFirstQueryParam
-            then False
-            else isFirstQueryParam
+        ( not (isQueryParamType httpDataType && isFirstQueryParam) && isFirstQueryParam
         )
         combos
     )
@@ -158,6 +188,7 @@ routePartStmtAndBinding rp = case rp of
     stmtBinding <- runIO randName
     let stmt = BindS (SigP (VarP stmtBinding) (ConT $ mkName $ unpack typeName)) (AppE (VarE (mkName "Okapi.queryParam")) (LitE $ StringL $ unpack queryParamName))
     pure (Just (stmtBinding, ConT $ mkName $ unpack typeName), Just $ AnonQueryParamType queryParamName, stmt)
+  Bind functionName -> pure (Nothing, Nothing, NoBindS $ AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError"))
 
 randName :: IO Name
 randName = do
