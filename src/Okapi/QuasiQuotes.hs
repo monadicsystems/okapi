@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 --- !!!!!!TODO: HTTParser :TODO!!!!!!
 
@@ -19,10 +20,11 @@ import Data.List.NonEmpty
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.String (IsString)
 import Data.Text
+import GHC.ExecutionStack (Location (functionName))
 import GHC.Unicode (isAscii)
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
-import Okapi (OkapiT, Response)
+import Okapi (OkapiT, Response, MonadOkapi)
 import System.Random
 
 data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr | Bind Text
@@ -31,9 +33,9 @@ data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQ
 newtype URL = URL {unURL :: Text}
   deriving newtype (IsString, Semigroup, Monoid, Eq, Ord, Show)
 
-data Route input = Route
-  { parser :: forall m. (Monad m, MonadIO m) => OkapiT m Response,
-    url :: input -> URL
+data Route m i o = Route
+  { parser :: OkapiT m o
+  , url    :: i -> URL
   }
 
 parseCurlyExpr :: Parser CurlyExpr
@@ -85,7 +87,7 @@ parseBind :: Parser RoutePart
 parseBind = do
   string ">>="
   skipSpace
-  functionName <- Data.Attoparsec.Text.takeWhile1 isAlphaNum
+  functionName <- Data.Attoparsec.Text.takeWhile1 (\char -> isAlphaNum char || char == '.')
   pure $ Bind functionName
 
 routePartsToExp :: [RoutePart] -> Q Exp
@@ -97,8 +99,8 @@ routePartsToExp [] =
         (mkName "url", LamE [VarP $ mkName "unit"] (AppE (ConE $ mkName "Okapi.URL") (LitE $ StringL "")))
       ]
 routePartsToExp routeParts = do
-  let notBinds = Prelude.dropWhile isBind routeParts
-      binds = Prelude.takeWhile isBind routeParts
+  let binds = Prelude.dropWhile (not . isBind) routeParts
+      notBinds = Prelude.takeWhile (not . isBind) routeParts
   routePartStmtsAndBindings <- mapM routePartStmtAndBinding notBinds
   let routePartStmts = Prelude.map (\(_, _, stmts) -> stmts) routePartStmtsAndBindings
       bindingsAndTypes = mapMaybe (\(bandTs, _, _) -> bandTs) routePartStmtsAndBindings
@@ -109,18 +111,17 @@ routePartsToExp routeParts = do
       bindingsAndHTTPDataTypes :: [(Maybe Name, HTTPDataType)] = mapMaybe bAndTHelper routePartStmtsAndBindings
       bindings = Prelude.map fst bindingsAndTypes
       -- types = map snd bindingsAndTypes
-      returnStmt :: Stmt = NoBindS (AppE (VarE $ mkName "pure") (TupE (Prelude.map (Just . VarE) bindings)))
+      returnStmt :: Stmt =
+        case bindings of
+          [] -> NoBindS (AppE (VarE $ mkName "pure") (ConE $ mkName "()"))
+          [binding] -> NoBindS (AppE (VarE $ mkName "pure") (VarE binding))
+          _ -> NoBindS (AppE (VarE $ mkName "pure") (TupE (Prelude.map (Just . VarE) bindings)))
       leftSide = ParensE (DoE Nothing $ routePartStmts <> [returnStmt])
       (middle, rightSide) =
-        case nonEmpty binds of
-          Nothing -> (VarE $ mkName ">>", AppE (VarE $ mkName "return") (VarE $ mkName "Okapi.ok"))
-          Just ((Bind functionName) :| []) -> (VarE $ mkName ">>=", VarE $ mkName $ unpack functionName)
-          Just ((Bind functionName) :| bs) -> (VarE $ mkName ">>=", loop bs)
+        case binds of
+          [] -> (VarE $ mkName ">>=", LamE [VarP $ mkName "params"] (AppE (VarE $ mkName "pure") (VarE $ mkName "params")))
+          [Bind functionName] -> (VarE $ mkName ">>=", VarE $ mkName $ unpack functionName)
           _ -> (VarE $ mkName ">>", AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError"))
-      loop :: [RoutePart] -> Exp
-      loop [] = VarE $ mkName "return"
-      loop ((Bind functionName) : rps') = UInfixE (VarE $ mkName $ unpack functionName) (VarE $ mkName ">>=") (loop rps')
-      loop _ = LamE [WildP] $ AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError")
   pure $
     RecConE
       (mkName "Okapi.Route")
@@ -311,12 +312,13 @@ bornInIndiana :: [Actor] -> [Actor]
 -- Could be gen parser
 -- parser generator for headers?
 moviesRoute = [Okapi.route|
-  GET HEAD
-  /movies
-  /{Date|isModern}
-  ?director{Director}
-  ?actors{[Actor]->childActors->bornInIndiana|notEmpty}
-  ?female
+    GET
+    HEAD
+    /movies
+    /{Date|isModern}
+    ?director{Director}
+    ?actors{[Actor]->childActors->bornInIndiana|notEmpty}
+    ?female
 |]
 
 "GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
@@ -327,17 +329,14 @@ THE ABOVE MAY BE PARTIAL ROUTES WITHOUT EVERY PIECE OF A URL
 -- Multiple Routes --
 ---------------------
 
-[Okapi.genApp|
-  [megaApp]
-    [app]
-      homeRoute     = GET /                                        >> getHome
-      moviesRoute   = GET /movies             >> authenticate      >> getMoviesHandler
-      putMovieRoute = PUT /movies /{MovieID} >>= authenticateData >>= putMovieHandler
-      getBooksRoute = GET /books              >> authenticate      >> getBooksHandler
-      putBookRoute  = PUT /books /{BookID}   >>= authenticateData >>= putBookHandler
-
-    [anotherApp]
-      anotherRoute = GET /anotherPath >> anotherHandler
+[Okapi.genRoute|
+  CHOOSE
+    GET /                                        >> getHome
+    GET /movies             >> authenticate      >> getMoviesHandler
+    PUT /movies /{MovieID} >>= authenticateData >>= putMovieHandler
+    GET /books              >> authenticate      >> getBooksHandler
+    PUT /books /{BookID}   >>= authenticateData >>= putBookHandle
+    GET /anotherPath >> anotherHandler
 
     someOtherRoute = ...
 |]
