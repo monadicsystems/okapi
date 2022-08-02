@@ -7,18 +7,18 @@ import qualified Control.Monad.Except as ExceptT
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.State.Strict as StateT
+import qualified Data.Bifunctor
 import Data.ByteString.Internal as BS
 import Data.ByteString.Lazy.Internal as LBS
 import Data.Function
+import Network.HTTP.Types (decodePath, queryToQueryText)
 import qualified Network.HTTP.Types as HTTP
+import Network.Wai (defaultRequest)
 import qualified Network.Wai as Wai
-import Network.Wai.Test (setRawPathInfo, SRequest (..))
+import Network.Wai.Test (SRequest (..), setRawPathInfo)
 import qualified Network.Wai.Test as Wai.Test
 import qualified Okapi
 import qualified Okapi.State as Okapi
-import Network.HTTP.Types (decodePath, queryToQueryText)
-import qualified Data.Bifunctor
-import Network.Wai (defaultRequest)
 
 data TestRequest = TestRequest
   { testRequestMethod :: HTTP.Method,
@@ -37,7 +37,10 @@ testParser hoister okapiT testRequest =
   (StateT.runStateT . ExceptT.runExceptT . Okapi.unOkapiT $ Morph.hoist hoister okapiT)
     (testRequestToState testRequest)
 
-testParserIO :: Okapi.OkapiT IO Okapi.Response -> TestRequest -> IO (Either Okapi.Failure Okapi.Response, Okapi.State)
+testParserIO ::
+  Okapi.OkapiT IO Okapi.Response ->
+  TestRequest ->
+  IO (Either Okapi.Failure Okapi.Response, Okapi.State)
 testParserIO = testParser id
 
 testRequestToState :: TestRequest -> Okapi.State
@@ -51,7 +54,7 @@ testRequestToState (TestRequest method headers rawPath body) =
       stateRequestMethodParsed = False
       stateRequestBodyParsed = False
       stateResponded = False
-    in Okapi.State {..}
+   in Okapi.State {..}
 
 -- ASSERTION FUNCTIONS
 
@@ -83,8 +86,8 @@ testRequestToSRequest :: TestRequest -> Wai.Test.SRequest
 testRequestToSRequest (TestRequest method headers rawPath body) =
   let requestMethod = method
       sRequestBody = body
-      sRequestRequest = Wai.Test.setPath (defaultRequest { Wai.requestMethod = method, Wai.requestHeaders = headers }) rawPath
-    in SRequest sRequestRequest sRequestBody
+      sRequestRequest = Wai.Test.setPath (defaultRequest {Wai.requestMethod = method, Wai.requestHeaders = headers}) rawPath
+   in SRequest sRequestRequest sRequestBody
 
 runSession ::
   Monad m =>
