@@ -12,6 +12,11 @@ makeOkapiApp hoister defaultResponse okapiT waiRequest respond = do
           Right succesfulResponse -> succesfulResponse
   responseToWaiApp response waiRequest respond
 
+makeOkapiAppWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> OkapiT m Response -> ConnectionOptions -> ServerApp -> Wai.Application
+makeOkapiAppWebsockets hoister defaultResponse okapiT connSettings serverApp =
+  let backup = makeOkapiApp hoister defaultResponse okapiT
+  in websocketsOr connSettings serverApp backup
+
 responseToWaiApp :: Response -> Wai.Application
 responseToWaiApp (Response {..}) waiRequest respond = case responseBody of
   ResponseBodyRaw body -> respond $ Wai.responseLBS (toEnum $ fromEnum responseStatus) responseHeaders body

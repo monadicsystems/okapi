@@ -69,8 +69,10 @@ library
     , vault
     , wai
     , wai-extra
+    , wai-websockets
     , warp
     , warp-tls
+    , websockets
   default-language: Haskell2010
 
 executable calculator-exe
@@ -106,8 +108,10 @@ executable calculator-exe
     , vault
     , wai
     , wai-extra
+    , wai-websockets
     , warp
     , warp-tls
+    , websockets
   default-language: Haskell2010
 
 executable todo-exe
@@ -144,8 +148,10 @@ executable todo-exe
     , vault
     , wai
     , wai-extra
+    , wai-websockets
     , warp
     , warp-tls
+    , websockets
   default-language: Haskell2010
 
 test-suite okapi-test
@@ -183,6 +189,8 @@ test-suite okapi-test
     , vault
     , wai
     , wai-extra
+    , wai-websockets
     , warp
     , warp-tls
+    , websockets
   default-language: Haskell2010

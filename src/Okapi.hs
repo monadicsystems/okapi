@@ -117,6 +117,11 @@ runOkapi hoister defaultResponse port okapiT = do
   print $ "Running Okapi App on port " <> show port
   Warp.run port $ makeOkapiApp hoister defaultResponse okapiT
 
+runOkapiWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> ServerApp -> IO ()
+runOkapiWebsockets hoister defaultResponse port okapiT serverApp = do
+  print $ "Running Okapi App on port " <> show port
+  Warp.run port $ makeOkapiAppWebsockets hoister defaultResponse okapiT serverApp
+
 runOkapiTLS :: Monad m => (forall a. m a -> IO a) -> Response -> Warp.TLSSettings -> Warp.Settings -> OkapiT m Response -> IO ()
 runOkapiTLS hoister defaultResponse tlsSettings settings okapiT = do
   print "Running servo on port 43"

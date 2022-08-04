@@ -42,8 +42,10 @@ dependencies:
 - vault
 - wai
 - wai-extra
+- wai-websockets
 - warp
 - warp-tls
+- websockets
 
 library:
   source-dirs: src
