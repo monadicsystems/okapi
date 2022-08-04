@@ -29,12 +29,16 @@ library
   exposed-modules:
       Okapi
       Okapi.Event
+      Okapi.Failure
+      Okapi.Internal.Functions.Application
+      Okapi.Internal.Functions.Event
+      Okapi.Internal.Functions.Parser
+      Okapi.Internal.Functions.Response
+      Okapi.Internal.Functions.Route
+      Okapi.Internal.Types
       Okapi.Parser
-      Okapi.QuasiQuotes
       Okapi.Response
-      Okapi.Routes
-      Okapi.State
-      Okapi.Synonym
+      Okapi.Route
       Okapi.Test
   other-modules:
       Paths_okapi
@@ -160,6 +164,7 @@ test-suite okapi-test
     , bytestring
     , containers
     , cookie
+    , doctest-parallel
     , extra
     , http-api-data
     , http-types

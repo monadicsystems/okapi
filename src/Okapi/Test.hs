@@ -18,14 +18,6 @@ import qualified Network.Wai as Wai
 import Network.Wai.Test (SRequest (..), setRawPathInfo)
 import qualified Network.Wai.Test as Wai.Test
 import qualified Okapi
-import qualified Okapi.State as Okapi
-
-data TestRequest = TestRequest
-  { testRequestMethod :: HTTP.Method,
-    testRequestHeaders :: HTTP.RequestHeaders,
-    testRequestRawPath :: BS.ByteString,
-    testRequestBody :: LBS.ByteString
-  }
 
 testParser ::
   Monad m =>
@@ -82,13 +74,6 @@ assertState assertion (_, parserResultState) = assertion parserResultState
 
 -- BELOW IS FOR USE WITH WAI TEST
 
-testRequestToSRequest :: TestRequest -> Wai.Test.SRequest
-testRequestToSRequest (TestRequest method headers rawPath body) =
-  let requestMethod = method
-      sRequestBody = body
-      sRequestRequest = Wai.Test.setPath (defaultRequest {Wai.requestMethod = method, Wai.requestHeaders = headers}) rawPath
-   in SRequest sRequestRequest sRequestBody
-
 runSession ::
   Monad m =>
   Wai.Test.Session a ->
@@ -118,3 +103,10 @@ send TestRequest {..} =
       simpleRequestBody = testRequestBody
       finalRequest = Wai.Test.SRequest simpleRequest simpleRequestBody
    in Wai.Test.srequest finalRequest
+
+testRequestToSRequest :: TestRequest -> Wai.Test.SRequest
+testRequestToSRequest (TestRequest method headers rawPath body) =
+  let requestMethod = method
+      sRequestBody = body
+      sRequestRequest = Wai.Test.setPath (defaultRequest {Wai.requestMethod = method, Wai.requestHeaders = headers}) rawPath
+   in SRequest sRequestRequest sRequestBody

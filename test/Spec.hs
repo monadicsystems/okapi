@@ -22,6 +22,12 @@ import qualified Okapi.QuasiQuotes as Okapi
 import Okapi.Test
 import Web.HttpApiData
 
+import Test.DocTest (mainFromCabal)
+import System.Environment (getArgs)
+
+runDoctests :: IO ()
+runDoctests = mainFromCabal "okapi" =<< getArgs
+
 type Okapi = OkapiT IO
 
 someRoute = [genRoute|
@@ -176,8 +182,26 @@ testSession = do
 -- send (TestRequest methodGet [] "/" "") ?? Maybe because of how path is stored in srequest
 --   >>= assertStatus 200
 
+test1 :: IO ()
+test1 = do
+  let result = parseOnly routeParser "GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
+      goal =
+        Right
+          [ Method "GET",
+            Method "HEAD",
+            PathSegMatch "movies",
+            AnonPathSeg (CurlyExpr "Date" [] (Just "isModern")),
+            AnonQueryParam "director" (CurlyExpr "Director" [] Nothing),
+            AnonQueryParam "actors" (CurlyExpr "[Actor]" ["childActors", "bornInIndiana"] (Just "notEmpty")),
+            AnonQueryParam "female" (CurlyExpr "Gender" [] Nothing)
+          ]
+  if result == goal
+    then print "PASSED!"
+    else print "FAILED!"
+
 main :: IO ()
 main = do
+  runDoctests
   testSomeRoute
   testSomeRoute3
   Okapi.Test.runSession testSession liftIO testServer

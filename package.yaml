@@ -31,7 +31,6 @@ dependencies:
 - lucid
 - mmorph
 - mtl
-# - random
 - parser-combinators
 - random
 - stm
@@ -146,3 +145,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - okapi
+    - doctest-parallel
