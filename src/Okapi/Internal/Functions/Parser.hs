@@ -11,15 +11,7 @@
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Internal.Parser
-  ( OkapiT,
-    MonadOkapi,
-    Failure,
-    skip,
-    throw,
-    (<!>),
-  )
-where
+module Okapi.Internal.Functions.Parser where
 
 import qualified Control.Applicative as Applicative
 import qualified Control.Concurrent.Chan as Chan
@@ -42,8 +34,9 @@ import qualified Data.Vault.Lazy as Vault
 import qualified GHC.Natural as Natural
 import qualified Network.HTTP.Types as HTTP
 import qualified Okapi.Event as Event
+import Okapi.Internal.Functions.Failure
+import Okapi.Internal.Types
 import Okapi.Response
-import Prelude hiding (error)
 
 -- PRIMITIVE PARSERS
 
@@ -98,6 +91,23 @@ parseBody = do
       body <- liftIO bodyRef
       State.modify (\state -> state {stateRequestBodyParsed = True})
       pure body
+
+-- State Checks
+
+methodParsed :: MonadOkapi m => m Bool
+methodParsed = State.gets stateRequestMethodParsed
+
+pathParsed :: MonadOkapi m => m Bool
+pathParsed = State.gets (Prelude.null . requestPath . stateRequest)
+
+queryParsed :: MonadOkapi m => m Bool
+queryParsed = State.gets (Prelude.null . requestQuery . stateRequest)
+
+headersParsed :: MonadOkapi m => m Bool
+headersParsed = State.gets (Prelude.null . requestHeaders . stateRequest)
+
+bodyParsed :: MonadOkapi m => m Bool
+bodyParsed = State.gets stateRequestBodyParsed
 
 {-
 TODO: HTTPDataStore? Not really needed because you can just pass data normally or store in own monad.

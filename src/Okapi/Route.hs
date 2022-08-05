@@ -1,10 +1,10 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
 
 --- !!!!!!TODO: Change Name of Okapi to HTTParser??? :TODO!!!!!!
 
@@ -24,11 +24,11 @@ import GHC.ExecutionStack (Location (functionName))
 import GHC.Unicode (isAscii)
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
-import Okapi (OkapiT, Response, MonadOkapi)
+import Okapi.Internal.Functions.Route
 import System.Random
 
-genRoute :: QuasiQuoter
-genRoute =
+route :: QuasiQuoter
+route =
   QuasiQuoter
     { quoteExp = genRouteExp . pack,
       quotePat = undefined,

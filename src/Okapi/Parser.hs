@@ -1,5 +1,24 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+
 module Okapi.Parser where
+
+import Control.Monad.Combinators
+import qualified Control.Monad.State.Strict as State
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Char8 as Char8
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import Data.Text.Encoding.Base64
+import qualified Network.HTTP.Types as HTTP
+import Okapi.Internal.Functions.Failure
+import Okapi.Internal.Functions.Parser
+import Okapi.Internal.Types
+import qualified Web.Cookie as Cookie
+import qualified Web.FormUrlEncoded as Web
+import qualified Web.HttpApiData as Web
 
 -- METHOD HELPERS
 
@@ -84,7 +103,7 @@ queryFlag queryItemName = do
   maybeQueryItem <- optional $ parseQueryItem queryItemName
   pure $ case maybeQueryItem of
     Nothing -> False
-    Just _  -> True
+    Just _ -> True
 
 -- HEADER HELPERS
 
@@ -133,25 +152,8 @@ bodyForm = do
       Right value -> Just value
 
 -- TODO: bodyFile functions for file uploads to server?
-bodyRaw :: forall m. MonadOkapi m => m LazyByteString.ByteString
+bodyRaw :: forall m. MonadOkapi m => m LBS.ByteString
 bodyRaw = parseBody
-
--- State Checks
-
-methodParsed :: MonadOkapi m => m Bool
-methodParsed = State.gets stateRequestMethodParsed
-
-pathParsed :: MonadOkapi m => m Bool
-pathParsed = State.gets (Prelude.null . requestPath . stateRequest)
-
-queryParsed :: MonadOkapi m => m Bool
-queryParsed = State.gets (Prelude.null . requestQuery . stateRequest)
-
-headersParsed :: MonadOkapi m => m Bool
-headersParsed = State.gets (Prelude.null . requestHeaders . stateRequest)
-
-bodyParsed :: MonadOkapi m => m Bool
-bodyParsed = State.gets stateRequestBodyParsed
 
 respond :: forall m. MonadOkapi m => Response -> m Response
 respond response = do

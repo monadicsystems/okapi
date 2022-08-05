@@ -2,18 +2,12 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
 
-module Okapi.Internal.Functions.Event
-  ( newEventSource,
-    sendEvent,
-    sendValue,
-    eventSourceAppUnagiChan,
-  )
-where
+module Okapi.Internal.Functions.Event where
 
 import qualified Control.Concurrent.Chan.Unagi as Unagi
 import qualified Control.Monad.IO.Class as IO
 import qualified Data.ByteString.Builder as Builder
-import qualified Data.ByteString.Lazy as ByteString
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Function as Function
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
@@ -23,7 +17,10 @@ import qualified Data.UUID.V4 as UUID
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.HTTP.Types.Status as HTTP
 import qualified Network.Wai as Wai
-import qualified Network.Wai.EventSource as EventSource
+import qualified Network.Wai.EventSource as Wai
+import Okapi.Internal.Types
+
+-- import Network.Wai.EventSource
 
 -- TODO: Below this point, put in Interface module
 eventSourceAppUnagiChan :: EventSource -> Wai.Application
@@ -31,7 +28,7 @@ eventSourceAppUnagiChan (inChan, _outChan) req sendResponse = do
   outChan <- IO.liftIO $ Unagi.dupChan inChan
   eventSourceAppIO (eventToServerEvent <$> Unagi.readChan outChan) req sendResponse
 
-eventSourceAppIO :: IO EventSource.ServerEvent -> Wai.Application
+eventSourceAppIO :: IO Wai.ServerEvent -> Wai.Application
 eventSourceAppIO src _ sendResponse =
   sendResponse $
     Wai.responseStream
@@ -45,11 +42,11 @@ eventSourceAppIO src _ sendResponse =
             Nothing -> return ()
             Just b -> sendChunk b >> flush >> loop
 
-eventToBuilder :: EventSource.ServerEvent -> Maybe Builder.Builder
-eventToBuilder (EventSource.CommentEvent txt) = Just $ field commentField txt
-eventToBuilder (EventSource.RetryEvent n) = Just $ field retryField (Builder.string8 . show $ n)
-eventToBuilder EventSource.CloseEvent = Nothing
-eventToBuilder (EventSource.ServerEvent n i d) =
+eventToBuilder :: Wai.ServerEvent -> Maybe Builder.Builder
+eventToBuilder (Wai.CommentEvent txt) = Just $ field commentField txt
+eventToBuilder (Wai.RetryEvent n) = Just $ field retryField (Builder.string8 . show $ n)
+eventToBuilder Wai.CloseEvent = Nothing
+eventToBuilder (Wai.ServerEvent n i d) =
   Just $
     mappend (name n (evid i $ evdata (mconcat d) nl)) nl
   where
@@ -73,11 +70,11 @@ commentField = Builder.char7 ':'
 field :: Builder.Builder -> Builder.Builder -> Builder.Builder
 field l b = l `mappend` b `mappend` nl
 
-eventToServerEvent :: Event -> EventSource.ServerEvent
+eventToServerEvent :: Event -> Wai.ServerEvent
 eventToServerEvent Event {..} =
-  EventSource.ServerEvent
+  Wai.ServerEvent
     (Builder.byteString . Text.encodeUtf8 <$> eventName)
     (Builder.byteString . Text.encodeUtf8 <$> eventID)
-    (Builder.word8 <$> ByteString.unpack eventData)
-eventToServerEvent (CommentEvent comment) = EventSource.CommentEvent $ Builder.lazyByteString comment
-eventToServerEvent CloseEvent = EventSource.CloseEvent
+    (Builder.word8 <$> LBS.unpack eventData)
+eventToServerEvent (CommentEvent comment) = Wai.CommentEvent $ Builder.lazyByteString comment
+eventToServerEvent CloseEvent = Wai.CloseEvent

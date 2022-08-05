@@ -1,24 +1,37 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Okapi.Internal.Functions.Route where
 
-parseCurlyExpr :: Parser CurlyExpr
-parseCurlyExpr = between (char '{') (char '}') $ do
-  typeName <- Data.Attoparsec.Text.takeWhile (\char -> isAlphaNum char || char == '[' || char == ']' || char == '(' || char == ')')
+import Control.Monad.Combinators
+import qualified Data.Attoparsec.Text as Atto
+import Data.Char
+import Data.Maybe
+import Data.Text
+import Language.Haskell.TH
+import Okapi.Internal.Types
+import System.Random
+
+parseCurlyExpr :: Atto.Parser CurlyExpr
+parseCurlyExpr = between (Atto.char '{') (Atto.char '}') $ do
+  typeName <- Atto.takeWhile (\char -> isAlphaNum char || char == '[' || char == ']' || char == '(' || char == ')')
   transformFunctionNames <- many $ do
-    string "->"
-    Data.Attoparsec.Text.takeWhile isAlphaNum
+    Atto.string "->"
+    Atto.takeWhile isAlphaNum
   filterFunctionName <- optional $ do
-    char '|'
-    Data.Attoparsec.Text.takeWhile isAlphaNum
+    Atto.char '|'
+    Atto.takeWhile isAlphaNum
   pure $ CurlyExpr typeName transformFunctionNames filterFunctionName
 
-routeParser :: Parser [RoutePart]
+routeParser :: Atto.Parser [RoutePart]
 routeParser = many $ do
-  skipSpace
+  Atto.skipSpace
   parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam <|> parseBind
 
-parseMethod :: Parser RoutePart
+parseMethod :: Atto.Parser RoutePart
 parseMethod = do
-  method <- Data.Attoparsec.Text.takeWhile isUpper
+  method <- Atto.takeWhile isUpper
   case method of
     "GET" -> pure $ Method "GET"
     "HEAD" -> pure $ Method "HEAD"
@@ -28,28 +41,28 @@ parseMethod = do
     "PATCH" -> pure $ Method "PATCH"
     _ -> fail "Couldn't parse method"
 
-parsePathSegMatch :: Parser RoutePart
+parsePathSegMatch :: Atto.Parser RoutePart
 parsePathSegMatch = do
-  char '/'
-  match <- Data.Attoparsec.Text.takeWhile1 isAlpha
+  Atto.char '/'
+  match <- Atto.takeWhile1 isAlpha
   pure $ PathSegMatch match
 
-parseAnonPathSeg :: Parser RoutePart
+parseAnonPathSeg :: Atto.Parser RoutePart
 parseAnonPathSeg = do
-  char '/'
+  Atto.char '/'
   AnonPathSeg <$> parseCurlyExpr
 
-parseAnonQueryParam :: Parser RoutePart
+parseAnonQueryParam :: Atto.Parser RoutePart
 parseAnonQueryParam = do
-  char '?'
-  queryParamName <- Data.Attoparsec.Text.takeWhile isAlphaNum
+  Atto.char '?'
+  queryParamName <- Atto.takeWhile isAlphaNum
   AnonQueryParam queryParamName <$> parseCurlyExpr
 
-parseBind :: Parser RoutePart
+parseBind :: Atto.Parser RoutePart
 parseBind = do
-  string ">>="
-  skipSpace
-  functionName <- Data.Attoparsec.Text.takeWhile1 (\char -> isAlphaNum char || char == '.')
+  Atto.string ">>="
+  Atto.skipSpace
+  functionName <- Atto.takeWhile1 (\char -> isAlphaNum char || char == '.')
   pure $ Bind functionName
 
 routePartsToExp :: [RoutePart] -> Q Exp

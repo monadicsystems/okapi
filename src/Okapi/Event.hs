@@ -1,4 +1,6 @@
 module Okapi.Event where
+import Okapi.Internal.Types
+import qualified Control.Concurrent.Chan.Unagi as Unagi
 
 -- TODO: Use MonadOkapi
 newEventSource :: IO EventSource

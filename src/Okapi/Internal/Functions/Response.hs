@@ -1,9 +1,11 @@
 {-# LANGUAGE RankNTypes #-}
-module Okapi.Internal.Response where
+{-# LANGUAGE RecordWildCards #-}
 
+module Okapi.Internal.Functions.Response where
+
+import qualified GHC.Natural as Natural
+import qualified Network.HTTP.Types as HTTP
 import Okapi.Internal.Types
-
--- RESPONSE SETTERS (Hidden)
 
 setResponseStatus :: Natural.Natural -> Response -> Response
 setResponseStatus status response = response {responseStatus = status}

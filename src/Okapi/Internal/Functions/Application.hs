@@ -1,10 +1,23 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Okapi.Internal.Functions.Application where
 
+import qualified Control.Monad.Except as Except
+import qualified Control.Monad.Morph as Morph
+import qualified Control.Monad.State.Strict as State
+import qualified Network.HTTP.Types as HTTP
+import qualified Network.Wai as Wai
+import Network.Wai.Handler.WebSockets
+import qualified Network.Wai.Handler.WebSockets as WS
+import qualified Network.Wai.Middleware.Gzip as Middleware
+import qualified Network.WebSockets as WS
+import Okapi.Internal.Functions.Event
+import Okapi.Internal.Types
+
 makeOkapiApp :: Monad m => (forall a. m a -> IO a) -> Response -> OkapiT m Response -> Wai.Application
 makeOkapiApp hoister defaultResponse okapiT waiRequest respond = do
-  (eitherFailureOrResponse, _state) <- (StateT.runStateT . ExceptT.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) (waiRequestToState waiRequest)
+  (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) (waiRequestToState waiRequest)
   let response =
         case eitherFailureOrResponse of
           Left Skip -> defaultResponse
@@ -12,16 +25,16 @@ makeOkapiApp hoister defaultResponse okapiT waiRequest respond = do
           Right succesfulResponse -> succesfulResponse
   responseToWaiApp response waiRequest respond
 
-makeOkapiAppWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> OkapiT m Response -> ConnectionOptions -> ServerApp -> Wai.Application
+makeOkapiAppWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> OkapiT m Response -> WS.ConnectionOptions -> WS.ServerApp -> Wai.Application
 makeOkapiAppWebsockets hoister defaultResponse okapiT connSettings serverApp =
   let backup = makeOkapiApp hoister defaultResponse okapiT
-  in websocketsOr connSettings serverApp backup
+   in WS.websocketsOr connSettings serverApp backup
 
 responseToWaiApp :: Response -> Wai.Application
 responseToWaiApp (Response {..}) waiRequest respond = case responseBody of
   ResponseBodyRaw body -> respond $ Wai.responseLBS (toEnum $ fromEnum responseStatus) responseHeaders body
   ResponseBodyFile filePath -> respond $ Wai.responseFile (toEnum $ fromEnum responseStatus) responseHeaders filePath Nothing
-  ResponseBodyEventSource eventSource -> (gzip def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
+  ResponseBodyEventSource eventSource -> (Middleware.gzip Middleware.def $ eventSourceAppUnagiChan eventSource) waiRequest respond
 
 waiRequestToState :: Wai.Request -> State
 waiRequestToState waiRequest =

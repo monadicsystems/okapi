@@ -14,6 +14,8 @@ import qualified GHC.Natural as Natural
 import qualified Lucid
 import qualified Network.HTTP.Types as HTTP
 import qualified Okapi.Event as Event
+import Okapi.Internal.Types
+import Okapi.Internal.Functions.Response
 
 -- BASE RESPONSES
 
@@ -90,7 +92,7 @@ json bytes response =
 file :: FilePath -> Response -> Response
 file path = setResponseBody (ResponseBodyFile path) -- TODO: setHeader???
 
-eventSource :: Event.EventSource -> Response -> Response
+eventSource :: EventSource -> Response -> Response
 eventSource source response =
   response
     & setResponseBody (ResponseBodyEventSource source)

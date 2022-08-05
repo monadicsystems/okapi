@@ -3,10 +3,10 @@
 
 module Okapi.Test where
 
-import qualified Control.Monad.Except as ExceptT
+import qualified Control.Monad.Except as Except
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.Morph as Morph
-import qualified Control.Monad.State.Strict as StateT
+import qualified Control.Monad.State.Strict as State
 import qualified Data.Bifunctor
 import Data.ByteString.Internal as BS
 import Data.ByteString.Lazy.Internal as LBS
@@ -17,58 +17,60 @@ import Network.Wai (defaultRequest)
 import qualified Network.Wai as Wai
 import Network.Wai.Test (SRequest (..), setRawPathInfo)
 import qualified Network.Wai.Test as Wai.Test
-import qualified Okapi
+import Okapi.Internal.Functions.Application
+import Okapi.Internal.Types
+import Okapi.Response
 
 testParser ::
   Monad m =>
   (forall a. m a -> IO a) ->
-  Okapi.OkapiT m Okapi.Response ->
+  OkapiT m Response ->
   TestRequest ->
-  IO (Either Okapi.Failure Okapi.Response, Okapi.State)
+  IO (Either Failure Response, State)
 testParser hoister okapiT testRequest =
-  (StateT.runStateT . ExceptT.runExceptT . Okapi.unOkapiT $ Morph.hoist hoister okapiT)
+  (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT)
     (testRequestToState testRequest)
 
 testParserIO ::
-  Okapi.OkapiT IO Okapi.Response ->
+  OkapiT IO Response ->
   TestRequest ->
-  IO (Either Okapi.Failure Okapi.Response, Okapi.State)
+  IO (Either Failure Response, State)
 testParserIO = testParser id
 
-testRequestToState :: TestRequest -> Okapi.State
+testRequestToState :: TestRequest -> State
 testRequestToState (TestRequest method headers rawPath body) =
   let requestMethod = method
       (requestPath, requestQuery) = Data.Bifunctor.second queryToQueryText $ decodePath rawPath
       requestBody = pure body
       requestHeaders = headers
       requestVault = mempty
-      stateRequest = Okapi.Request {..}
+      stateRequest = Request {..}
       stateRequestMethodParsed = False
       stateRequestBodyParsed = False
       stateResponded = False
-   in Okapi.State {..}
+   in State {..}
 
 -- ASSERTION FUNCTIONS
 
 assertFailure ::
-  (Okapi.Failure -> Bool) ->
-  (Either Okapi.Failure Okapi.Response, Okapi.State) ->
+  (Failure -> Bool) ->
+  (Either Failure Response, State) ->
   Bool
 assertFailure assertion parserResult = case parserResult of
   (Left failure, _) -> assertion failure
   _ -> False
 
 assertResponse ::
-  (Okapi.Response -> Bool) ->
-  (Either Okapi.Failure Okapi.Response, Okapi.State) ->
+  (Response -> Bool) ->
+  (Either Failure Response, State) ->
   Bool
 assertResponse assertion parserResult = case parserResult of
   (Right response, _) -> assertion response
   _ -> False
 
 assertState ::
-  (Okapi.State -> Bool) ->
-  (Either Okapi.Failure Okapi.Response, Okapi.State) ->
+  (State -> Bool) ->
+  (Either Failure Response, State) ->
   Bool
 assertState assertion (_, parserResultState) = assertion parserResultState
 
@@ -78,16 +80,16 @@ runSession ::
   Monad m =>
   Wai.Test.Session a ->
   (forall a. m a -> IO a) ->
-  Okapi.OkapiT m Okapi.Response ->
+  OkapiT m Response ->
   IO a
 runSession session hoister okapiT = do
-  let app = Okapi.makeOkapiApp hoister Okapi.notFound okapiT
+  let app = makeOkapiApp hoister notFound okapiT
   Wai.Test.runSession session app
 
 withSession ::
   Monad m =>
   (forall a. m a -> IO a) ->
-  Okapi.OkapiT m Okapi.Response ->
+  OkapiT m Response ->
   Wai.Test.Session a ->
   IO a
 withSession hoister okapiT session = runSession session hoister okapiT

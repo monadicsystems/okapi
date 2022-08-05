@@ -6,65 +6,25 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi
-  ( -- MODULES
-    module Okapi.Synonym,
+  ( module Okapi.Internal.Types,
+    module Okapi.Event,
+    module Okapi.Failure,
     module Okapi.Parser,
     module Okapi.Response,
-    -- TYPES
-    State,
-    Request,
-    ToSSE (..),
-    Event (..),
-    EventSource,
-    -- FOR RUNNING OKAPI
+    module Okapi.Route,
+    module Okapi.Test,
     runOkapi,
     runOkapiTLS,
-    makeOkapiApp,
-    -- METHOD HELPERS
-    method,
-    get,
-    post,
-    head,
-    put,
-    delete,
-    trace,
-    connect,
-    options,
-    patch,
-    anyMethod,
-    -- PATH HELPERS
-    pathSegWith,
-    pathSeg,
-    path,
-    pathParam,
-    pathParamRaw,
-    -- QUERY HELPERS
-    queryParam,
-    queryParamRaw,
-    queryFlag,
-    -- HEADER HELPERS
-    header,
-    basicAuth,
-    cookies,
-    -- BODY HELPERS
-    bodyRaw,
-    bodyJSON,
-    bodyForm,
-    -- SERVER SIDE EVENT HELPERS
-    newEventSource,
-    sendEvent,
-    sendValue,
-    -- RESPONSE HELPERS
-    respond,
+    runOkapiWebsockets
   )
 where
 
+import Control.Applicative.Combinators
 import qualified Control.Concurrent as Concurrent
 import qualified Control.Concurrent.STM.TVar as TVar
 import Control.Monad (MonadPlus, guard, (>=>))
@@ -99,28 +59,29 @@ import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WarpTLS as Warp
 import qualified Network.Wai.Internal as Wai
 import Network.Wai.Middleware.Gzip (def, gzip)
+import qualified Network.WebSockets as WS
 import Okapi.Event
 import qualified Okapi.Event as Event
+import Okapi.Failure
+import Okapi.Internal.Functions.Application
+import Okapi.Internal.Types
 import Okapi.Parser
 import Okapi.Response
-import Okapi.State
+import Okapi.Route
+import Okapi.Test
 import qualified Web.Cookie as Cookie
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
-import Prelude hiding (error, head)
-import Control.Applicative.Combinators
-
--- FOR RUNNING OKAPI
 
 runOkapi :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> IO ()
 runOkapi hoister defaultResponse port okapiT = do
   print $ "Running Okapi App on port " <> show port
   Warp.run port $ makeOkapiApp hoister defaultResponse okapiT
 
-runOkapiWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> ServerApp -> IO ()
-runOkapiWebsockets hoister defaultResponse port okapiT serverApp = do
+runOkapiWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> WS.ConnectionOptions -> WS.ServerApp -> IO ()
+runOkapiWebsockets hoister defaultResponse port okapiT connSettings serverApp = do
   print $ "Running Okapi App on port " <> show port
-  Warp.run port $ makeOkapiAppWebsockets hoister defaultResponse okapiT serverApp
+  Warp.run port $ makeOkapiAppWebsockets hoister defaultResponse okapiT connSettings serverApp
 
 runOkapiTLS :: Monad m => (forall a. m a -> IO a) -> Response -> Warp.TLSSettings -> Warp.Settings -> OkapiT m Response -> IO ()
 runOkapiTLS hoister defaultResponse tlsSettings settings okapiT = do

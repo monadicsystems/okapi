@@ -17,9 +17,6 @@ import Network.Wai.EventSource (ServerEvent (RetryEvent))
 import Network.Wai.Test
 import Okapi
 import qualified Okapi
-import Okapi.QuasiQuotes
-import qualified Okapi.QuasiQuotes as Okapi
-import Okapi.Test
 import Web.HttpApiData
 
 import Test.DocTest (mainFromCabal)
@@ -30,7 +27,7 @@ runDoctests = mainFromCabal "okapi" =<< getArgs
 
 type Okapi = OkapiT IO
 
-someRoute = [genRoute|
+someRoute = [route|
   GET
   HEAD
   /movies
@@ -45,7 +42,7 @@ someRouteHandler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
 someRouteHandler (_, _, _, _) = respond ok
 
 someRoute2 =
-  [genRoute|
+  [route|
   GET
   HEAD
   /movies
@@ -60,7 +57,7 @@ someRoute2Handler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
 someRoute2Handler (_, _, _, _) = respond ok
 
 someRoute3 =
-  [genRoute|
+  [route|
   GET
   /todos
   /{Int}
@@ -82,7 +79,7 @@ someRoute3TestSession = do
     >>= assertStatus 204
 
 testSomeRoute3 :: IO ()
-testSomeRoute3 = Okapi.Test.runSession someRoute3TestSession id (parser someRoute3)
+testSomeRoute3 = Okapi.runSession someRoute3TestSession id (parser someRoute3)
 
 testSomeRoute :: IO ()
 testSomeRoute = do
@@ -144,10 +141,10 @@ testServerQuasi = choice
  , parser4
  ]
  where
-  parser1 = parser [genRoute|GET /todos|] >> respond ok
-  parser2 = parser [genRoute|GET /todos /completed|] >> respond ok
-  parser3 = parser [genRoute|GET /todos ?status{Text}|] >>= (\status -> ok & plaintext status & respond)
-  parser4 = parser [genRoute|GET /a|] >> respond ok
+  parser1 = parser [route|GET /todos|] >> respond ok
+  parser2 = parser [route|GET /todos /completed|] >> respond ok
+  parser3 = parser [route|GET /todos ?status{Text}|] >>= (\status -> ok & plaintext status & respond)
+  parser4 = parser [route|GET /a|] >> respond ok
 
 testSession :: Session ()
 testSession = do
@@ -181,7 +178,7 @@ testSession = do
 
 -- send (TestRequest methodGet [] "/" "") ?? Maybe because of how path is stored in srequest
 --   >>= assertStatus 200
-
+{-
 test1 :: IO ()
 test1 = do
   let result = parseOnly routeParser "GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
@@ -198,13 +195,14 @@ test1 = do
   if result == goal
     then print "PASSED!"
     else print "FAILED!"
+-}
 
 main :: IO ()
 main = do
   runDoctests
   testSomeRoute
   testSomeRoute3
-  Okapi.Test.runSession testSession liftIO testServer
-  Okapi.Test.runSession testSession liftIO testServerQuasi
+  Okapi.runSession testSession liftIO testServer
+  Okapi.runSession testSession liftIO testServerQuasi
 
 -- Okapi.Test.runSession testSession2 liftIO (parser someRoute2)
