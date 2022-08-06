@@ -16,13 +16,12 @@ module Okapi.Response
     json,
     file,
     eventSource,
-    lucid,
     -- RESPONSE SETTERS
-    setResponseStatus,
-    setResponseBody,
-    setResponseBodyRaw,
-    setResponseHeaders,
-    setResponseHeader,
+    setStatus,
+    setBody,
+    setBodyRaw,
+    setHeaders,
+    setHeader,
   )
 where
 
@@ -34,7 +33,6 @@ import qualified Data.Text as Text
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as Text
 import qualified GHC.Natural as Natural
-import qualified Lucid
 import qualified Network.HTTP.Types as HTTP
 import qualified Okapi.Event as Event
 import Okapi.Types
@@ -95,44 +93,41 @@ redirect (URL url) =
 plaintext :: Text.Text -> Response -> Response
 plaintext text response =
   response
-    & setResponseHeader ("Content-Type", "text/plain")
-    & setResponseBody (ResponseBodyRaw $ LBS.fromStrict . Text.encodeUtf8 $ text)
+    & setHeader ("Content-Type", "text/plain")
+    & setBody (ResponseBodyRaw $ LBS.fromStrict . Text.encodeUtf8 $ text)
 
 html :: LBS.ByteString -> Response -> Response
 html htmlRaw response =
   response
-    & setResponseBody (ResponseBodyRaw htmlRaw)
-    & setResponseHeader ("Content-Type", "text/html")
+    & setBody (ResponseBodyRaw htmlRaw)
+    & setHeader ("Content-Type", "text/html")
 
 json :: forall a. Aeson.ToJSON a => a -> Response -> Response
 json value response =
   response
-    & setResponseHeader ("Content-Type", "application/json")
-    & setResponseBody (ResponseBodyRaw $ Aeson.encode value)
+    & setHeader ("Content-Type", "application/json")
+    & setBody (ResponseBodyRaw $ Aeson.encode value)
 
 file :: FilePath -> Response -> Response
-file path = setResponseBody (ResponseBodyFile path) -- TODO: setHeader???
+file path = setBody (ResponseBodyFile path) -- TODO: setHeader???
 
 eventSource :: EventSource -> Response -> Response
 eventSource source response =
   response
-    & setResponseBody (ResponseBodyEventSource source)
-
-lucid :: Lucid.Html a -> Response -> Response
-lucid = html . Lucid.renderBS
+    & setBody (ResponseBodyEventSource source)
 
 -- RESPONSE SETTERS
 
-setResponseStatus :: Natural.Natural -> Response -> Response
-setResponseStatus status response = response {responseStatus = status}
+setStatus :: Natural.Natural -> Response -> Response
+setStatus status response = response {responseStatus = status}
 
-setResponseHeaders :: Headers -> Response -> Response
-setResponseHeaders headers response = response {responseHeaders = headers}
+setHeaders :: Headers -> Response -> Response
+setHeaders headers response = response {responseHeaders = headers}
 
 -- TODO: setResponseCookie
 
-setResponseHeader :: HTTP.Header -> Response -> Response
-setResponseHeader header response@Response {..} =
+setHeader :: HTTP.Header -> Response -> Response
+setHeader header response@Response {..} =
   response {responseHeaders = update header responseHeaders}
   where
     update :: forall a b. Eq a => (a, b) -> [(a, b)] -> [(a, b)]
@@ -142,8 +137,8 @@ setResponseHeader header response@Response {..} =
         then pair : ps
         else pair' : update pair ps
 
-setResponseBody :: ResponseBody -> Response -> Response
-setResponseBody body response = response {responseBody = body}
+setBody :: ResponseBody -> Response -> Response
+setBody body response = response {responseBody = body}
 
-setResponseBodyRaw :: LBS.ByteString -> Response -> Response
-setResponseBodyRaw bodyRaw = setResponseBody (ResponseBodyRaw bodyRaw)
+setBodyRaw :: LBS.ByteString -> Response -> Response
+setBodyRaw bodyRaw = setBody (ResponseBodyRaw bodyRaw)

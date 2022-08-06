@@ -79,7 +79,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Base64
 import qualified GHC.Natural as Natural
-import qualified Lucid
 import qualified Network.HTTP.Types as HTTP
 import Network.Wai (ResponseReceived)
 import qualified Network.Wai as Wai

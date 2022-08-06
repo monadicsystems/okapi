@@ -50,7 +50,6 @@ library
     , extra
     , http-api-data
     , http-types
-    , lucid
     , mmorph
     , mtl
     , parser-combinators
@@ -88,7 +87,6 @@ executable calculator-exe
     , extra
     , http-api-data
     , http-types
-    , lucid
     , mmorph
     , mtl
     , okapi
@@ -127,7 +125,6 @@ executable todo-exe
     , extra
     , http-api-data
     , http-types
-    , lucid
     , mmorph
     , mtl
     , okapi
@@ -169,7 +166,6 @@ test-suite okapi-test
     , extra
     , http-api-data
     , http-types
-    , lucid
     , mmorph
     , mtl
     , okapi

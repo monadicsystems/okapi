@@ -27,6 +27,7 @@ module Okapi.Parser
     pathParam,
     pathParamRaw,
     pathSegWith,
+    wildcard,
 
     -- * Query Parsers
 
@@ -38,7 +39,7 @@ module Okapi.Parser
     -- * Header Parsers
 
     -- | Parsers for extracting data from the headers of a request.
-    -- | Useful for authentication, cookies, and other request metadata, like the Client's preferred media type(s)
+    -- Useful for authentication, cookies, and other request metadata, like the Client's preferred media type(s)
     basicAuth,
     cookies,
     header,

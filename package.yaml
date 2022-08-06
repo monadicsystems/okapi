@@ -28,7 +28,6 @@ dependencies:
 - extra
 - http-api-data
 - http-types
-- lucid
 - mmorph
 - mtl
 - parser-combinators
