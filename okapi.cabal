@@ -28,19 +28,13 @@ source-repository head
 library
   exposed-modules:
       Okapi
+      Okapi.Application
       Okapi.Event
-      Okapi.Failure
-      Okapi.Internal.Functions.Application
-      Okapi.Internal.Functions.Event
-      Okapi.Internal.Functions.Failure
-      Okapi.Internal.Functions.Parser
-      Okapi.Internal.Functions.Response
-      Okapi.Internal.Functions.Route
-      Okapi.Internal.Types
       Okapi.Parser
       Okapi.Response
       Okapi.Route
       Okapi.Test
+      Okapi.Types
   other-modules:
       Paths_okapi
   hs-source-dirs:

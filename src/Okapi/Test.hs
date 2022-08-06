@@ -1,7 +1,19 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.Test where
+module Okapi.Test
+  ( TestRequest (..),
+    testParser,
+    testParserIO,
+    assertFailure,
+    assertState,
+    assertResponse,
+    -- For use with Wai.Test
+    runSession,
+    withSession,
+    testRequest,
+  )
+where
 
 import qualified Control.Monad.Except as Except
 import Control.Monad.IO.Class (liftIO)
@@ -17,9 +29,16 @@ import Network.Wai (defaultRequest)
 import qualified Network.Wai as Wai
 import Network.Wai.Test (SRequest (..), setRawPathInfo)
 import qualified Network.Wai.Test as Wai.Test
-import Okapi.Internal.Functions.Application
-import Okapi.Internal.Types
+import Okapi.Application
 import Okapi.Response
+import Okapi.Types
+
+data TestRequest = TestRequest
+  { testRequestMethod :: HTTP.Method,
+    testRequestHeaders :: HTTP.RequestHeaders,
+    testRequestRawPath :: BS.ByteString,
+    testRequestBody :: LBS.ByteString
+  }
 
 testParser ::
   Monad m =>
@@ -50,7 +69,7 @@ testRequestToState (TestRequest method headers rawPath body) =
       stateResponded = False
    in State {..}
 
--- ASSERTION FUNCTIONS
+-- ASSERTION FUNCTIONS TODO: Add common assertion helpers
 
 assertFailure ::
   (Failure -> Bool) ->
@@ -83,7 +102,7 @@ runSession ::
   OkapiT m Response ->
   IO a
 runSession session hoister okapiT = do
-  let app = makeOkapiApp hoister notFound okapiT
+  let app = okapiApp hoister _404 okapiT
   Wai.Test.runSession session app
 
 withSession ::
@@ -94,8 +113,8 @@ withSession ::
   IO a
 withSession hoister okapiT session = runSession session hoister okapiT
 
-send :: TestRequest -> Wai.Test.Session Wai.Test.SResponse
-send TestRequest {..} =
+testRequest :: TestRequest -> Wai.Test.Session Wai.Test.SResponse
+testRequest TestRequest {..} =
   let request =
         Wai.defaultRequest
           { Wai.requestMethod = testRequestMethod,

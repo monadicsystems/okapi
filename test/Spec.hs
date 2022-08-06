@@ -16,18 +16,17 @@ import Network.Wai
 import Network.Wai.EventSource (ServerEvent (RetryEvent))
 import Network.Wai.Test
 import Okapi
-import qualified Okapi
-import Web.HttpApiData
-
-import Test.DocTest (mainFromCabal)
 import System.Environment (getArgs)
+import Test.DocTest (mainFromCabal)
+import Web.HttpApiData
 
 runDoctests :: IO ()
 runDoctests = mainFromCabal "okapi" =<< getArgs
 
 type Okapi = OkapiT IO
 
-someRoute = [route|
+someRoute =
+  [route|
   GET
   HEAD
   /movies
@@ -39,7 +38,7 @@ someRoute = [route|
   |]
 
 someRouteHandler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
-someRouteHandler (_, _, _, _) = respond ok
+someRouteHandler (_, _, _, _) = respond _200
 
 someRoute2 =
   [route|
@@ -54,7 +53,7 @@ someRoute2 =
   |]
 
 someRoute2Handler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
-someRoute2Handler (_, _, _, _) = respond ok
+someRoute2Handler (_, _, _, _) = respond _200
 
 someRoute3 =
   [route|
@@ -65,17 +64,17 @@ someRoute3 =
   |]
 
 verifyTodo :: Int -> Okapi Okapi.Response
-verifyTodo id_ = if id_ > 0 then pure ok else Okapi.throw noContent
+verifyTodo id_ = if id_ > 0 then pure _200 else Okapi.throw _204
 
 someRoute3TestSession :: Session ()
 someRoute3TestSession = do
-  send (TestRequest methodGet [] "/todos/20" "")
+  testRequest (TestRequest methodGet [] "/todos/20" "")
     >>= assertStatus 200
 
-  send (TestRequest methodGet [] "/todos" "")
+  testRequest (TestRequest methodGet [] "/todos" "")
     >>= assertStatus 404
 
-  send (TestRequest methodGet [] "/todos/-1" "")
+  testRequest (TestRequest methodGet [] "/todos/-1" "")
     >>= assertStatus 204
 
 testSomeRoute3 :: IO ()
@@ -93,36 +92,36 @@ testServer = do
   let parser1 = do
         get
         pathSeg "todos"
-        respond ok
+        respond _200
 
       parser2 = do
         get
         path ["todos", "completed"]
-        respond ok
+        respond _200
 
       parser3 = do
         get
         pathSeg "todos"
         status <- queryParam "status"
-        ok
+        _200
           & plaintext status
           & respond
 
       parser4 = do
         get
         pathSeg "a"
-        respond ok
+        respond _200
 
       parser5 = do
         get
         pathSeg "todos"
         queryFlag "progress"
-        respond ok
+        respond _200
 
       parser6 = do
         get
         pathSeg ""
-        respond ok
+        respond _200
 
   choice
     [ parser1,
@@ -134,49 +133,50 @@ testServer = do
     ]
 
 testServerQuasi :: Okapi Okapi.Response
-testServerQuasi = choice
- [ parser1
- , parser2
- , parser3
- , parser4
- ]
- where
-  parser1 = parser [route|GET /todos|] >> respond ok
-  parser2 = parser [route|GET /todos /completed|] >> respond ok
-  parser3 = parser [route|GET /todos ?status{Text}|] >>= (\status -> ok & plaintext status & respond)
-  parser4 = parser [route|GET /a|] >> respond ok
+testServerQuasi =
+  choice
+    [ parser1,
+      parser2,
+      parser3,
+      parser4
+    ]
+  where
+    parser1 = parser [route|GET /todos|] >> respond _200
+    parser2 = parser [route|GET /todos /completed|] >> respond _200
+    parser3 = parser [route|GET /todos ?status{Text}|] >>= (\status -> _200 & plaintext status & respond)
+    parser4 = parser [route|GET /a|] >> respond _200
 
 testSession :: Session ()
 testSession = do
-  send (TestRequest methodGet [] "/todos" "")
+  testRequest (TestRequest methodGet [] "/todos" "")
     >>= assertStatus 200
 
-  send (TestRequest methodPost [] "/todos" "")
+  testRequest (TestRequest methodPost [] "/todos" "")
     >>= assertStatus 404
 
-  send (TestRequest methodGet [] "/todos/completed" "")
+  testRequest (TestRequest methodGet [] "/todos/completed" "")
     >>= assertStatus 200
 
-  res3 <- send $ TestRequest methodGet [] "/todos?status=done" ""
+  res3 <- testRequest $ TestRequest methodGet [] "/todos?status=done" ""
   assertStatus 200 res3
   assertBody "done" res3
 
-  -- send (TestRequest methodGet [] "/todos?progress" "")
+  -- testRequest (TestRequest methodGet [] "/todos?progress" "")
   --   >>= assertStatus 200
 
-  send (TestRequest methodGet [] "/todos?what" "")
+  testRequest (TestRequest methodGet [] "/todos?what" "")
     >>= assertStatus 404
 
-  send (TestRequest methodGet [] "/what" "")
+  testRequest (TestRequest methodGet [] "/what" "")
     >>= assertStatus 404
 
-  send (TestRequest methodGet [] "/a" "")
+  testRequest (TestRequest methodGet [] "/a" "")
     >>= assertStatus 200
 
 -- testSession2 = do
---   send (TestRequest methodGet [] "/")
+--   testRequest (TestRequest methodGet [] "/")
 
--- send (TestRequest methodGet [] "/" "") ?? Maybe because of how path is stored in srequest
+-- testRequest (TestRequest methodGet [] "/" "") ?? Maybe because of how path is stored in srequest
 --   >>= assertStatus 200
 {-
 test1 :: IO ()

@@ -6,9 +6,10 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Internal.Types where
+module Okapi.Types where
 
 import qualified Control.Applicative as Applicative
 import qualified Control.Concurrent.Chan.Unagi as Unagi
@@ -202,29 +203,5 @@ type Chan a = (Unagi.InChan a, Unagi.OutChan a)
 
 type EventSource = Chan Event
 
-data Route m i o = Route
-  { parser :: OkapiT m o,
-    url :: i -> URL
-  }
-
 newtype URL = URL {unURL :: Text}
   deriving newtype (IsString, Semigroup, Monoid, Eq, Ord, Show)
-
-data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr | Bind Text
-  deriving (Eq, Show)
-
-data CurlyExpr
-  = CurlyExpr
-      Text -- type name
-      [Text] -- transform function names
-      (Maybe Text) -- filter function name
-  deriving (Eq, Show)
-
-data HTTPDataType = PathSegType Text | AnonPathParamType | AnonQueryParamType Text
-
-data TestRequest = TestRequest
-  { testRequestMethod :: HTTP.Method,
-    testRequestHeaders :: HTTP.RequestHeaders,
-    testRequestRawPath :: BS.ByteString,
-    testRequestBody :: LBS.ByteString
-  }
