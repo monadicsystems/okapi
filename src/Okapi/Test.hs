@@ -12,6 +12,11 @@ module Okapi.Test
     runSession,
     withSession,
     testRequest,
+    -- Assertion Helpers
+    is200,
+    is404,
+    isSkip,
+    hasBodyRaw
   )
 where
 
@@ -79,6 +84,10 @@ assertFailure assertion parserResult = case parserResult of
   (Left failure, _) -> assertion failure
   _ -> False
 
+isSkip :: Failure -> Bool
+isSkip Skip = True
+isSkip _ = False
+
 assertResponse ::
   (Response -> Bool) ->
   (Either Failure Response, State) ->
@@ -86,6 +95,18 @@ assertResponse ::
 assertResponse assertion parserResult = case parserResult of
   (Right response, _) -> assertion response
   _ -> False
+
+is200 :: Response -> Bool
+is200 Response {..} = responseStatus == 200
+
+is404 :: Response -> Bool
+is404 Response {..} = responseStatus == 404
+
+hasBodyRaw :: LBS.ByteString -> Response -> Bool
+hasBodyRaw match Response {..} = case responseBody of
+  ResponseBodyRaw bs -> bs == match
+  _ -> False
+
 
 assertState ::
   (State -> Bool) ->

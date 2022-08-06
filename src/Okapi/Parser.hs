@@ -2,8 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | This module exports parsers for verifying the existance of and extracting data from incoming HTTP requests.
 module Okapi.Parser
-  ( -- Method parsers
+  ( -- * Method Parsers
+
+    -- | Parsers for matching the Method of a request
     get,
     post,
     head,
@@ -12,36 +15,60 @@ module Okapi.Parser
     trace,
     connect,
     options,
+    patch,
     anyMethod,
     method,
-    -- Path parsers
+
+    -- * Path parsers
+
+    -- | Parsers for matching or extracting data from the path of a request
     pathSeg,
     path,
     pathParam,
     pathParamRaw,
     pathSegWith,
-    -- Query parsers
+
+    -- * Query Parsers
+
+    -- | Parsers for matching of extracting data from the query parameters of a request
     queryParam,
     queryParamRaw,
     queryFlag,
-    -- Header parsers
+
+    -- * Header Parsers
+
+    -- | Parsers for extracting data from the headers of a request.
+    -- | Useful for authentication, cookies, and other request metadata, like the Client's preferred media type(s)
     basicAuth,
     cookies,
     header,
-    -- Body parsers
+
+    -- * Body Parsers
+
+    -- | Parsers for extracting data from the body of a request
     bodyJSON,
     bodyForm,
     bodyRaw,
-    -- Response Helpers
+
+    -- * Response Helper
     respond,
-    -- Error Helpers
+
+    -- * Error Helpers
+
+    -- | Various helper functions for throwing parser errors
+    -- | See for more information on how throwing error works
     skip,
     throw,
     (<!>),
     guardThrow,
     optionalThrow,
     optionThrow,
-    -- State Checkers
+
+    -- * State Checkers
+
+    -- | Functions for checking the state of a parser.
+    -- | Useful for checking if certain parts of the request have been completely parsed before continuing with another action.
+    -- | See the implementation of @respond@ for an example of how these functions can be used.
     methodParsed,
     pathParsed,
     queryParsed,
@@ -69,38 +96,97 @@ import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 import Prelude hiding (head)
 
--- METHOD HELPERS
+-- $setup
+-- >>> :set -XFlexibleContexts
+-- >>> :set -XOverloadedStrings
+-- >>> import Okapi.Response
+-- >>> import Okapi.Test
 
+-- |
+-- >>> let parser = get >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 get :: forall m. MonadOkapi m => m ()
 get = method HTTP.methodGet
 
+-- |
+-- >>> let parser = post >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "POST" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 post :: forall m. MonadOkapi m => m ()
 post = method HTTP.methodPost
 
+-- |
+-- >>> let parser = Okapi.Parser.head >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "HEAD" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 head :: forall m. MonadOkapi m => m ()
 head = method HTTP.methodHead
 
+-- |
+-- >>> let parser = put >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "PUT" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 put :: forall m. MonadOkapi m => m ()
 put = method HTTP.methodPut
 
+-- |
+-- >>> let parser = delete >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "DELETE" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 delete :: forall m. MonadOkapi m => m ()
 delete = method HTTP.methodDelete
 
+-- |
+-- >>> let parser = trace >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "TRACE" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 trace :: forall m. MonadOkapi m => m ()
 trace = method HTTP.methodTrace
 
+-- |
+-- >>> let parser = connect >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "CONNECT" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 connect :: forall m. MonadOkapi m => m ()
 connect = method HTTP.methodConnect
 
+-- |
+-- >>> let parser = options >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "OPTIONS" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 options :: forall m. MonadOkapi m => m ()
 options = method HTTP.methodOptions
 
+-- |
+-- >>> let parser = patch >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "PATCH" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 patch :: forall m. MonadOkapi m => m ()
 patch = method HTTP.methodPatch
 
+-- |
+-- >>> let parser = anyMethod >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "FOOBLAH" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 anyMethod :: forall m. MonadOkapi m => m ()
 anyMethod = parseMethod >> pure ()
 
+-- |
+-- >>> let parser = method "CUSTOM" >> respond _200
+-- >>> result <- testParserIO parser (TestRequest "CUSTOM" [] "" "")
+-- >>> assertResponse is200 result
+-- True
 method :: forall m. MonadOkapi m => HTTP.Method -> m ()
 method method = do
   method' <- parseMethod
@@ -110,24 +196,51 @@ method method = do
 
 -- PATH HELPERS
 
--- | Parses a single path segment matching the given text and discards it
+-- | Parses and discards a single path segment matching the given @Text@ value
+-- >>> parser = do get; pathSeg "store"; pathSeg "clothing"; respond _200;
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
+-- >>> assertResponse is200 result
+-- True
 pathSeg :: forall m. MonadOkapi m => Text.Text -> m ()
 pathSeg goal = pathSegWith (goal ==)
 
--- | Parses mutiple segments matching the order of the given list and discards them
--- | TODO: Needs testing. May not have the correct behavior
+-- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
+-- >>> parser = do get; path ["store", "clothing"]; respond _200;
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
+-- >>> assertResponse is200 result
+-- True
 path :: forall m. MonadOkapi m => [Text.Text] -> m ()
 path = mapM_ pathSeg
 
--- | Parses a single seg segment, and returns the parsed seg segment as a value of the given type
+-- | Parses a single path segment and returns it as a Haskell value of the specified type
+-- >>> :set -XTypeApplications
+-- >>> parser = do get; pathSeg "product"; productID <- pathParam @Int; respond $ json productID $ _200;
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> assertResponse is200 result
+-- True
 pathParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => m a
 pathParam = do
   pathSeg <- parsePathSeg
   maybe skip pure (Web.parseUrlPieceMaybe pathSeg)
 
+-- | Parses a single path segment as raw @Text@. Use this instead of @pathParam@ if you want to process the path segment yourself
+-- >>> parser = do get; pathSeg "product"; productID <- pathParamRaw; respond $ json productID $ _200;
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> assertResponse is200 result
+-- True
 pathParamRaw :: forall m. MonadOkapi m => m Text.Text
 pathParamRaw = parsePathSeg
 
+-- | Parses and discards a single path segment if it matches the given predicate function
+-- >>> import qualified Data.Text
+-- >>> isValidProductID = \pid -> Data.Text.length pid > 5
+-- >>> parser = do get; pathSeg "product"; pathSegWith isValidProductID; respond _200;
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> assertResponse is200 result
+-- True
+-- >>> result' <- testParserIO parser (TestRequest "GET" [] "/product/5641" "")
+-- >>> assertFailure isSkip result'
+-- True
 pathSegWith :: forall m. MonadOkapi m => (Text.Text -> Bool) -> m ()
 pathSegWith predicate = do
   pathSeg <- parsePathSeg
@@ -137,6 +250,17 @@ pathSegWith predicate = do
 
 -- QUERY HELPERS
 
+-- | Parses the value of a query parameter with the given type and name
+-- >>> :set -XTypeApplications
+-- >>> import qualified Data.ByteString.Lazy as LBS
+-- >>> import qualified Data.ByteString.Char8 as C8
+-- >>> showLBS = LBS.fromStrict . C8.pack . show
+-- >>> parser = do get; pathSeg "product"; minCost <- queryParam @Float "min_cost"; respond $ setResponseBodyRaw (showLBS minCost) $ _200;
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/product?min_cost=13200.60" "")
+-- >>> assertResponse is200 result
+-- True
+-- >>> assertResponse (hasBodyRaw "13200.60") result
+-- True
 queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> m a
 queryParam queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName

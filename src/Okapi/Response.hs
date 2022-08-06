@@ -20,6 +20,7 @@ module Okapi.Response
     -- RESPONSE SETTERS
     setResponseStatus,
     setResponseBody,
+    setResponseBodyRaw,
     setResponseHeaders,
     setResponseHeader,
   )
@@ -143,3 +144,6 @@ setResponseHeader header response@Response {..} =
 
 setResponseBody :: ResponseBody -> Response -> Response
 setResponseBody body response = response {responseBody = body}
+
+setResponseBodyRaw :: LBS.ByteString -> Response -> Response
+setResponseBodyRaw bodyRaw = setResponseBody (ResponseBodyRaw bodyRaw)

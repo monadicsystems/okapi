@@ -1,10 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
+-- | This module exports functions for handling Server Sent Events.
+-- See __ for an example on how to use Server Sent Events.
 module Okapi.Event
-  ( newEventSource,
+  ( -- * Interface
+
+    -- Create event sources and send events
+    newEventSource,
     sendValue,
     sendEvent,
+
+    -- * Internal
     eventSourceAppUnagiChan,
   )
 where
@@ -21,7 +28,6 @@ import qualified Network.Wai.EventSource as Wai
 import Network.WebSockets (send)
 import Okapi.Types
 
--- TODO: Use MonadOkapi
 newEventSource :: IO EventSource
 newEventSource = Unagi.newChan
 
