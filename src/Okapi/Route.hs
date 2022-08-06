@@ -36,7 +36,7 @@ data Route m i o = Route
     url :: i -> URL
   }
 
-data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr | Bind Text
+data RoutePart = Method Text | PathSegMatch Text | AnonPathSeg CurlyExpr | AnonQueryParam Text CurlyExpr | Wildcard
   deriving (Eq, Show)
 
 data CurlyExpr
@@ -78,7 +78,7 @@ parseCurlyExpr = between (Atto.char '{') (Atto.char '}') $ do
 routeParser :: Atto.Parser [RoutePart]
 routeParser = many $ do
   Atto.skipSpace
-  parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam <|> parseBind
+  parseMethod <|> parsePathSegMatch <|> parseAnonPathSeg <|> parseAnonQueryParam <|> parseWildcard
 
 parseMethod :: Atto.Parser RoutePart
 parseMethod = do
@@ -109,12 +109,11 @@ parseAnonQueryParam = do
   queryParamName <- Atto.takeWhile isAlphaNum
   AnonQueryParam queryParamName <$> parseCurlyExpr
 
-parseBind :: Atto.Parser RoutePart
-parseBind = do
-  Atto.string ">>="
-  Atto.skipSpace
-  functionName <- Atto.takeWhile1 (\char -> isAlphaNum char || char == '.')
-  pure $ Bind functionName
+parseWildcard :: Atto.Parser RoutePart
+parseWildcard = do
+  Atto.char '/'
+  Atto.char '*'
+  pure Wildcard
 
 routePartsToExp :: [RoutePart] -> Q Exp
 routePartsToExp [] =
@@ -125,9 +124,7 @@ routePartsToExp [] =
         (mkName "url", LamE [VarP $ mkName "unit"] (AppE (ConE $ mkName "Okapi.URL") (LitE $ StringL "")))
       ]
 routePartsToExp routeParts = do
-  let binds = Prelude.dropWhile (not . isBind) routeParts
-      notBinds = Prelude.takeWhile (not . isBind) routeParts
-  routePartStmtsAndBindings <- mapM routePartStmtAndBinding notBinds
+  routePartStmtsAndBindings <- mapM routePartStmtAndBinding routeParts
   let routePartStmts = Prelude.map (\(_, _, stmts) -> stmts) routePartStmtsAndBindings
       bindingsAndTypes = mapMaybe (\(bandTs, _, _) -> bandTs) routePartStmtsAndBindings
       bAndTHelper :: (Maybe (Name, Type), Maybe HTTPDataType, Stmt) -> Maybe (Maybe Name, HTTPDataType) = \case
@@ -142,30 +139,13 @@ routePartsToExp routeParts = do
           [] -> NoBindS (AppE (VarE $ mkName "pure") (ConE $ mkName "()"))
           [binding] -> NoBindS (AppE (VarE $ mkName "pure") (VarE binding))
           _ -> NoBindS (AppE (VarE $ mkName "pure") (TupE (Prelude.map (Just . VarE) bindings)))
-      leftSide = ParensE (DoE Nothing $ routePartStmts <> [returnStmt])
-      (middle, rightSide) =
-        case binds of
-          [] -> (VarE $ mkName ">>=", LamE [VarP $ mkName "params"] (AppE (VarE $ mkName "pure") (VarE $ mkName "params")))
-          [Bind functionName] -> (VarE $ mkName ">>=", VarE $ mkName $ unpack functionName)
-          _ -> (VarE $ mkName ">>", AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError"))
+      leftSide = DoE Nothing $ routePartStmts <> [returnStmt]
   pure $
     RecConE
       (mkName "Okapi.Route")
-      [ (mkName "parser", UInfixE leftSide middle rightSide),
+      [ (mkName "parser", leftSide),
         (mkName "url", LamE [lambdaPattern bindingsAndTypes] (lambdaBody True bindingsAndHTTPDataTypes))
       ]
-
-isBind :: RoutePart -> Bool
-isBind (Bind _) = True
-isBind _ = False
-
--- bindsExp :: NonEmpty RoutePart -> Exp
--- bindsExp (Bind functionName) = VarE $ mkName $ unpack functionName
--- bindsExp ((Bind functionName) :| rps) = UInfixE (VarE $ mkName $ unpack functionName) (VarE $ mkName ">>=") (loop rps)
---   where
---     loop :: [RoutePart] -> Exp
---     loop [] = LamE [WildP] (VarE $ mkName "Okapi.skip")
---     loop ((Bind functionName) : rps) = undefined
 
 lambdaPattern :: [(Name, Type)] -> Pat
 lambdaPattern [] = WildP
@@ -213,7 +193,10 @@ routePartStmtAndBinding rp = case rp of
     stmtBinding <- runIO randName
     let stmt = BindS (SigP (VarP stmtBinding) (ConT $ mkName $ unpack typeName)) (AppE (VarE (mkName "Okapi.queryParam")) (LitE $ StringL $ unpack queryParamName))
     pure (Just (stmtBinding, ConT $ mkName $ unpack typeName), Just $ AnonQueryParamType queryParamName, stmt)
-  Bind functionName -> pure (Nothing, Nothing, NoBindS $ AppE (VarE $ mkName "Okapi.throw") (VarE $ mkName "Okapi.internalServerError"))
+  Wildcard -> do
+    stmtBinding <- runIO randName
+    let stmt = BindS (VarP stmtBinding) (VarE $ mkName "Okapi.wildcard")
+    pure (Just (stmtBinding, ConT $ mkName "[Text]"), Nothing, stmt)
 
 randName :: IO Name
 randName = do

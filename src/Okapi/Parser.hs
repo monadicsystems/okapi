@@ -248,6 +248,10 @@ pathSegWith predicate = do
     then pure ()
     else skip
 
+-- | Parses all the remaining path segments of the request
+wildcard :: forall m. MonadOkapi m => m [Text.Text]
+wildcard = many pathParam
+
 -- QUERY HELPERS
 
 -- | Parses the value of a query parameter with the given type and name
