@@ -27,7 +27,7 @@ module Okapi.Parser
     pathParam,
     pathParamRaw,
     pathSegWith,
-    wildcard,
+    pathWildcard,
 
     -- * Query Parsers
 
@@ -51,13 +51,13 @@ module Okapi.Parser
     bodyForm,
     bodyRaw,
 
-    -- * Response Helper
+    -- * Response Helpers
     respond,
 
     -- * Error Helpers
 
     -- | Various helper functions for throwing parser errors
-    -- | See for more information on how throwing error works
+    -- See for more information on how throwing error works
     skip,
     throw,
     (<!>),
@@ -68,8 +68,8 @@ module Okapi.Parser
     -- * State Checkers
 
     -- | Functions for checking the state of a parser.
-    -- | Useful for checking if certain parts of the request have been completely parsed before continuing with another action.
-    -- | See the implementation of @respond@ for an example of how these functions can be used.
+    -- Useful for checking if certain parts of the request have been completely parsed before continuing with another action.
+    -- See the implementation of @respond@ for an example of how these functions can be used.
     methodParsed,
     pathParsed,
     queryParsed,
@@ -87,6 +87,7 @@ import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as Foldable
 import qualified Data.List as List
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Base64
@@ -195,10 +196,16 @@ method method = do
     then pure ()
     else skip
 
--- PATH HELPERS
-
 -- | Parses and discards a single path segment matching the given @Text@ value
--- >>> parser = do get; pathSeg "store"; pathSeg "clothing"; respond _200;
+--
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "store"
+--   pathSeg "clothing"
+--   respond _200;
+-- :}
+--
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
@@ -206,7 +213,14 @@ pathSeg :: forall m. MonadOkapi m => Text.Text -> m ()
 pathSeg goal = pathSegWith (goal ==)
 
 -- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
--- >>> parser = do get; path ["store", "clothing"]; respond _200;
+--
+-- >>> :{
+-- parser = do
+--   get
+--   path ["store", "clothing"]
+--   respond _200
+-- :}
+--
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
@@ -214,8 +228,16 @@ path :: forall m. MonadOkapi m => [Text.Text] -> m ()
 path = mapM_ pathSeg
 
 -- | Parses a single path segment and returns it as a Haskell value of the specified type
+--
 -- >>> :set -XTypeApplications
--- >>> parser = do get; pathSeg "product"; productID <- pathParam @Int; respond $ json productID $ _200;
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "product"
+--   productID <- pathParam @Int
+--   respond $ json productID $ _200;
+-- :}
+--
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result
 -- True
@@ -224,23 +246,40 @@ pathParam = do
   pathSeg <- parsePathSeg
   maybe skip pure (Web.parseUrlPieceMaybe pathSeg)
 
--- | Parses a single path segment as raw @Text@. Use this instead of @pathParam@ if you want to process the path segment yourself
--- >>> parser = do get; pathSeg "product"; productID <- pathParamRaw; respond $ json productID $ _200;
+-- | Parses a single path segment as raw @Text@.
+-- Use this instead of @pathParam@ if you want to process the path segment yourself
+--
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "product"
+--   productID <- pathParamRaw
+--   respond $ json productID $ _200
+-- :}
+--
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result
 -- True
 pathParamRaw :: forall m. MonadOkapi m => m Text.Text
 pathParamRaw = parsePathSeg
 
--- | Parses and discards a single path segment if it matches the given predicate function
+-- | Parses and discards a single path segment if it satisfies the given predicate function
+--
 -- >>> import qualified Data.Text
 -- >>> isValidProductID = \pid -> Data.Text.length pid > 5
--- >>> parser = do get; pathSeg "product"; pathSegWith isValidProductID; respond _200;
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
--- >>> assertResponse is200 result
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "product"
+--   pathSegWith isValidProductID
+--   respond _200
+-- :}
+--
+-- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> assertResponse is200 result1
 -- True
--- >>> result' <- testParserIO parser (TestRequest "GET" [] "/product/5641" "")
--- >>> assertFailure isSkip result'
+-- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/product/5641" "")
+-- >>> assertFailure isSkip result2
 -- True
 pathSegWith :: forall m. MonadOkapi m => (Text.Text -> Bool) -> m ()
 pathSegWith predicate = do
@@ -249,33 +288,93 @@ pathSegWith predicate = do
     then pure ()
     else skip
 
--- | Parses all the remaining path segments of the request
-wildcard :: forall m. MonadOkapi m => m [Text.Text]
-wildcard = many pathParam
+-- | Parses all the remaining path segments of a request
+pathWildcard :: forall m. MonadOkapi m => m (NonEmpty.NonEmpty Text.Text)
+pathWildcard = do
+  segs <- some pathParamRaw
+  case segs of
+    [] -> skip
+    _ -> pure $ NonEmpty.fromList segs
 
 -- QUERY HELPERS
 
 -- | Parses the value of a query parameter with the given type and name
+--
 -- >>> :set -XTypeApplications
 -- >>> import qualified Data.ByteString.Lazy as LBS
 -- >>> import qualified Data.ByteString.Char8 as C8
 -- >>> showLBS = LBS.fromStrict . C8.pack . show
--- >>> parser = do get; pathSeg "product"; minCost <- queryParam @Float "min_cost"; respond $ setResponseBodyRaw (showLBS minCost) $ _200;
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/product?min_cost=13200.60" "")
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "product"
+--   minQty <- queryParam @Int "min_qty"
+--   respond $ setBodyRaw (showLBS $ minQty + 3) $ _200
+-- :}
+--
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/product?min_qty=2" "")
 -- >>> assertResponse is200 result
 -- True
--- >>> assertResponse (hasBodyRaw "13200.60") result
+-- >>> assertResponse (hasBodyRaw "5") result
 -- True
 queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> m a
 queryParam queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   maybe skip pure (Web.parseQueryParamMaybe =<< queryItemValue)
 
+-- | Parses the value of a query parameter as raw @Text@.
+-- Use this instead of @queryParam@ if you want to process the query parameter yourself
+--
+-- >>> data Bit = Zero | One
+-- >>> :{
+-- parseBit text =
+--   case text of
+--     "b0" -> Just Zero
+--     "b1" -> Just One
+--     _    -> Nothing
+-- :}
+--
+-- >>> :{
+-- parser = do
+--   get
+--   path ["flip", "my", "bit"]
+--   bitRaw <- queryParamRaw "value"
+--   case parseBit bitRaw of
+--     Just Zero -> respond $ setBodyRaw "1" $ _200
+--     Just One  -> respond $ setBodyRaw "0" $ _200
+--     Nothing   -> throw _500
+-- :}
+--
+-- >>> result <- testParserIO parser (TestRequest "GET" [] "/flip/my/bit?value=b0" "")
+-- >>> assertResponse (hasBodyRaw "1") result
+-- True
 queryParamRaw :: forall m. MonadOkapi m => Text.Text -> m Text.Text
 queryParamRaw queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   maybe skip pure queryItemValue
 
+-- | Test for the existance of a query flag
+--
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "users"
+--   isAdmin <- queryFlag "admin"
+--   respond $
+--     if isAdmin
+--       then json ["Derek", "Alice"] $ _200
+--       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ _200
+-- :}
+--
+-- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/users?admin" "")
+-- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result1
+-- True
+-- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/users?admin=foobarbaz" "")
+-- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result2
+-- True
+-- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/users" "")
+-- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\",\"Bob\",\"Casey\",\"Alex\",\"Larry\"]") result3
+-- True
 queryFlag :: forall a m. MonadOkapi m => Text.Text -> m Bool
 queryFlag queryItemName = do
   maybeQueryItem <- optional $ parseQueryItem queryItemName

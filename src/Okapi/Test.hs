@@ -15,8 +15,9 @@ module Okapi.Test
     -- Assertion Helpers
     is200,
     is404,
+    is500,
     isSkip,
-    hasBodyRaw
+    hasBodyRaw,
   )
 where
 
@@ -102,11 +103,13 @@ is200 Response {..} = responseStatus == 200
 is404 :: Response -> Bool
 is404 Response {..} = responseStatus == 404
 
+is500 :: Response -> Bool
+is500 Response {..} = responseStatus == 500
+
 hasBodyRaw :: LBS.ByteString -> Response -> Bool
 hasBodyRaw match Response {..} = case responseBody of
   ResponseBodyRaw bs -> bs == match
   _ -> False
-
 
 assertState ::
   (State -> Bool) ->

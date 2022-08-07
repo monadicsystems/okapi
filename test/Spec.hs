@@ -24,7 +24,7 @@ runDoctests :: IO ()
 runDoctests = mainFromCabal "okapi" =<< getArgs
 
 type Okapi = OkapiT IO
-
+{-
 someRoute =
   [route|
   GET
@@ -34,7 +34,6 @@ someRoute =
   ?director{Text}
   ?actors{Text->childActors->bornInIndiana|notEmpty}
   ?female{Text}
-  >>= someRouteHandler
   |]
 
 someRouteHandler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
@@ -86,7 +85,7 @@ testSomeRoute = do
   print (urlFunc (5, "John", "World", "true"))
   let urlFunc2 = url someRoute2
   print (urlFunc (5, "John", "World", "true") == urlFunc2 (5, "John", "World", "true"))
-
+-}
 testServer :: Okapi Okapi.Response
 testServer = do
   let parser1 = do
@@ -164,14 +163,14 @@ testSession = do
   -- testRequest (TestRequest methodGet [] "/todos?progress" "")
   --   >>= assertStatus 200
 
-  testRequest (TestRequest methodGet [] "/todos?what" "")
-    >>= assertStatus 404
+  -- testRequest (TestRequest methodGet [] "/todos?what" "")
+  --   >>= assertStatus 404
 
-  testRequest (TestRequest methodGet [] "/what" "")
-    >>= assertStatus 404
+  -- testRequest (TestRequest methodGet [] "/what" "")
+  --   >>= assertStatus 404
 
-  testRequest (TestRequest methodGet [] "/a" "")
-    >>= assertStatus 200
+  -- testRequest (TestRequest methodGet [] "/a" "")
+  --   >>= assertStatus 200
 
 -- testSession2 = do
 --   testRequest (TestRequest methodGet [] "/")
@@ -200,8 +199,8 @@ test1 = do
 main :: IO ()
 main = do
   runDoctests
-  testSomeRoute
-  testSomeRoute3
+  -- testSomeRoute
+  -- testSomeRoute3
   Okapi.runSession testSession liftIO testServer
   Okapi.runSession testSession liftIO testServerQuasi
 

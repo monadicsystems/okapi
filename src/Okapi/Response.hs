@@ -14,12 +14,11 @@ module Okapi.Response
     plaintext,
     html,
     json,
-    file,
-    eventSource,
+    setBodyFile,
+    setBodyEventSource,
+    setBodyRaw,
     -- RESPONSE SETTERS
     setStatus,
-    setBody,
-    setBodyRaw,
     setHeaders,
     setHeader,
   )
@@ -108,11 +107,11 @@ json value response =
     & setHeader ("Content-Type", "application/json")
     & setBody (ResponseBodyRaw $ Aeson.encode value)
 
-file :: FilePath -> Response -> Response
-file path = setBody (ResponseBodyFile path) -- TODO: setHeader???
+setBodyFile :: FilePath -> Response -> Response
+setBodyFile path = setBody (ResponseBodyFile path) -- TODO: setHeader???
 
-eventSource :: EventSource -> Response -> Response
-eventSource source response =
+setBodyEventSource :: EventSource -> Response -> Response
+setBodyEventSource source response =
   response
     & setBody (ResponseBodyEventSource source)
 
@@ -124,7 +123,7 @@ setStatus status response = response {responseStatus = status}
 setHeaders :: Headers -> Response -> Response
 setHeaders headers response = response {responseHeaders = headers}
 
--- TODO: setResponseCookie
+-- TODO: setCookie
 
 setHeader :: HTTP.Header -> Response -> Response
 setHeader header response@Response {..} =

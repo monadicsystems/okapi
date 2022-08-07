@@ -60,7 +60,7 @@ okapiApp hoister defaultResponse okapiT waiRequest respond = do
        in State {..}
 
 -- | Turns a parsers into a WAI application with WebSocket functionality
--- | See __ for information on how to create a WebSocket server
+-- See __ for information on how to create a WebSocket server
 okapiAppWebsockets ::
   Monad m =>
   (forall a. m a -> IO a) ->

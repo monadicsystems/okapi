@@ -174,6 +174,10 @@ data ResponseBody
 -- TODO: ADD Text field to Skip for logging
 data Failure = Skip | Error Response
 
+instance Show Failure where
+  show Skip = "Skipped"
+  show (Error _) = "Error returned"
+
 type Path = [Text.Text]
 
 type Headers = [HTTP.Header]
