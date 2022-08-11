@@ -9,7 +9,7 @@ module Okapi.Parser
     -- | Parsers for matching the Method of a request
     get,
     post,
-    head,
+    Okapi.Parser.head,
     put,
     delete,
     trace,
@@ -88,6 +88,8 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as Foldable
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Map.Strict (Map)
+import Data.Text
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Base64
@@ -382,6 +384,9 @@ queryFlag queryItemName = do
     Nothing -> False
     Just _ -> True
 
+queryParams :: forall m. MonadOkapi m => m (Map Text.Text Text.Text)
+queryParams = undefined
+
 -- HEADER HELPERS
 
 basicAuth :: forall m. MonadOkapi m => m (Text.Text, Text.Text)
@@ -397,6 +402,8 @@ basicAuth = do
             _ -> skip
     _ -> skip
 
+-- TODO: cookie :: forall m. MonadOkapi m => Cookie
+
 cookies :: forall m. MonadOkapi m => m Cookies
 cookies = do
   cookiesValue <- header "Cookie"
@@ -407,6 +414,8 @@ header :: forall m. MonadOkapi m => HTTP.HeaderName -> m Char8.ByteString
 header headerName = do
   (_headerName, headerValue) <- parseHeader headerName
   pure headerValue
+
+-- TODO: headers :: forall m. MonadOkapi m => m Headers
 
 -- BODY HELPERS
 
@@ -440,6 +449,8 @@ respond response = do
   check2 <- pathParsed
   check3 <- queryParsed
   if check1 && check2 && check3 then return response else skip
+
+-- TODO: add end parser similar to <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
 
 -- Error HELPERS
 

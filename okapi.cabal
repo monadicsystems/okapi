@@ -30,6 +30,8 @@ library
       Okapi
       Okapi.Application
       Okapi.Event
+      Okapi.Match
+      Okapi.Operator
       Okapi.Parser
       Okapi.Response
       Okapi.Route
