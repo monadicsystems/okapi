@@ -24,10 +24,12 @@ dependencies:
 - base64
 - bytestring
 - containers
+- contravariant
 - cookie
 - extra
 - http-api-data
 - http-types
+- invariant
 - mmorph
 - mtl
 - parser-combinators

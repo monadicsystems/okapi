@@ -30,8 +30,6 @@ library
       Okapi
       Okapi.Application
       Okapi.Event
-      Okapi.Match
-      Okapi.Operator
       Okapi.Parser
       Okapi.Response
       Okapi.Route
@@ -48,10 +46,12 @@ library
     , base64
     , bytestring
     , containers
+    , contravariant
     , cookie
     , extra
     , http-api-data
     , http-types
+    , invariant
     , mmorph
     , mtl
     , parser-combinators
@@ -85,10 +85,12 @@ executable calculator-exe
     , base64
     , bytestring
     , containers
+    , contravariant
     , cookie
     , extra
     , http-api-data
     , http-types
+    , invariant
     , mmorph
     , mtl
     , okapi
@@ -123,10 +125,12 @@ executable todo-exe
     , base64
     , bytestring
     , containers
+    , contravariant
     , cookie
     , extra
     , http-api-data
     , http-types
+    , invariant
     , mmorph
     , mtl
     , okapi
@@ -163,11 +167,13 @@ test-suite okapi-test
     , base64
     , bytestring
     , containers
+    , contravariant
     , cookie
     , doctest-parallel
     , extra
     , http-api-data
     , http-types
+    , invariant
     , mmorph
     , mtl
     , okapi
