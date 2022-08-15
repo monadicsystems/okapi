@@ -4,7 +4,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Match where
+module Okapi.Pattern where
 
 import Control.Applicative
 import Data.Attoparsec.Text
@@ -87,7 +87,6 @@ segPattern = Pattern segParser segPrinter
 
 data MyRoute = MyRoute Text Text Text
   deriving (Eq, Show)
-
 
 myRoutePrinter :: Printer MyRoute
 myRoutePrinter = adapt >$< segPrinter >*< segPrinter >*< segPrinter
