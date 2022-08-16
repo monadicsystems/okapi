@@ -61,6 +61,28 @@ pattern BlogRouteIdSection blogID sectionName <-
   where
     BlogRouteIdSection blogID sectionName = URLData GET ["blog", toUrlPiece blogID, sectionName]
 
+-- | Test example patterns in Okapi.Pattern module TODO:::NOW !!!!!!!
+--
+-- >>> :{
+-- parser = do
+--   get
+--   pathSeg "users"
+--   isAdmin <- queryFlag "admin"
+--   respond $
+--     if isAdmin
+--       then json ["Derek", "Alice"] $ _200
+--       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ _200
+-- :}
+--
+-- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/users?admin" "")
+-- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result1
+-- True
+-- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/users?admin=foobarbaz" "")
+-- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result2
+-- True
+-- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/users" "")
+-- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\",\"Bob\",\"Casey\",\"Alex\",\"Larry\"]") result3
+-- True
 testMatcher :: MonadOkapi m => m Response
 testMatcher = matchURLWith $ \case
   BlogRoute -> respond _200
