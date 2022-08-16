@@ -32,6 +32,18 @@ matchURLWith matcher = do
   urlPattern <- getURLPattern
   matcher urlPattern
 
+renderURLData :: URLData -> URL
+renderURLData urlData = undefined
+
+parseURLToURLData :: MonadOkapi m => URL -> m URLData
+parseURLToURLData url = undefined
+
+testURLPatternRoundtrip :: MonadOkapi m => URLData -> m Bool
+testURLPatternRoundtrip urlData = do
+  let url = renderURLData urlData
+  parsedUrlData <- parseURLToURLData url
+  pure $ urlData == parsedUrlData
+
 -- BELOW IS FOR TESTING
 
 pattern BlogRoute :: URLData
