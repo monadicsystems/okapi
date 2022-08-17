@@ -34,6 +34,12 @@ data Method
 
 data URLData = URLData Method [Text] (Map Text (Maybe Text)) deriving (Eq, Show)
 
+pattern QueryParam :: a -> Maybe (Maybe a)
+pattern QueryParam txt <- Just (Just txt)
+
+pattern QueryFlag :: Maybe (Maybe a)
+pattern QueryFlag = Just Nothing
+
 httpMethodToMethod :: HTTP.Method -> Method
 httpMethodToMethod = \case
   "GET" -> GET
@@ -86,14 +92,14 @@ pattern BlogRouteIdSection blogID sectionName <-
   where
     BlogRouteIdSection blogID sectionName = URLData GET ["blog", toUrlPiece blogID, sectionName] mempty
 
-parseQueryMap :: Text -> Map Text (Maybe Text) -> (Maybe Text, Map Text (Maybe Text))
-parseQueryMap queryParamName queryMap = case Map.lookup queryParamName queryMap of
+viewQuery :: Text -> Map Text (Maybe Text) -> (Maybe (Maybe Text), Map Text (Maybe Text))
+viewQuery queryParamName queryMap = case Map.lookup queryParamName queryMap of
   Nothing -> (Nothing, queryMap)
-  queryParamValue -> (join queryParamValue, Map.delete queryParamName queryMap)
+  just -> (just, Map.delete queryParamName queryMap)
 
 pattern BlogQueryRoute :: Text -> Text -> URLData
 pattern BlogQueryRoute author category <-
-  URLData GET ["blog"] (parseQueryMap "author" -> (Just author, parseQueryMap "category" -> (Just category, _)))
+  URLData GET ["blog"] (viewQuery "author" -> (QueryParam author, viewQuery "category" -> (QueryParam category, _)))
   where
     BlogQueryRoute author category = URLData GET ["blog"] (Map.fromList [("author", Just author), ("category", Just category)])
 
