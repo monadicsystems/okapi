@@ -6,8 +6,11 @@
 
 module Okapi.Pattern where
 
+import Control.Monad
+import Control.Monad.Combinators
 import Control.Monad.IO.Class
 import Data.Map
+import qualified Data.Map as Map
 import Data.Text
 import qualified Network.HTTP.Types as HTTP
 import Okapi
@@ -15,17 +18,36 @@ import Okapi.Response
 import Okapi.Types
 import Web.HttpApiData
 
+-- $setup
+-- >>> :set -XFlexibleContexts
+-- >>> :set -XOverloadedStrings
+-- >>> import Okapi.Response
+-- >>> import Okapi.Test
+
 data Method
   = GET
   | POST
   | PUT
   | DELETE
+  | OTHER
   deriving (Eq, Show)
 
-data URLData = URLData Method [Text] deriving (Eq, Show)
+data URLData = URLData Method [Text] (Map Text (Maybe Text)) deriving (Eq, Show)
+
+httpMethodToMethod :: HTTP.Method -> Method
+httpMethodToMethod = \case
+  "GET" -> GET
+  "POST" -> POST
+  "PUT" -> PUT
+  "DELETE" -> DELETE
+  _ -> OTHER
 
 getURLPattern :: MonadOkapi m => m URLData
-getURLPattern = pure $ URLData GET ["home"] -- Should be a parser that parses everything
+getURLPattern = do
+  method <- parseMethod
+  path <- some parsePathSeg
+  queryMap <- parseAllQueryItems
+  pure $ URLData (httpMethodToMethod method) path queryMap -- Should be a parser that parses everything
 
 matchURLWith :: MonadOkapi m => (URLData -> m Response) -> m Response
 matchURLWith matcher = do
@@ -47,52 +69,61 @@ testURLPatternRoundtrip urlData = do
 -- BELOW IS FOR TESTING
 
 pattern BlogRoute :: URLData
-pattern BlogRoute = URLData GET ["blog"]
+pattern BlogRoute <-
+  URLData GET ["blog"] (Map.null -> True)
+  where
+    BlogRoute = URLData GET ["blog"] mempty
 
 pattern BlogRouteId :: Int -> URLData
 pattern BlogRouteId blogID <-
-  URLData GET ["blog", parseUrlPiece -> Right blogID]
+  URLData GET ["blog", parseUrlPiece -> Right blogID] (Map.null -> True)
   where
-    BlogRouteId blogID = URLData GET ["blog", toUrlPiece blogID]
+    BlogRouteId blogID = URLData GET ["blog", toUrlPiece blogID] mempty
 
 pattern BlogRouteIdSection :: Int -> Text -> URLData
 pattern BlogRouteIdSection blogID sectionName <-
-  URLData GET ["blog", parseUrlPiece -> Right blogID, sectionName]
+  URLData GET ["blog", parseUrlPiece -> Right blogID, sectionName] (Map.null -> True)
   where
-    BlogRouteIdSection blogID sectionName = URLData GET ["blog", toUrlPiece blogID, sectionName]
+    BlogRouteIdSection blogID sectionName = URLData GET ["blog", toUrlPiece blogID, sectionName] mempty
 
--- | Test example patterns in Okapi.Pattern module TODO:::NOW !!!!!!!
+parseQueryMap :: Text -> Map Text (Maybe Text) -> (Maybe Text, Map Text (Maybe Text))
+parseQueryMap queryParamName queryMap = case Map.lookup queryParamName queryMap of
+  Nothing -> (Nothing, queryMap)
+  queryParamValue -> (join queryParamValue, Map.delete queryParamName queryMap)
+
+pattern BlogQueryRoute :: Text -> Text -> URLData
+pattern BlogQueryRoute author category <-
+  URLData GET ["blog"] (parseQueryMap "author" -> (Just author, parseQueryMap "category" -> (Just category, _)))
+  where
+    BlogQueryRoute author category = URLData GET ["blog"] (Map.fromList [("author", Just author), ("category", Just category)])
+
+-- | Test example patterns in Okapi.Pattern module
 --
--- >>> :{
--- parser = do
---   get
---   pathSeg "users"
---   isAdmin <- queryFlag "admin"
---   respond $
---     if isAdmin
---       then json ["Derek", "Alice"] $ _200
---       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ _200
--- :}
+-- >>> parser = testMatcher
 --
--- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/users?admin" "")
--- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result1
+-- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/blog" "")
+-- >>> assertResponse is200 result1
 -- True
--- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/users?admin=foobarbaz" "")
--- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result2
+-- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/blog/2" "")
+-- >>> assertResponse is200 result2
 -- True
--- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/users" "")
--- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\",\"Bob\",\"Casey\",\"Alex\",\"Larry\"]") result3
+-- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/blog/7/intro" "")
+-- >>> assertResponse is200 result3
 -- True
+--
+-- >>> result4 <- testParserIO parser (TestRequest "GET" [] "/blog?author=Diamond&category=pets" "")
+-- >>> assertResponse is200 result4
+-- True
+--
+-- >>> result5 <- testParserIO parser (TestRequest "GET" [] "/blog?author=Diamond" "")
+-- >>> assertResponse is200 result5
+-- False
 testMatcher :: MonadOkapi m => m Response
 testMatcher = matchURLWith $ \case
   BlogRoute -> respond _200
-  BlogRouteId blogID -> do
-    liftIO $ print blogID
-    respond _200
-  BlogRouteIdSection blogID sectionName -> do
-    liftIO $ print blogID
-    liftIO $ print sectionName
-    respond _200
+  BlogRouteId blogID -> respond _200
+  BlogRouteIdSection blogID sectionName -> respond _200
+  BlogQueryRoute author category -> respond _200
   _ -> skip
 
 testPattern :: (URLData -> Bool) -> URLData -> Bool

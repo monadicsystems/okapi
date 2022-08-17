@@ -75,6 +75,12 @@ module Okapi.Parser
     queryParsed,
     headersParsed,
     bodyParsed,
+
+    -- * Internal Parsers
+    parseMethod,
+    parsePathSeg,
+    parseQueryItem,
+    parseAllQueryItems,
   )
 where
 
@@ -88,11 +94,13 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as Foldable
 import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Map as Map
 import Data.Map.Strict (Map)
 import Data.Text
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Base64
+import Network.HTTP.Types (parseQuery)
 import qualified Network.HTTP.Types as HTTP
 import Okapi.Types
 import qualified Web.Cookie as Cookie
@@ -527,6 +535,12 @@ parseQueryItem queryItemName = do
     Just queryItem -> do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = List.delete queryItem $ requestQuery $ stateRequest state}})
       pure queryItem
+
+parseAllQueryItems :: MonadOkapi m => m (Map Text (Maybe Text))
+parseAllQueryItems = do
+  query <- State.gets (requestQuery . stateRequest)
+  State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
+  pure $ Map.fromList query
 
 parseHeader :: MonadOkapi m => HTTP.HeaderName -> m HTTP.Header
 parseHeader headerName = do
