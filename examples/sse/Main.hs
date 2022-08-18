@@ -16,7 +16,7 @@ main = do
         threadDelay 1000000
         time <- getPOSIXTime
         sendEvent eventSource $ Event Nothing Nothing $ pack $ show time
-    runOkapi id 8080 (api eventSource)
+    run id 8080 (api eventSource)
     killThread threadID
 
 type Okapi a = OkapiT IO a

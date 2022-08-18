@@ -6,7 +6,6 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.Types where
@@ -34,7 +33,6 @@ type MonadOkapi m =
     Applicative.Alternative m,
     Monad m,
     Monad.MonadPlus m,
-    IO.MonadIO m,
     Except.MonadError Failure m,
     State.MonadState State m
   )
@@ -116,9 +114,6 @@ instance Monad m => Monad.MonadPlus (OkapiT m) where
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE mplus #-}
 
-instance IO.MonadIO m => IO.MonadIO (OkapiT m) where
-  liftIO = Morph.lift . IO.liftIO
-
 instance Reader.MonadReader r m => Reader.MonadReader r (OkapiT m) where
   ask = Morph.lift Reader.ask
   local = mapOkapiT . Reader.local
@@ -155,7 +150,7 @@ data Request = Request
   { requestMethod :: HTTP.Method,
     requestPath :: Path,
     requestQuery :: Query,
-    requestBody :: IO LBS.ByteString,
+    requestBody :: LBS.ByteString,
     requestHeaders :: Headers,
     requestVault :: Vault.Vault
   }

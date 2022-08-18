@@ -18,7 +18,7 @@ main :: IO ()
 main = do
   config <- getConfig
   setupDB $ configDBConnection config
-  Okapi.runOkapi (hoistHandler config) 3000 conduit
+  Okapi.run (hoistHandler config) 3000 conduit
 
 hoistHandler :: Config -> Handler a -> IO a
 hoistHandler config app = runReaderT (runHandler app) config

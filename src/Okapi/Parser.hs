@@ -80,7 +80,7 @@ module Okapi.Parser
     parseMethod,
     parsePathSeg,
     parseQueryItem,
-    parseAllQueryItems,
+    -- parseAllQueryItems,
   )
 where
 
@@ -455,8 +455,8 @@ respond :: forall m. MonadOkapi m => Response -> m Response
 respond response = do
   check1 <- methodParsed
   check2 <- pathParsed
-  check3 <- queryParsed
-  if check1 && check2 && check3 then return response else skip
+  -- check3 <- queryParsed
+  if check1 && check2 then return response else skip
 
 -- TODO: add end parser similar to <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
 
@@ -536,11 +536,11 @@ parseQueryItem queryItemName = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = List.delete queryItem $ requestQuery $ stateRequest state}})
       pure queryItem
 
-parseAllQueryItems :: MonadOkapi m => m (Map Text (Maybe Text))
-parseAllQueryItems = do
-  query <- State.gets (requestQuery . stateRequest)
-  State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
-  pure $ Map.fromList query
+-- parseAllQueryItems :: MonadOkapi m => m (Map Text (Maybe Text))
+-- parseAllQueryItems = do
+--   query <- State.gets (requestQuery . stateRequest)
+--   State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
+--   pure $ Map.fromList query
 
 parseHeader :: MonadOkapi m => HTTP.HeaderName -> m HTTP.Header
 parseHeader headerName = do
@@ -557,8 +557,7 @@ parseBody = do
   if isBodyParsed
     then skip
     else do
-      bodyRef <- State.gets (requestBody . stateRequest)
-      body <- IO.liftIO bodyRef
+      body <- State.gets (requestBody . stateRequest)
       State.modify (\state -> state {stateRequestBodyParsed = True})
       pure body
 

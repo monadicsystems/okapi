@@ -12,7 +12,7 @@ import Okapi
 import Template
 
 okapiApplication :: Application
-okapiApplication = okapiApp id okapiAPI
+okapiApplication = app id okapiAPI
 
 type Okapi a = OkapiT IO a
 

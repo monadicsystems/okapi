@@ -66,7 +66,7 @@ testRequestToState :: TestRequest -> State
 testRequestToState (TestRequest method headers rawPath body) =
   let requestMethod = method
       (requestPath, requestQuery) = Data.Bifunctor.second queryToQueryText $ decodePath rawPath
-      requestBody = pure body
+      requestBody = body
       requestHeaders = headers
       requestVault = mempty
       stateRequest = Request {..}
@@ -126,8 +126,8 @@ runSession ::
   OkapiT m Response ->
   IO a
 runSession session hoister okapiT = do
-  let app = okapiApp hoister _404 okapiT
-  Wai.Test.runSession session app
+  let waiApp = app hoister _404 okapiT
+  Wai.Test.runSession session waiApp
 
 withSession ::
   Monad m =>

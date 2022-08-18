@@ -10,6 +10,7 @@ module Main where
 import Control.Applicative ((<|>))
 import Control.Applicative.Combinators
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Class
 import Data.Aeson (ToJSON, toJSON)
 import Data.ByteString.Lazy (fromStrict)
 import Data.Function ((&))
@@ -108,7 +109,7 @@ main :: IO ()
 main = do
   conn <- open "todo.db"
   execute_ conn "CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, name TEXT, status TEXT)"
-  runOkapi id _404 3000 (todoAPI conn)
+  run id _404 3000 (todoAPI conn)
   close conn
 
 -- SERVER FUNCTIONS
@@ -133,7 +134,7 @@ getTodo conn = do
   get
   pathSeg "todos"
   todoID <- pathParam @Int
-  maybeTodo <- liftIO $ selectTodo conn todoID
+  maybeTodo <- lift $ selectTodo conn todoID
   case maybeTodo of
     Nothing -> throw _500
     Just todo -> _200 & json todo & respond
@@ -143,7 +144,7 @@ getAllTodos conn = do
   get
   pathSeg "todos"
   status <- optional $ queryParam @Status "status"
-  todos <- liftIO $ selectAllTodos conn status
+  todos <- lift $ selectAllTodos conn status
   _200 & json todos & respond
 
 createTodo :: Connection -> Okapi Response
@@ -151,7 +152,7 @@ createTodo conn = do
   post
   pathSeg "todos"
   todoForm <- bodyForm
-  liftIO $ insertTodoForm conn todoForm
+  lift $ insertTodoForm conn todoForm
   respond _200
 
 editTodo :: Connection -> Okapi Response
@@ -160,7 +161,7 @@ editTodo conn = do
   pathSeg "todos"
   todoID <- pathParam @Int
   todoForm <- bodyForm @TodoForm
-  liftIO $ updateTodo conn todoID todoForm
+  lift $ updateTodo conn todoID todoForm
   respond _200
 
 forgetTodo :: Connection -> Okapi Response
@@ -168,7 +169,7 @@ forgetTodo conn = do
   delete
   pathSeg "todos"
   todoID <- pathParam @Int
-  liftIO $ deleteTodo conn todoID
+  lift $ deleteTodo conn todoID
   respond _200
 
 -- DATABASE FUNCTIONS

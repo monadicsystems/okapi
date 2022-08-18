@@ -12,7 +12,7 @@ import GHC.Generics (Generic)
 import Okapi
 
 main :: IO ()
-main = runOkapi id _404 3000 calc
+main = run id _404 3000 calc
 
 type Okapi a = OkapiT IO a
 

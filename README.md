@@ -16,7 +16,7 @@ import Data.Text
 import Okapi
 
 main :: IO ()
-main = runOkapi id 3000 greet
+main = run id 3000 greet
 
 greet = do
   pathSeg "greet"

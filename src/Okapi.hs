@@ -12,10 +12,10 @@
 
 module Okapi
   ( -- TOP LEVEL
-    runOkapi,
-    runOkapiTLS,
-    runOkapiWebsockets,
-    runOkapiWebsocketsTLS,
+    run,
+    runTLS,
+    runWebsockets,
+    runWebsocketsTLS,
     -- APPLICATION
     module Okapi.Application,
     -- SERVER SENT EVENTS
@@ -99,21 +99,21 @@ import qualified Web.Cookie as Cookie
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 
-runOkapi :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> IO ()
-runOkapi hoister defaultResponse port okapiT = do
+run :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> IO ()
+run hoister defaultResponse port okapiT = do
   print $ "Running Okapi App on port " <> show port
-  Warp.run port $ okapiApp hoister defaultResponse okapiT
+  Warp.run port $ app hoister defaultResponse okapiT
 
-runOkapiTLS :: Monad m => (forall a. m a -> IO a) -> Response -> Warp.TLSSettings -> Warp.Settings -> OkapiT m Response -> IO ()
-runOkapiTLS hoister defaultResponse tlsSettings settings okapiT = do
+runTLS :: Monad m => (forall a. m a -> IO a) -> Response -> Warp.TLSSettings -> Warp.Settings -> OkapiT m Response -> IO ()
+runTLS hoister defaultResponse tlsSettings settings okapiT = do
   print "Running servo on port 43"
-  Warp.runTLS tlsSettings settings $ okapiApp hoister defaultResponse okapiT
+  Warp.runTLS tlsSettings settings $ app hoister defaultResponse okapiT
 
-runOkapiWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> WS.ConnectionOptions -> WS.ServerApp -> IO ()
-runOkapiWebsockets hoister defaultResponse port okapiT connSettings serverApp = do
+runWebsockets :: Monad m => (forall a. m a -> IO a) -> Response -> Int -> OkapiT m Response -> WS.ConnectionOptions -> WS.ServerApp -> IO ()
+runWebsockets hoister defaultResponse port okapiT connSettings serverApp = do
   print $ "Running Okapi App on port " <> show port
-  Warp.run port $ okapiAppWebsockets hoister defaultResponse okapiT connSettings serverApp
+  Warp.run port $ websocketsApp hoister defaultResponse okapiT connSettings serverApp
 
-runOkapiWebsocketsTLS :: Monad m => (forall a. m a -> IO a) -> Response -> Warp.TLSSettings -> Warp.Settings -> OkapiT m Response -> WS.ConnectionOptions -> WS.ServerApp -> IO ()
-runOkapiWebsocketsTLS hoister defaultResponse tlsSettings settings okapiT connSettings serverApp = do
-  Warp.runTLS tlsSettings settings $ okapiAppWebsockets hoister defaultResponse okapiT connSettings serverApp
+runWebsocketsTLS :: Monad m => (forall a. m a -> IO a) -> Response -> Warp.TLSSettings -> Warp.Settings -> OkapiT m Response -> WS.ConnectionOptions -> WS.ServerApp -> IO ()
+runWebsocketsTLS hoister defaultResponse tlsSettings settings okapiT connSettings serverApp = do
+  Warp.runTLS tlsSettings settings $ websocketsApp hoister defaultResponse okapiT connSettings serverApp

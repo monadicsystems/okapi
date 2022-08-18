@@ -24,6 +24,7 @@ runDoctests :: IO ()
 runDoctests = mainFromCabal "okapi" =<< getArgs
 
 type Okapi = OkapiT IO
+
 {-
 someRoute =
   [route|
@@ -123,9 +124,9 @@ testServer = do
         respond _200
 
   choice
-    [ parser1,
+    [ parser3,
       parser2,
-      parser3,
+      parser1,
       parser4,
       parser5,
       parser6
@@ -134,16 +135,16 @@ testServer = do
 testServerQuasi :: Okapi Okapi.Response
 testServerQuasi =
   choice
-    [ parser1,
+    [ parser3,
       parser2,
-      parser3,
+      parser1,
       parser4
     ]
   where
-    parser1 = parser [route|GET /todos|] >> respond _200
-    parser2 = parser [route|GET /todos /completed|] >> respond _200
+    parser1 = parser [route|GET /todos|] >> respond (_200 & plaintext "parser1")
+    parser2 = parser [route|GET /todos /completed|] >> respond (_200 & plaintext "parser2")
     parser3 = parser [route|GET /todos ?status{Text}|] >>= (\status -> _200 & plaintext status & respond)
-    parser4 = parser [route|GET /a|] >> respond _200
+    parser4 = parser [route|GET /a|] >> respond (_200 & plaintext "parser4")
 
 testSession :: Session ()
 testSession = do
@@ -160,48 +161,8 @@ testSession = do
   assertStatus 200 res3
   assertBody "done" res3
 
-  -- testRequest (TestRequest methodGet [] "/todos?progress" "")
-  --   >>= assertStatus 200
-
-  -- testRequest (TestRequest methodGet [] "/todos?what" "")
-  --   >>= assertStatus 404
-
-  -- testRequest (TestRequest methodGet [] "/what" "")
-  --   >>= assertStatus 404
-
-  -- testRequest (TestRequest methodGet [] "/a" "")
-  --   >>= assertStatus 200
-
--- testSession2 = do
---   testRequest (TestRequest methodGet [] "/")
-
--- testRequest (TestRequest methodGet [] "/" "") ?? Maybe because of how path is stored in srequest
---   >>= assertStatus 200
-{-
-test1 :: IO ()
-test1 = do
-  let result = parseOnly routeParser "GET HEAD /movies /{Date|isModern} ?director{Director} ?actors{[Actor]->childActors->bornInIndiana|notEmpty} ?female{Gender}"
-      goal =
-        Right
-          [ Method "GET",
-            Method "HEAD",
-            PathSegMatch "movies",
-            AnonPathSeg (CurlyExpr "Date" [] (Just "isModern")),
-            AnonQueryParam "director" (CurlyExpr "Director" [] Nothing),
-            AnonQueryParam "actors" (CurlyExpr "[Actor]" ["childActors", "bornInIndiana"] (Just "notEmpty")),
-            AnonQueryParam "female" (CurlyExpr "Gender" [] Nothing)
-          ]
-  if result == goal
-    then print "PASSED!"
-    else print "FAILED!"
--}
-
 main :: IO ()
 main = do
   runDoctests
-  -- testSomeRoute
-  -- testSomeRoute3
   Okapi.runSession testSession liftIO testServer
   Okapi.runSession testSession liftIO testServerQuasi
-
--- Okapi.Test.runSession testSession2 liftIO (parser someRoute2)

@@ -96,7 +96,7 @@ main = do
     threadDelay 1000000
     confirmer envTVar
     matchmaker envTVar
-  Okapi.runOkapi (hoistApp envTVar) 3000 chess
+  Okapi.run (hoistApp envTVar) 3000 chess
 
 confirmer :: TVar Env -> IO ()
 confirmer = sendConfirmMessages

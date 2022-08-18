@@ -9,6 +9,8 @@ module Okapi.Pattern where
 import Control.Monad
 import Control.Monad.Combinators
 import Control.Monad.IO.Class
+import qualified Data.Attoparsec.Text as Atto
+import Data.Either.Extra
 import Data.Map
 import qualified Data.Map as Map
 import Data.Text
@@ -24,115 +26,89 @@ import Web.HttpApiData
 -- >>> import Okapi.Response
 -- >>> import Okapi.Test
 
-data Method
-  = GET
-  | POST
-  | PUT
-  | DELETE
-  | OTHER
-  deriving (Eq, Show)
+data Pattern = Pattern HTTP.Method [Text] deriving (Eq, Show)
 
-data URLData = URLData Method [Text] (Map Text (Maybe Text)) deriving (Eq, Show)
+pattern GET :: HTTP.Method
+pattern GET = "GET"
 
-pattern QueryParam :: a -> Maybe (Maybe a)
-pattern QueryParam txt <- Just (Just txt)
+pattern POST :: HTTP.Method
+pattern POST = "POST"
 
-pattern QueryFlag :: Maybe (Maybe a)
-pattern QueryFlag = Just Nothing
+pattern DELETE :: HTTP.Method
+pattern DELETE = "DELETE"
 
-httpMethodToMethod :: HTTP.Method -> Method
-httpMethodToMethod = \case
-  "GET" -> GET
-  "POST" -> POST
-  "PUT" -> PUT
-  "DELETE" -> DELETE
-  _ -> OTHER
+pattern OTHER :: HTTP.Method -> HTTP.Method
+pattern OTHER method <-
+  method
+  where
+    OTHER method = method
 
-getURLPattern :: MonadOkapi m => m URLData
-getURLPattern = do
+pattern PathParam :: (ToHttpApiData a, FromHttpApiData a) => a -> Text
+pattern PathParam param <-
+  (parseUrlPiece -> Right param)
+  where
+    PathParam param = toUrlPiece param
+
+parsePattern :: MonadOkapi m => m Pattern
+parsePattern = do
   method <- parseMethod
-  path <- some parsePathSeg
-  queryMap <- parseAllQueryItems
-  pure $ URLData (httpMethodToMethod method) path queryMap -- Should be a parser that parses everything
+  path <- many parsePathSeg
+  pure $ Pattern method path
 
-matchURLWith :: MonadOkapi m => (URLData -> m Response) -> m Response
-matchURLWith matcher = do
-  urlPattern <- getURLPattern
-  matcher urlPattern
+matchWith :: MonadOkapi m => (Pattern -> m Response) -> m Response
+matchWith matcher = parsePattern >>= matcher
 
-renderURLData :: URLData -> URL
-renderURLData urlData = undefined
+encodePattern :: Pattern -> URL
+encodePattern p = undefined
 
-parseURLToURLData :: MonadOkapi m => URL -> m URLData
-parseURLToURLData url = undefined
-
-testURLPatternRoundtrip :: MonadOkapi m => URLData -> m Bool
-testURLPatternRoundtrip urlData = do
-  let url = renderURLData urlData
-  parsedUrlData <- parseURLToURLData url
-  pure $ urlData == parsedUrlData
+decodePattern :: URL -> Maybe Pattern
+decodePattern (URL "") = Nothing
+decodePattern (URL url) =
+  eitherToMaybe $
+    flip Atto.parseOnly url $ Pattern GET <$> many pathSeg
+  where
+    pathSeg :: Atto.Parser Text
+    pathSeg = do
+      Atto.char '/'
+      Atto.takeWhile (\c -> c /= '/' && c /= '?')
 
 -- BELOW IS FOR TESTING
 
-pattern BlogRoute :: URLData
-pattern BlogRoute <-
-  URLData GET ["blog"] (Map.null -> True)
-  where
-    BlogRoute = URLData GET ["blog"] mempty
+pattern BlogRoute :: Pattern
+pattern BlogRoute = Pattern GET ["blog"]
 
-pattern BlogRouteId :: Int -> URLData
-pattern BlogRouteId blogID <-
-  URLData GET ["blog", parseUrlPiece -> Right blogID] (Map.null -> True)
-  where
-    BlogRouteId blogID = URLData GET ["blog", toUrlPiece blogID] mempty
+pattern BlogRouteId :: Int -> Pattern
+pattern BlogRouteId blogID = Pattern GET ["blog", PathParam blogID]
 
-pattern BlogRouteIdSection :: Int -> Text -> URLData
-pattern BlogRouteIdSection blogID sectionName <-
-  URLData GET ["blog", parseUrlPiece -> Right blogID, sectionName] (Map.null -> True)
-  where
-    BlogRouteIdSection blogID sectionName = URLData GET ["blog", toUrlPiece blogID, sectionName] mempty
-
-viewQuery :: Text -> Map Text (Maybe Text) -> (Maybe (Maybe Text), Map Text (Maybe Text))
-viewQuery queryParamName queryMap = case Map.lookup queryParamName queryMap of
-  Nothing -> (Nothing, queryMap)
-  just -> (just, Map.delete queryParamName queryMap)
-
-pattern BlogQueryRoute :: Text -> Text -> URLData
-pattern BlogQueryRoute author category <-
-  URLData GET ["blog"] (viewQuery "author" -> (QueryParam author, viewQuery "category" -> (QueryParam category, _)))
-  where
-    BlogQueryRoute author category = URLData GET ["blog"] (Map.fromList [("author", Just author), ("category", Just category)])
+pattern BlogRouteIdSection :: Int -> Text -> Pattern
+pattern BlogRouteIdSection blogID sectionName =
+  Pattern GET ["blog", PathParam blogID, sectionName]
 
 -- | Test example patterns in Okapi.Pattern module
 --
--- >>> parser = testMatcher
---
--- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/blog" "")
+-- >>> result1 <- testParserIO testMatcher (TestRequest "GET" [] "/blog" "")
 -- >>> assertResponse is200 result1
 -- True
--- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/blog/2" "")
+-- >>> result2 <- testParserIO testMatcher (TestRequest "GET" [] "/blog/2" "")
 -- >>> assertResponse is200 result2
 -- True
--- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/blog/7/intro" "")
+-- >>> result3 <- testParserIO testMatcher (TestRequest "GET" [] "/blog/7/intro" "")
 -- >>> assertResponse is200 result3
 -- True
---
--- >>> result4 <- testParserIO parser (TestRequest "GET" [] "/blog?author=Diamond&category=pets" "")
+-- >>> result4 <- testParserIO testMatcher (TestRequest "GET" [] "/blog?author=Diamond&category=pets" "")
 -- >>> assertResponse is200 result4
 -- True
---
--- >>> result5 <- testParserIO parser (TestRequest "GET" [] "/blog?author=Diamond" "")
+-- >>> result5 <- testParserIO testMatcher (TestRequest "GET" [] "/blog?author=Johnson" "")
 -- >>> assertResponse is200 result5
--- False
+-- True
 testMatcher :: MonadOkapi m => m Response
-testMatcher = matchURLWith $ \case
+testMatcher = matchWith $ \case
   BlogRoute -> respond _200
   BlogRouteId blogID -> respond _200
   BlogRouteIdSection blogID sectionName -> respond _200
-  BlogQueryRoute author category -> respond _200
-  _ -> skip
+  _ -> Okapi.skip
 
-testPattern :: (URLData -> Bool) -> URLData -> Bool
+testPattern :: (Pattern -> Bool) -> Pattern -> Bool
 testPattern f = f
 
 -- >>> testBlogPattern

@@ -3,8 +3,8 @@
 
 -- | This module exports functions for turning HTTP request parsers into WAI applications.
 module Okapi.Application
-  ( okapiApp,
-    okapiAppWebsockets,
+  ( app,
+    Okapi.Application.websocketsApp,
   )
 where
 
@@ -21,7 +21,7 @@ import Okapi.Event
 import Okapi.Types
 
 -- | Turns a parser into a WAI application
-okapiApp ::
+app ::
   Monad m =>
   -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
   (forall a. m a -> IO a) ->
@@ -30,8 +30,9 @@ okapiApp ::
   -- | The parser used to match the request
   OkapiT m Response ->
   Wai.Application
-okapiApp hoister defaultResponse okapiT waiRequest respond = do
-  (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) (waiRequestToState waiRequest)
+app hoister defaultResponse okapiT waiRequest respond = do
+  state <- waiRequestToState waiRequest
+  (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) state
   let response =
         case eitherFailureOrResponse of
           Left Skip -> defaultResponse
@@ -45,23 +46,24 @@ okapiApp hoister defaultResponse okapiT waiRequest respond = do
       ResponseBodyFile filePath -> respond $ Wai.responseFile (toEnum $ fromEnum responseStatus) responseHeaders filePath Nothing
       ResponseBodyEventSource eventSource -> (Middleware.gzip Middleware.def $ eventSourceAppUnagiChan eventSource) waiRequest respond
 
-    waiRequestToState :: Wai.Request -> State
-    waiRequestToState waiRequest =
+    waiRequestToState :: Wai.Request -> IO State
+    waiRequestToState waiRequest = do
+      requestBody <- Wai.strictRequestBody waiRequest
       let requestMethod = Wai.requestMethod waiRequest
           requestPath = Wai.pathInfo waiRequest
           requestQuery = HTTP.queryToQueryText $ Wai.queryString waiRequest
-          requestBody = Wai.strictRequestBody waiRequest
           requestHeaders = Wai.requestHeaders waiRequest
           requestVault = Wai.vault waiRequest
           stateRequest = Request {..}
           stateRequestMethodParsed = False
           stateRequestBodyParsed = False
           stateResponded = False
-       in State {..}
+
+      pure State {..}
 
 -- | Turns a parsers into a WAI application with WebSocket functionality
 -- See __ for information on how to create a WebSocket server
-okapiAppWebsockets ::
+websocketsApp ::
   Monad m =>
   (forall a. m a -> IO a) ->
   Response ->
@@ -71,6 +73,6 @@ okapiAppWebsockets ::
   -- | The server to use for handling WebSocket connections
   WS.ServerApp ->
   Wai.Application
-okapiAppWebsockets hoister defaultResponse okapiT connSettings serverApp =
-  let backup = okapiApp hoister defaultResponse okapiT
-   in WS.websocketsOr connSettings serverApp backup
+websocketsApp hoister defaultResponse okapiT connSettings serverApp =
+  let backupApp = app hoister defaultResponse okapiT
+   in WS.websocketsOr connSettings serverApp backupApp
