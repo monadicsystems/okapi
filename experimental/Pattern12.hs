@@ -120,3 +120,43 @@ testBlogPattern = testPattern (\case BlogRoute -> True; _ -> False) BlogRoute
 -- True
 testBlogIdPattern :: Bool
 testBlogIdPattern = testPattern (\case BlogRouteId 7 -> True; _ -> False) (BlogRouteId 7)
+
+-- $setup
+-- >>> :set -XFlexibleContexts
+-- >>> :set -XOverloadedStrings
+-- >>> import Okapi.Response
+-- >>> import Okapi.Test
+
+{-
+encodePattern :: Request -> URL
+encodePattern p = undefined
+
+decodePattern :: URL -> Maybe Request
+decodePattern (URL "") = Nothing
+decodePattern (URL url) = eitherToMaybe $
+  flip Atto.parseOnly url $ do
+    path <- many pathSeg
+    maybeQueryStart <- optional $ Atto.char '?'
+    case maybeQueryStart of
+      Nothing -> pure $ Request GET path mempty
+      Just _ -> do
+        query <- Map.fromList <$> many queryParam
+        pure $ Request GET path query
+  where
+    pathSeg :: Atto.Parser Text
+    pathSeg = do
+      Atto.char '/'
+      Atto.takeWhile (\c -> c /= '/' && c /= '?')
+
+    queryParam :: Atto.Parser (Text, QueryValue)
+    queryParam = do
+      queryParamName <- Atto.takeWhile (\c -> c /= '=' && c /= '&')
+      mbEquals <- optional $ Atto.char '='
+      case mbEquals of
+        Nothing -> pure (queryParamName, QueryFlag)
+        Just _ -> do
+          queryParamValue <- Atto.takeWhile (/= '&')
+          pure (queryParamName, QueryParam queryParamValue)
+-}
+
+-- BELOW IS FOR TESTING

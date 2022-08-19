@@ -1,9 +1,11 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module Okapi.Test
-  ( TestRequest (..),
-    testParser,
+  ( testParser,
     testParserIO,
     assertFailure,
     assertState,
@@ -29,6 +31,7 @@ import qualified Data.Bifunctor
 import Data.ByteString.Internal as BS
 import Data.ByteString.Lazy.Internal as LBS
 import Data.Function
+import Data.Text.Encoding (encodeUtf8)
 import Network.HTTP.Types (decodePath, queryToQueryText)
 import qualified Network.HTTP.Types as HTTP
 import Network.Wai (defaultRequest)
@@ -39,40 +42,43 @@ import Okapi.Application
 import Okapi.Response
 import Okapi.Types
 
-data TestRequest = TestRequest
-  { testRequestMethod :: HTTP.Method,
-    testRequestHeaders :: HTTP.RequestHeaders,
-    testRequestRawPath :: BS.ByteString,
-    testRequestBody :: LBS.ByteString
-  }
+requestURL :: Request -> URL
+requestURL (Request _ [] query _ _) = "?" <> queryToURL query
+requestURL (Request _ path [] _ _) = pathToURL path
+requestURL (Request _ path query _ _) = pathToURL path <> "?" <> queryToURL query
+requestURL _ = ""
+
+queryToURL :: Query -> URL
+queryToURL [] = ""
+queryToURL ((name, QueryFlag) : query) = URL name <> "&" <> queryToURL query
+queryToURL ((name, QueryParam value) : query) = URL name <> "=" <> URL value <> "&" <> queryToURL query
+
+pathToURL :: Path -> URL
+pathToURL [] = ""
+pathToURL (pathSeg : path) = "/" <> URL pathSeg <> pathToURL path
 
 testParser ::
   Monad m =>
   (forall a. m a -> IO a) ->
   OkapiT m Response ->
-  TestRequest ->
+  Request ->
   IO (Either Failure Response, State)
-testParser hoister okapiT testRequest =
+testParser hoister okapiT request =
   (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT)
-    (testRequestToState testRequest)
+    (requestToState request)
 
 testParserIO ::
   OkapiT IO Response ->
-  TestRequest ->
+  Request ->
   IO (Either Failure Response, State)
 testParserIO = testParser id
 
-testRequestToState :: TestRequest -> State
-testRequestToState (TestRequest method headers rawPath body) =
-  let requestMethod = method
-      (requestPath, requestQuery) = Data.Bifunctor.second queryToQueryText $ decodePath rawPath
-      requestBody = body
-      requestHeaders = headers
-      requestVault = mempty
-      stateRequest = Request {..}
-      stateRequestMethodParsed = False
+requestToState :: Request -> State
+requestToState stateRequest =
+  let stateRequestMethodParsed = False
       stateRequestBodyParsed = False
       stateResponded = False
+      stateVault = mempty
    in State {..}
 
 -- ASSERTION FUNCTIONS TODO: Add common assertion helpers
@@ -137,21 +143,13 @@ withSession ::
   IO a
 withSession hoister okapiT session = runSession session hoister okapiT
 
-testRequest :: TestRequest -> Wai.Test.Session Wai.Test.SResponse
-testRequest TestRequest {..} =
-  let request =
-        Wai.defaultRequest
-          { Wai.requestMethod = testRequestMethod,
-            Wai.requestHeaders = testRequestHeaders
-          }
-      simpleRequest = Wai.Test.setPath request testRequestRawPath
-      simpleRequestBody = testRequestBody
-      finalRequest = Wai.Test.SRequest simpleRequest simpleRequestBody
-   in Wai.Test.srequest finalRequest
+testRequest :: Request -> Wai.Test.Session Wai.Test.SResponse
+testRequest = Wai.Test.srequest . requestToSRequest
 
-testRequestToSRequest :: TestRequest -> Wai.Test.SRequest
-testRequestToSRequest (TestRequest method headers rawPath body) =
+requestToSRequest :: Request -> Wai.Test.SRequest
+requestToSRequest request@(Request method path query body headers) =
   let requestMethod = method
       sRequestBody = body
+      rawPath = requestURL request & \(URL url) -> encodeUtf8 url
       sRequestRequest = Wai.Test.setPath (defaultRequest {Wai.requestMethod = method, Wai.requestHeaders = headers}) rawPath
    in SRequest sRequestRequest sRequestBody

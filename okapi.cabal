@@ -31,7 +31,7 @@ library
       Okapi.Application
       Okapi.Event
       Okapi.Parser
-      Okapi.Pattern
+      Okapi.Patterns
       Okapi.Response
       Okapi.Route
       Okapi.Test

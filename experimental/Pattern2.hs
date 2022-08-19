@@ -26,9 +26,11 @@ import Web.HttpApiData
 -- >>> import Okapi.Response
 -- >>> import Okapi.Test
 
-data QueryValue = QueryParam Text | QueryFlag deriving (Eq, Show)
+type Query = Map Text QueryValue
 
-data Pattern = Pattern HTTP.Method [Text] (Map Text QueryValue) deriving (Eq, Show)
+data QueryValue = QueryParam Text | QueryFlag deriving (Eq, Show) -- QueryList [Text]
+
+data Pattern = Pattern HTTP.Method [Text] Query deriving (Eq, Show)
 
 pattern GET :: HTTP.Method
 pattern GET = "GET"
@@ -51,33 +53,34 @@ pattern PathParam param <-
   where
     PathParam param = toUrlPiece param
 
-pattern NoQueryParams :: Map Text QueryValue
+pattern HasQueryParam :: FromHttpApiData a => a -> Maybe QueryParam
+pattern HasQueryParam value <- Just (QueryParam (parseUrlPiece -> Just value))
+
+pattern HasQueryFlag :: Maybe QueryParam
+pattern HasQueryFlag <- Just QueryFlag
+
+pattern NoQueryParams :: Query
 pattern NoQueryParams <-
-  (Map.null -> True)
+  (null -> True)
   where
     NoQueryParams = mempty
 
-viewQuery :: Text -> Map Text QueryValue -> (Maybe QueryValue, Map Text QueryValue)
-viewQuery queryParamName queryMap = case Map.lookup queryParamName queryMap of
-  Nothing -> (Nothing, queryMap)
-  just -> (just, Map.delete queryParamName queryMap)
-
-pattern FoundQueryParam :: Text -> Maybe QueryValue
-pattern FoundQueryParam queryParamValue <- Just (QueryParam queryParamValue)
-
-pattern FoundQueryFlag :: Maybe QueryValue
-pattern FoundQueryFlag <- Just QueryFlag
+viewQuery :: Text -> Query -> (Maybe QueryValue, Query)
+viewQuery name query = case Map.lookup name query of
+  Nothing -> (Nothing, query)
+  Just value -> (Just value, Map.delete name query)
 
 parsePattern :: MonadOkapi m => m Pattern
 parsePattern = do
   method <- parseMethod
   path <- some parsePathSeg
-  queryMap <- parseAllQueryItems
-  pure $ Pattern method path (fmap (\case Just txt -> QueryParam txt; Nothing -> QueryFlag) queryMap) -- Should be a parser that parses everything
+  query <- fmap (\case Just txt -> QueryParam txt; Nothing -> QueryFlag) parseAllQueryItems
+  pure $ Pattern method path query
 
 matchWith :: MonadOkapi m => (Pattern -> m Response) -> m Response
 matchWith matcher = parsePattern >>= matcher
 
+{-
 encodePattern :: Pattern -> URL
 encodePattern p = undefined
 
@@ -107,6 +110,7 @@ decodePattern (URL url) = eitherToMaybe $
         Just _ -> do
           queryParamValue <- Atto.takeWhile (/= '&')
           pure (queryParamName, QueryParam queryParamValue)
+-}
 
 -- BELOW IS FOR TESTING
 
@@ -134,7 +138,7 @@ pattern BlogQueryRoute author category <-
   Pattern
     GET
     ["blog"]
-    (viewQuery "author" -> (FoundQueryParam author, viewQuery "category" -> (FoundQueryParam category, _)))
+    (viewQuery "author" -> (HasQueryParam author, viewQuery "category" -> (HasQueryParam category, _)))
   where
     BlogQueryRoute author category = Pattern GET ["blog"] (Map.fromList [("author", QueryParam author), ("category", QueryParam category)])
 

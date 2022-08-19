@@ -20,6 +20,7 @@ import qualified Control.Monad.Reader.Class as Reader
 import qualified Control.Monad.State.Strict as State
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
+import Data.Map
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -142,21 +143,21 @@ data State = State
     -- TODO: Remove state checkers??
     stateRequestMethodParsed :: Bool,
     stateRequestBodyParsed :: Bool,
-    stateResponded :: Bool
+    stateResponded :: Bool,
+    stateVault :: Vault.Vault
     -- add HTTPDataStore???
   }
 
 data Request = Request
-  { requestMethod :: HTTP.Method,
+  { requestMethod :: Method,
     requestPath :: Path,
     requestQuery :: Query,
-    requestBody :: LBS.ByteString,
-    requestHeaders :: Headers,
-    requestVault :: Vault.Vault
+    requestBody :: Body,
+    requestHeaders :: Headers
   }
 
 data Response = Response
-  { responseStatus :: Natural.Natural,
+  { responseStatus :: Status,
     responseHeaders :: Headers,
     responseBody :: ResponseBody
   }
@@ -173,17 +174,29 @@ instance Show Failure where
   show Skip = "Skipped"
   show (Error _) = "Error returned"
 
+type Method = HTTP.Method
+
 type Path = [Text.Text]
 
-type Headers = [HTTP.Header]
-
-type QueryItem = (Text.Text, Maybe Text.Text)
-
 type Query = [QueryItem]
+
+type QueryItem = (Text, QueryValue)
+
+data QueryValue = QueryParam Text | QueryFlag deriving (Eq, Show) -- QueryList [Text]
+
+type Body = LBS.ByteString
+
+type Headers = [Header]
+
+type Header = (HeaderName, BS.ByteString)
+
+type HeaderName = HTTP.HeaderName
 
 type Cookie = (Text.Text, Text.Text)
 
 type Cookies = [Cookie]
+
+type Status = Natural.Natural
 
 class ToSSE a where
   toSSE :: a -> Event

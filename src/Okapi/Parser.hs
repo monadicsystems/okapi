@@ -80,7 +80,14 @@ module Okapi.Parser
     parseMethod,
     parsePathSeg,
     parseQueryItem,
-    -- parseAllQueryItems,
+    parsePath,
+    Okapi.Parser.parseQuery,
+    parseHeaders,
+    parseBody,
+    parseRequest,
+
+    -- * Special
+    match,
   )
 where
 
@@ -89,6 +96,7 @@ import qualified Control.Monad.Except as Except
 import qualified Control.Monad.IO.Class as IO
 import qualified Control.Monad.State.Strict as State
 import qualified Data.Aeson as Aeson
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as Foldable
@@ -330,7 +338,9 @@ pathWildcard = do
 queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> m a
 queryParam queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
-  maybe skip pure (Web.parseQueryParamMaybe =<< queryItemValue)
+  case queryItemValue of
+    QueryFlag -> skip
+    QueryParam valueText -> maybe skip pure (Web.parseQueryParamMaybe valueText)
 
 -- | Parses the value of a query parameter as raw @Text@.
 -- Use this instead of @queryParam@ if you want to process the query parameter yourself
@@ -361,7 +371,9 @@ queryParam queryItemName = do
 queryParamRaw :: forall m. MonadOkapi m => Text.Text -> m Text.Text
 queryParamRaw queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
-  maybe skip pure queryItemValue
+  case queryItemValue of
+    QueryFlag -> skip
+    QueryParam raw -> pure raw
 
 -- | Test for the existance of a query flag
 --
@@ -514,6 +526,9 @@ parseMethod = do
       State.modify (\state -> state {stateRequestMethodParsed = True})
       pure method
 
+parsePath :: MonadOkapi m => m [Text.Text]
+parsePath = some parsePathSeg
+
 parsePathSeg :: MonadOkapi m => m Text.Text
 parsePathSeg = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
@@ -536,13 +551,19 @@ parseQueryItem queryItemName = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = List.delete queryItem $ requestQuery $ stateRequest state}})
       pure queryItem
 
--- parseAllQueryItems :: MonadOkapi m => m (Map Text (Maybe Text))
--- parseAllQueryItems = do
---   query <- State.gets (requestQuery . stateRequest)
---   State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
---   pure $ Map.fromList query
+parseQuery :: MonadOkapi m => m Query
+parseQuery = do
+  query <- State.gets (requestQuery . stateRequest)
+  State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
+  pure query
 
-parseHeader :: MonadOkapi m => HTTP.HeaderName -> m HTTP.Header
+parseHeaders :: MonadOkapi m => m Headers
+parseHeaders = do
+  headers <- State.gets (requestHeaders . stateRequest)
+  State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = []}})
+  pure headers
+
+parseHeader :: MonadOkapi m => HTTP.HeaderName -> m Header
 parseHeader headerName = do
   maybeHeader <- State.gets (Foldable.find (\(headerName', _) -> headerName == headerName') . requestHeaders . stateRequest)
   case maybeHeader of
@@ -560,6 +581,21 @@ parseBody = do
       body <- State.gets (requestBody . stateRequest)
       State.modify (\state -> state {stateRequestBodyParsed = True})
       pure body
+
+parseRequest :: MonadOkapi m => m Request
+parseRequest = Request <$> parseMethod <*> parsePath <*> Okapi.Parser.parseQuery <*> parseBody <*> parseHeaders
+
+match :: MonadOkapi m => (Request -> m Response) -> m Response
+match matcher = parseRequest >>= matcher
+
+lookupQuery :: MonadOkapi m => Text -> Query -> m QueryValue
+lookupQuery name query = maybe skip pure (List.lookup name query)
+
+lookupHeaders :: MonadOkapi m => HeaderName -> Headers -> m BS.ByteString
+lookupHeaders name headers = maybe skip pure (List.lookup name headers)
+
+lookupForm :: (MonadOkapi m, Web.FromHttpApiData a) => Text -> Body -> m a
+lookupForm = undefined
 
 {-
 TODO: HTTPDataStore? Not really needed because you can just pass data normally or store in own monad.

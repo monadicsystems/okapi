@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -11,6 +12,7 @@ where
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.State.Strict as State
+import qualified Data.Map as Map
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai as Wai
 import Network.Wai.Handler.WebSockets
@@ -51,13 +53,13 @@ app hoister defaultResponse okapiT waiRequest respond = do
       requestBody <- Wai.strictRequestBody waiRequest
       let requestMethod = Wai.requestMethod waiRequest
           requestPath = Wai.pathInfo waiRequest
-          requestQuery = HTTP.queryToQueryText $ Wai.queryString waiRequest
+          requestQuery = map (\case (name, Nothing) -> (name, QueryFlag); (name, Just txt) -> (name, QueryParam txt)) $ HTTP.queryToQueryText $ Wai.queryString waiRequest
           requestHeaders = Wai.requestHeaders waiRequest
-          requestVault = Wai.vault waiRequest
           stateRequest = Request {..}
           stateRequestMethodParsed = False
           stateRequestBodyParsed = False
           stateResponded = False
+          stateVault = Wai.vault waiRequest
 
       pure State {..}
 
