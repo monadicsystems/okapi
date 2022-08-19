@@ -12,7 +12,7 @@ import GHC.Generics (Generic)
 import Okapi
 
 main :: IO ()
-main = run id _404 3000 calc
+main = run id notFound 3000 calc
 
 type Okapi a = OkapiT IO a
 
@@ -27,20 +27,20 @@ addOp = do
   pathSeg "add"
   (x, y) <- getArgs
   respond $
-    json (x + y) _200
+    json (x + y) ok
 
 subOp :: Okapi Response
 subOp = do
   pathSeg "sub" <|> pathSeg "minus"
   (x, y) <- getArgs
   respond $
-    _200 & json (x - y)
+    ok & json (x - y)
 
 mulOp :: Okapi Response
 mulOp = do
   pathSeg "mul"
   (x, y) <- getArgs
-  _200 & json (x * y) & respond
+  ok & json (x * y) & respond
 
 data DivResult = DivResult
   { answer :: Int,
@@ -53,9 +53,9 @@ divOp = do
   pathSeg "div"
   (x, y) <- getArgs
   if y == 0
-    then throw _403
+    then throw $ Response 403 [] $ ResponseBodyRaw "Forbidden"
     else
-      _200
+      ok
         & json DivResult {answer = x `div` y, remainder = x `mod` y}
         & respond
 

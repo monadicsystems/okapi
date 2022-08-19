@@ -15,7 +15,7 @@ import Data.Functor.Invariant
 import Data.Map
 import Data.Text
 import GHC.IO.Handle.Types (Handle__)
-import Okapi (_200)
+import Okapi (ok)
 import Okapi.Parser
 import Okapi.Types
 import Web.HttpApiData

@@ -123,7 +123,7 @@ import Prelude hiding (head)
 -- >>> import Okapi.Test
 
 -- |
--- >>> let parser = get >> respond _200
+-- >>> let parser = get >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -131,7 +131,7 @@ get :: forall m. MonadOkapi m => m ()
 get = method HTTP.methodGet
 
 -- |
--- >>> let parser = post >> respond _200
+-- >>> let parser = post >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "POST" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -139,7 +139,7 @@ post :: forall m. MonadOkapi m => m ()
 post = method HTTP.methodPost
 
 -- |
--- >>> let parser = Okapi.Parser.head >> respond _200
+-- >>> let parser = Okapi.Parser.head >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "HEAD" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -147,7 +147,7 @@ head :: forall m. MonadOkapi m => m ()
 head = method HTTP.methodHead
 
 -- |
--- >>> let parser = put >> respond _200
+-- >>> let parser = put >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "PUT" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -155,7 +155,7 @@ put :: forall m. MonadOkapi m => m ()
 put = method HTTP.methodPut
 
 -- |
--- >>> let parser = delete >> respond _200
+-- >>> let parser = delete >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "DELETE" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -163,7 +163,7 @@ delete :: forall m. MonadOkapi m => m ()
 delete = method HTTP.methodDelete
 
 -- |
--- >>> let parser = trace >> respond _200
+-- >>> let parser = trace >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "TRACE" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -171,7 +171,7 @@ trace :: forall m. MonadOkapi m => m ()
 trace = method HTTP.methodTrace
 
 -- |
--- >>> let parser = connect >> respond _200
+-- >>> let parser = connect >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "CONNECT" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -179,7 +179,7 @@ connect :: forall m. MonadOkapi m => m ()
 connect = method HTTP.methodConnect
 
 -- |
--- >>> let parser = options >> respond _200
+-- >>> let parser = options >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "OPTIONS" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -187,7 +187,7 @@ options :: forall m. MonadOkapi m => m ()
 options = method HTTP.methodOptions
 
 -- |
--- >>> let parser = patch >> respond _200
+-- >>> let parser = patch >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "PATCH" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -195,7 +195,7 @@ patch :: forall m. MonadOkapi m => m ()
 patch = method HTTP.methodPatch
 
 -- |
--- >>> let parser = anyMethod >> respond _200
+-- >>> let parser = anyMethod >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "FOOBLAH" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -203,7 +203,7 @@ anyMethod :: forall m. MonadOkapi m => m ()
 anyMethod = parseMethod >> pure ()
 
 -- |
--- >>> let parser = method "CUSTOM" >> respond _200
+-- >>> let parser = method "CUSTOM" >> respond ok
 -- >>> result <- testParserIO parser (TestRequest "CUSTOM" [] "" "")
 -- >>> assertResponse is200 result
 -- True
@@ -221,7 +221,7 @@ method method = do
 --   get
 --   pathSeg "store"
 --   pathSeg "clothing"
---   respond _200;
+--   respond ok;
 -- :}
 --
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
@@ -236,7 +236,7 @@ pathSeg goal = pathSegWith (goal ==)
 -- parser = do
 --   get
 --   path ["store", "clothing"]
---   respond _200
+--   respond ok
 -- :}
 --
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
@@ -253,7 +253,7 @@ path = mapM_ pathSeg
 --   get
 --   pathSeg "product"
 --   productID <- pathParam @Int
---   respond $ json productID $ _200;
+--   respond $ json productID $ ok;
 -- :}
 --
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
@@ -272,7 +272,7 @@ pathParam = do
 --   get
 --   pathSeg "product"
 --   productID <- pathParamRaw
---   respond $ json productID $ _200
+--   respond $ json productID $ ok
 -- :}
 --
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
@@ -290,7 +290,7 @@ pathParamRaw = parsePathSeg
 --   get
 --   pathSeg "product"
 --   pathSegWith isValidProductID
---   respond _200
+--   respond ok
 -- :}
 --
 -- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
@@ -327,7 +327,7 @@ pathWildcard = do
 --   get
 --   pathSeg "product"
 --   minQty <- queryParam @Int "min_qty"
---   respond $ setBodyRaw (showLBS $ minQty + 3) $ _200
+--   respond $ setBodyRaw (showLBS $ minQty + 3) $ ok
 -- :}
 --
 -- >>> result <- testParserIO parser (TestRequest "GET" [] "/product?min_qty=2" "")
@@ -360,8 +360,8 @@ queryParam queryItemName = do
 --   path ["flip", "my", "bit"]
 --   bitRaw <- queryParamRaw "value"
 --   case parseBit bitRaw of
---     Just Zero -> respond $ setBodyRaw "1" $ _200
---     Just One  -> respond $ setBodyRaw "0" $ _200
+--     Just Zero -> respond $ setBodyRaw "1" $ ok
+--     Just One  -> respond $ setBodyRaw "0" $ ok
 --     Nothing   -> throw _500
 -- :}
 --
@@ -384,8 +384,8 @@ queryParamRaw queryItemName = do
 --   isAdmin <- queryFlag "admin"
 --   respond $
 --     if isAdmin
---       then json ["Derek", "Alice"] $ _200
---       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ _200
+--       then json ["Derek", "Alice"] $ ok
+--       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ ok
 -- :}
 --
 -- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/users?admin" "")

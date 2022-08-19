@@ -103,9 +103,9 @@ pattern BlogRouteIdSection blogID sectionName =
 -- True
 testMatcher :: MonadOkapi m => m Response
 testMatcher = matchWith $ \case
-  BlogRoute -> respond _200
-  BlogRouteId blogID -> respond _200
-  BlogRouteIdSection blogID sectionName -> respond _200
+  BlogRoute -> respond ok
+  BlogRouteId blogID -> respond ok
+  BlogRouteIdSection blogID sectionName -> respond ok
   _ -> Okapi.skip
 
 testPattern :: (Pattern -> Bool) -> Pattern -> Bool

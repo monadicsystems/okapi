@@ -109,7 +109,7 @@ main :: IO ()
 main = do
   conn <- open "todo.db"
   execute_ conn "CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, name TEXT, status TEXT)"
-  run id _404 3000 (todoAPI conn)
+  run id notFound 3000 (todoAPI conn)
   close conn
 
 -- SERVER FUNCTIONS
@@ -127,7 +127,7 @@ healthCheck :: Okapi Response
 healthCheck = do
   get
   optional $ pathSeg ""
-  respond _200
+  respond ok
 
 getTodo :: Connection -> Okapi Response
 getTodo conn = do
@@ -136,8 +136,8 @@ getTodo conn = do
   todoID <- pathParam @Int
   maybeTodo <- lift $ selectTodo conn todoID
   case maybeTodo of
-    Nothing -> throw _500
-    Just todo -> _200 & json todo & respond
+    Nothing -> throw $ Response 500 [] $ ResponseBodyRaw ""
+    Just todo -> ok & json todo & respond
 
 getAllTodos :: Connection -> Okapi Response
 getAllTodos conn = do
@@ -145,7 +145,7 @@ getAllTodos conn = do
   pathSeg "todos"
   status <- optional $ queryParam @Status "status"
   todos <- lift $ selectAllTodos conn status
-  _200 & json todos & respond
+  ok & json todos & respond
 
 createTodo :: Connection -> Okapi Response
 createTodo conn = do
@@ -153,7 +153,7 @@ createTodo conn = do
   pathSeg "todos"
   todoForm <- bodyForm
   lift $ insertTodoForm conn todoForm
-  respond _200
+  respond ok
 
 editTodo :: Connection -> Okapi Response
 editTodo conn = do
@@ -162,7 +162,7 @@ editTodo conn = do
   todoID <- pathParam @Int
   todoForm <- bodyForm @TodoForm
   lift $ updateTodo conn todoID todoForm
-  respond _200
+  respond ok
 
 forgetTodo :: Connection -> Okapi Response
 forgetTodo conn = do
@@ -170,7 +170,7 @@ forgetTodo conn = do
   pathSeg "todos"
   todoID <- pathParam @Int
   lift $ deleteTodo conn todoID
-  respond _200
+  respond ok
 
 -- DATABASE FUNCTIONS
 

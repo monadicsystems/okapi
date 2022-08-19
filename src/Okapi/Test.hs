@@ -132,7 +132,7 @@ runSession ::
   OkapiT m Response ->
   IO a
 runSession session hoister okapiT = do
-  let waiApp = app hoister _404 okapiT
+  let waiApp = app hoister notFound okapiT
   Wai.Test.runSession session waiApp
 
 withSession ::

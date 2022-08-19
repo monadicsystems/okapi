@@ -3,12 +3,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Okapi.Response
-  ( _200,
-    _204,
-    _401,
-    _403,
-    _404,
-    _500,
+  ( ok,
+    notFound,
     redirect,
     -- RESPONSE BODY MODIFIERS
     plaintext,
@@ -38,51 +34,23 @@ import Okapi.Types
 
 -- BASE RESPONSES
 
-_200 :: Response
-_200 =
+ok :: Response
+ok =
   let responseStatus = 200
       responseHeaders = []
       responseBody = ResponseBodyRaw "OK"
    in Response {..}
 
-_204 :: Response
-_204 =
-  let responseStatus = 204
-      responseHeaders = []
-      responseBody = ResponseBodyRaw "No Content"
-   in Response {..}
-
-_403 :: Response
-_403 =
-  let responseStatus = 403
-      responseHeaders = []
-      responseBody = ResponseBodyRaw "Forbidden"
-   in Response {..}
-
-_404 :: Response
-_404 =
+notFound :: Response
+notFound =
   let responseStatus = 404
       responseHeaders = []
       responseBody = ResponseBodyRaw "Not Found"
    in Response {..}
 
-_401 :: Response
-_401 =
-  let responseStatus = 401
-      responseHeaders = []
-      responseBody = ResponseBodyRaw "Unauthorized"
-   in Response {..}
-
-_500 :: Response
-_500 =
-  let responseStatus = 500
-      responseHeaders = []
-      responseBody = ResponseBodyRaw "Internal Server Error"
-   in Response {..}
-
-redirect :: URL -> Response
-redirect (URL url) =
-  let responseStatus = 302
+redirect :: Status -> URL -> Response
+redirect status (URL url) =
+  let responseStatus = status
       responseHeaders = [("Location", encodeUtf8 url)]
       responseBody = ResponseBodyRaw ""
    in Response {..}
@@ -93,7 +61,7 @@ plaintext :: Text.Text -> Response -> Response
 plaintext text response =
   response
     & setHeader ("Content-Type", "text/plain")
-    & setBody (ResponseBodyRaw $ LBS.fromStrict . Text.encodeUtf8 $ text)
+    & setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
 
 html :: LBS.ByteString -> Response -> Response
 html htmlRaw response =
@@ -105,7 +73,7 @@ json :: forall a. Aeson.ToJSON a => a -> Response -> Response
 json value response =
   response
     & setHeader ("Content-Type", "application/json")
-    & setBody (ResponseBodyRaw $ Aeson.encode value)
+    & setBodyRaw (Aeson.encode value)
 
 setBodyFile :: FilePath -> Response -> Response
 setBodyFile path = setBody (ResponseBodyFile path) -- TODO: setHeader???

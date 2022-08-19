@@ -44,7 +44,7 @@ someRoute =
   |]
 
 someRouteHandler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
-someRouteHandler (_, _, _, _) = respond _200
+someRouteHandler (_, _, _, _) = respond ok
 
 someRoute2 =
   [route|
@@ -59,7 +59,7 @@ someRoute2 =
   |]
 
 someRoute2Handler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
-someRoute2Handler (_, _, _, _) = respond _200
+someRoute2Handler (_, _, _, _) = respond ok
 
 someRoute3 =
   [route|
@@ -70,7 +70,7 @@ someRoute3 =
   |]
 
 verifyTodo :: Int -> Okapi Okapi.Response
-verifyTodo id_ = if id_ > 0 then pure _200 else Okapi.throw _204
+verifyTodo id_ = if id_ > 0 then pure ok else Okapi.throw _204
 
 someRoute3TestSession :: Session ()
 someRoute3TestSession = do
@@ -98,36 +98,36 @@ testServer = do
   let parser1 = do
         get
         pathSeg "todos"
-        respond _200
+        respond ok
 
       parser2 = do
         get
         path ["todos", "completed"]
-        respond _200
+        respond ok
 
       parser3 = do
         get
         pathSeg "todos"
         status <- queryParam "status"
-        _200
+        ok
           & plaintext status
           & respond
 
       parser4 = do
         get
         pathSeg "a"
-        respond _200
+        respond ok
 
       parser5 = do
         get
         pathSeg "todos"
         queryFlag "progress"
-        respond _200
+        respond ok
 
       parser6 = do
         get
         pathSeg ""
-        respond _200
+        respond ok
 
   choice
     [ parser3,
@@ -147,10 +147,10 @@ testServerQuasi =
       parser4
     ]
   where
-    parser1 = parser [route|Okapi.Patterns.GET /todos|] >> respond (_200 & plaintext "parser1")
-    parser2 = parser [route|Okapi.Patterns.GET /todos /completed|] >> respond (_200 & plaintext "parser2")
-    parser3 = parser [route|Okapi.Patterns.GET /todos ?status{Text}|] >>= (\status -> _200 & plaintext status & respond)
-    parser4 = parser [route|Okapi.Patterns.GET /a|] >> respond (_200 & plaintext "parser4")
+    parser1 = parser [route|Okapi.Patterns.GET /todos|] >> respond (ok & plaintext "parser1")
+    parser2 = parser [route|Okapi.Patterns.GET /todos /completed|] >> respond (ok & plaintext "parser2")
+    parser3 = parser [route|Okapi.Patterns.GET /todos ?status{Text}|] >>= (\status -> ok & plaintext status & respond)
+    parser4 = parser [route|Okapi.Patterns.GET /a|] >> respond (ok & plaintext "parser4")
 
 testSession :: Session ()
 testSession = do
@@ -221,10 +221,10 @@ pattern BlogQueryRoute author category <-
 -- False
 testMatcher :: MonadOkapi m => m Okapi.Response
 testMatcher = match $ \case
-  BlogRoute -> respond _200
-  BlogIDRoute blogID -> respond _200
-  BlogIDSectionRoute blogID sectionName -> respond _200
-  BlogQueryRoute author category -> respond _200
+  BlogRoute -> respond ok
+  BlogIDRoute blogID -> respond ok
+  BlogIDSectionRoute blogID sectionName -> respond ok
+  BlogQueryRoute author category -> respond ok
   _ -> Okapi.skip
 
 testPattern :: (Okapi.Request -> Bool) -> Okapi.Request -> Bool
