@@ -115,6 +115,7 @@ import qualified Web.Cookie as Cookie
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 import Prelude hiding (head)
+import Data.List.NonEmpty
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -587,6 +588,15 @@ parseRequest = Request <$> parseMethod <*> parsePath <*> Okapi.Parser.parseQuery
 
 match :: MonadOkapi m => (Request -> m Response) -> m Response
 match matcher = parseRequest >>= matcher
+
+routeToFile :: MonadOkapi m => Status -> Headers -> m Response
+routeToFile status headers = do
+  nonEmptyPath <- pathWildcard
+  let filePath = nonEmptyPathToFilePath nonEmptyPath
+  respond $ Response status headers $ ResponseBodyFile filePath 
+  where
+    nonEmptyPathToFilePath :: NonEmpty Text -> FilePath
+    nonEmptyPathToFilePath (base :| path) = unpack $ base <> Text.intercalate "/" path
 
 lookupQuery :: MonadOkapi m => Text -> Query -> m QueryValue
 lookupQuery name query = maybe skip pure (List.lookup name query)
