@@ -101,6 +101,7 @@ import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Foldable as Foldable
 import qualified Data.List as List
+import Data.List.NonEmpty
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
 import Data.Map.Strict (Map)
@@ -115,7 +116,6 @@ import qualified Web.Cookie as Cookie
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 import Prelude hiding (head)
-import Data.List.NonEmpty
 
 -- $setup
 -- >>> :set -XFlexibleContexts
@@ -589,14 +589,20 @@ parseRequest = Request <$> parseMethod <*> parsePath <*> Okapi.Parser.parseQuery
 match :: MonadOkapi m => (Request -> m Response) -> m Response
 match matcher = parseRequest >>= matcher
 
+-- TODO: Probably don't need??? I don't think so after some thought
+{-
 routeToFile :: MonadOkapi m => Status -> Headers -> m Response
 routeToFile status headers = do
   nonEmptyPath <- pathWildcard
   let filePath = nonEmptyPathToFilePath nonEmptyPath
-  respond $ Response status headers $ ResponseBodyFile filePath 
+  respond $ Response status headers $ ResponseBodyFile filePath
   where
     nonEmptyPathToFilePath :: NonEmpty Text -> FilePath
     nonEmptyPathToFilePath (base :| path) = unpack $ base <> Text.intercalate "/" path
+
+static :: MonadOkapi m => [Text] ->
+static
+-}
 
 lookupQuery :: MonadOkapi m => Text -> Query -> m QueryValue
 lookupQuery name query = maybe skip pure (List.lookup name query)

@@ -30,6 +30,7 @@ library
       Okapi
       Okapi.Application
       Okapi.Event
+      Okapi.Middleware
       Okapi.Parser
       Okapi.Patterns
       Okapi.Response

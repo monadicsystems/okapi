@@ -85,7 +85,7 @@ setBodyEventSource source response =
 
 -- RESPONSE SETTERS
 
-setStatus :: Natural.Natural -> Response -> Response
+setStatus :: Status -> Response -> Response
 setStatus status response = response {responseStatus = status}
 
 setHeaders :: Headers -> Response -> Response
@@ -93,7 +93,7 @@ setHeaders headers response = response {responseHeaders = headers}
 
 -- TODO: setCookie
 
-setHeader :: HTTP.Header -> Response -> Response
+setHeader :: Header -> Response -> Response
 setHeader header response@Response {..} =
   response {responseHeaders = update header responseHeaders}
   where
