@@ -125,7 +125,7 @@ import Prelude hiding (head)
 
 -- |
 -- >>> let parser = get >> respond ok
--- >>> result <- testParserIO parser (TestRequest "GET" [] "" "")
+-- >>> result <- testParserIO parser $ request GET "" "" []
 -- >>> assertResponse is200 result
 -- True
 get :: forall m. MonadOkapi m => m ()

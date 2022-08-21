@@ -23,14 +23,19 @@ module Okapi.Test
   )
 where
 
+import Control.Monad.Combinators
 import qualified Control.Monad.Except as Except
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.State.Strict as State
+import qualified Data.Attoparsec.Text as Atto
 import qualified Data.Bifunctor
 import Data.ByteString.Internal as BS
 import Data.ByteString.Lazy.Internal as LBS
+import Data.Either.Extra
 import Data.Function
+import qualified Data.Map as Map
+import Data.Text
 import Data.Text.Encoding (encodeUtf8)
 import Network.HTTP.Types (decodePath, queryToQueryText)
 import qualified Network.HTTP.Types as HTTP
@@ -42,11 +47,45 @@ import Okapi.Application
 import Okapi.Response
 import Okapi.Types
 
+request :: Method -> URL -> Body -> Headers -> Maybe Request
+request method url body headers = case parseURL url of
+  Nothing -> Nothing
+  Just (path, query) -> Just $ Request method path query body headers
+
+parseURL :: URL -> Maybe (Path, Query)
+parseURL (URL url) = eitherToMaybe $
+  flip Atto.parseOnly url $ do
+    path <- many pathSeg
+    maybeQueryStart <- optional $ Atto.char '?'
+    case maybeQueryStart of
+      Nothing -> pure (path, [])
+      Just _ -> do
+        query <- many queryParam
+        pure (path, query)
+  where
+    pathSeg :: Atto.Parser Text
+    pathSeg = do
+      Atto.char '/'
+      Atto.takeWhile (\c -> c /= '/' && c /= '?')
+
+    queryParam :: Atto.Parser (Text, QueryValue)
+    queryParam = do
+      queryParamName <- Atto.takeWhile (\c -> c /= '=' && c /= '&')
+      mbEquals <- optional $ Atto.char '='
+      case mbEquals of
+        Nothing -> pure (queryParamName, QueryFlag)
+        Just _ -> do
+          queryParamValue <- Atto.takeWhile (/= '&')
+          pure (queryParamName, QueryParam queryParamValue)
+
 requestURL :: Request -> URL
-requestURL (Request _ [] query _ _) = "?" <> queryToURL query
-requestURL (Request _ path [] _ _) = pathToURL path
-requestURL (Request _ path query _ _) = pathToURL path <> "?" <> queryToURL query
-requestURL _ = ""
+requestURL (Request _ path query _ _) = url path query
+
+url :: Path -> Query -> URL
+url [] [] = ""
+url [] query = "?" <> queryToURL query
+url path [] = pathToURL path
+url path query = pathToURL path <> "?" <> queryToURL query
 
 queryToURL :: Query -> URL
 queryToURL [] = ""

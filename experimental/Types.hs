@@ -124,10 +124,6 @@ instance Reader.MonadReader r m => Reader.MonadReader r (OkapiT m) where
       mapOkapiT f okapiT = OkapiT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
   reader = Morph.lift . Reader.reader
 
--- instance State.MonadState s m => State.MonadState s (OkapiT m) where
---   get = Morph.lift State.get
---   put = Morph.lift . State.put
-
 instance Morph.MonadTrans OkapiT where
   lift :: Monad m => m a -> OkapiT m a
   lift action = OkapiT . Except.ExceptT . State.StateT $ \s -> do
@@ -138,11 +134,10 @@ instance Morph.MFunctor OkapiT where
   hoist :: Monad m => (forall a. m a -> n a) -> OkapiT m b -> OkapiT n b
   hoist nat okapiT = OkapiT . Except.ExceptT . State.StateT $ (nat . State.runStateT (Except.runExceptT $ unOkapiT okapiT))
 
--- TODO: Just use Raw Wai Request
 data State = State
   { stateRequest :: Request,
     -- TODO: Remove state checkers??
-    stateRequestMethodParsed :: Bool,
+    stateRequestMethodParsed :: Bool, -- Use Maybe instead of State Checks
     stateRequestBodyParsed :: Bool,
     stateResponded :: Bool,
     stateVault :: Vault.Vault
