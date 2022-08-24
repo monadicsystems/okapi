@@ -122,3 +122,39 @@ pattern BlogRoute uuid <- ["blog", PathParam uuid]
   where
     BlogRoute uuid = ["blog", PathParam uuid]
 ```
+
+or just
+
+```haskell
+-- Bidriectional Implicit
+pattern BlogRoute :: Int -> Path
+pattern BlogRoute uuid = ["blog", PathParam uuid]
+
+pattern BlogCategoryRoute :: Text -> Path
+pattern BlogCategoryRoute category = ["blog", PathParam category]
+```
+
+uses these bidrectional patterns with the `route` parser, like so:
+
+```haskell
+route :: MonadOkapi m => (Path -> m Response) -> m Response
+route matcher = do
+  path <- parsePath
+  matcher path
+  
+myAPI :: MonadOkapi m => m Response
+myAPI = route $ \case
+  BlogRoute uuid -> do
+    get
+    return ok
+  BlogRouteCategory category -> do
+    get
+    mbOrderBy <- optional $ queryParam @Order "order"
+    case mbOrderBy of
+      Nothing -> do
+        ...
+        return ok
+      Just orderBy -> do
+        ...
+        return ok
+```
