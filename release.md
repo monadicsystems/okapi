@@ -157,4 +157,5 @@ myAPI = route $ \case
       Just orderBy -> do
         ...
         return ok
+  _ -> next
 ```
