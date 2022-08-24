@@ -105,5 +105,20 @@ Now if we run our parser, it will return a `200 OK` response if we send a `GET` 
 
 Explain `<|>` then explain we can also parser combinators like `many`, `some`, `optional`, `option`, `takeWhile`, etc.
 
-Then explain the two types of errors.
+Then explain the two types of errors and how to throw and catch them.
 
+Then explain returning responses and executing a parser.
+
+Explaining type safe URLs with patterns:
+
+## Patterns
+
+Okapi uses bi-directional patterns to have typesafe urls. So you would have something like:
+
+```haskell
+-- Matches routes of the form /blog/99
+pattern BlogRoute :: Int -> Path
+pattern BlogRoute uuid <- ["blog", PathParam uuid]
+  where
+    BlogRoute uuid = ["blog", PathParam uuid]
+```
