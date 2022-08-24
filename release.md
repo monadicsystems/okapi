@@ -47,4 +47,51 @@ values of type `ParserError` upon failing. Let's redefine the example we defined
 ```haskell
 ```
 
+Great.
 
+## HTTP Request Parsers
+
+Now, let's redefine `type Parser a = ExceptT ParserError (State String a)` as `type Parser a = ExceptT HTTPError (State HTTPRequest a)`. This is an HTTP Request Parser. Instead of parsing happening in a context where the computation has access to state of type `String` and can throw errors of type `ParserError`, it happens in a context where the computation has access to state of type `HTTPRequest` and can throw errors of type `HTTPError`. Just like the string parser above had a concept of "consuming" parts of a `String`, the HTTP request parser "consumes" values of the type `HTTPRequest`. By consume we mean .... If you break values of type `String` into its smallest consituents, you get values of type `Char`. A `String` value is a list of `Char` values. What are the smallest constituents of a `HTTPRequest` value? The data type `HTTPRequest` is defined as follows:
+
+```haskell
+data HTTPRequest = HTTPRequest
+  { method :: Method
+  , path :: [Text]
+  , query :: Query
+  , body :: ByteString
+  , headers :: Headers
+  }
+```
+
+<!-- Just like our basic string parser in the beginning removed the part of the string it parsed before using the next parser.
+ -->
+Our HTTP request parser consumes different parts of the HTTP request like the `method` and `query`. Once a piece of the HTTP request is parsed, it is removed from the request before it is implicitly passed to the next parser. There are 5 types of parsers for each of the 5 parts of a HTTP request.
+
+1. Method Parsers
+2. Path Parsers
+3. Query Parsers
+4. Body Parsers
+5. Headers Parsers
+
+We can use these to create increasingly complex parsers. For example, let's say we wanted to implement a HTTP parser that matches the request `GET /blog`. That would look like this:
+
+```haskell
+blogRoute :: Parser ()
+blogRoute = do
+  get            -- Make sure that the request is a GET request
+  pathSeg "blog" -- Match against the path segment /blog
+  pathEnd        -- Make sure that there are no more path segments remaining in the request
+```
+
+Just like earlier, with our monadic string parser, we can sequence HTTP request parsers using `do` notation. This request parser isn't really useful though because it doesn't return anything. Let's make it return a response:
+
+```haskell
+blogRoute :: Parser HTTPResponse
+blogRoute = do
+  get
+  pathSeg "blog"
+  pathEnd
+  return ok
+```
+
+Now if we run our parser, it will return a `200 OK` response if we send a `GET` request to the `/blog` endpoint. On top of being able to sequence parsers with `do` notation thanks to `Parser` being an instance of the `Monad` typeclass, we can also build parsers that "choose" between multiple subparsers. This is possible because the `Parser` type is also an instance of the `Alternative` typeclass, which provides the operator `<|>`.
