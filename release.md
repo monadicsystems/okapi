@@ -159,3 +159,23 @@ myAPI = route $ \case
         return ok
   _ -> next
 ```
+
+Since both routes are `GET` requests, let's factor out the `get` parser:
+
+```haskell
+myAPI :: MonadOkapi m => m Response
+myAPI = do
+  get
+  route $ \case
+    BlogRoute uuid -> return ok
+    BlogRouteCategory category -> do
+      mbOrderBy <- optional $ queryParam @Order "order"
+      case mbOrderBy of
+        Nothing -> do
+          ...
+          return ok
+        Just orderBy -> do
+          ...
+          return ok
+    _ -> next
+```
