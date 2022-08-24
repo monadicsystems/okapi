@@ -65,7 +65,14 @@ data HTTPRequest = HTTPRequest
 
 <!-- Just like our basic string parser in the beginning removed the part of the string it parsed before using the next parser.
  -->
-Our HTTP request parser consumes different parts of the HTTP request like the `method` and `query`. Once a piece of the HTTP request is parsed, it is removed from the request before it is implicitly passed to the next parser. There are 5 types of parsers for each of the 5 parts of a HTTP request.
+Our HTTP request parser consumes different parts of the HTTP request like the `method` and `query`. Once a piece of the HTTP request is parsed, it is removed from the request before it is implicitly passed to the next parser.
+
+There are 2 types of parsers:
+
+1. Data parsers
+2. Checker parsers
+
+There are 5 types of parsers for each of the 5 parts of a HTTP request.
 
 1. Method Parsers
 2. Path Parsers
@@ -94,4 +101,9 @@ blogRoute = do
   return ok
 ```
 
-Now if we run our parser, it will return a `200 OK` response if we send a `GET` request to the `/blog` endpoint. On top of being able to sequence parsers with `do` notation thanks to `Parser` being an instance of the `Monad` typeclass, we can also build parsers that "choose" between multiple subparsers. This is possible because the `Parser` type is also an instance of the `Alternative` typeclass, which provides the operator `<|>`.
+Now if we run our parser, it will return a `200 OK` response if we send a `GET` request to the `/blog` endpoint. On top of being able to sequence parsers with `do` notation thanks to `Parser` being an instance of the `Monad` typeclass, we can also build parsers that "choose" between multiple subparsers. This is possible because the `Parser` type is also an instance of the `Alternative` typeclass, which provides the `<|>` operator.
+
+Explain `<|>` then explain we can also parser combinators like `many`, `some`, `optional`, `option`, `takeWhile`, etc.
+
+Then explain the two types of errors.
+
