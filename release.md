@@ -258,6 +258,7 @@ instance URL Path where
 instance URL Query where
  
 instance URL RelURL where
+  render (RelURL p q) = render p <> render q 
 
 instance URL AbsURL where
 
