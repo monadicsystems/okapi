@@ -241,4 +241,12 @@ myAPI = do
 
 ## URLs
 
+There are two types of URLs that you can generate with Okapi:
 
+1. Relative URLs
+2. Absolute URLs
+
+```haskell
+data RelURL = RelURL Path Query
+data AbsURL = AbsURL Scheme Host (Maybe Port) RelURL
+```
