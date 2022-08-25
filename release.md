@@ -252,6 +252,10 @@ data AbsURL = AbsURL Scheme Host (Maybe Port) RelURL
 
 class URL a where
   render :: a -> Text
+  getPath :: a -> Path
+  setPath :: a -> Path -> a
+  getQuery :: a -> Query
+  setQuery :: a -> Query -> a
   
 instance URL RelURL where
 
