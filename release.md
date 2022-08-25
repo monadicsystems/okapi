@@ -249,4 +249,10 @@ There are two types of URLs that you can generate with Okapi:
 ```haskell
 data RelURL = RelURL Path Query
 data AbsURL = AbsURL Scheme Host (Maybe Port) RelURL
+
+renderRelURL :: RelURL -> Text
+
+renderAbsURL :: AbsURL -> Text
+
+blogRouteCategoryURL = renderRelURL $ BlogRouteCategory "fiction"
 ```
