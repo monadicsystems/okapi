@@ -250,9 +250,12 @@ There are two types of URLs that you can generate with Okapi:
 data RelURL = RelURL Path Query
 data AbsURL = AbsURL Scheme Host (Maybe Port) RelURL
 
-renderRelURL :: RelURL -> Text
+class URL a where
+  render :: a -> Text
+  
+instance URL RelURL where
 
-renderAbsURL :: AbsURL -> Text
+instance URL AbsURL where
 
-blogRouteCategoryURL = renderRelURL $ BlogRouteCategory "fiction"
+blogRouteCategoryURL = render $ BlogRouteCategory "fiction"
 ```
