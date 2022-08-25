@@ -247,22 +247,23 @@ There are two types of URLs that you can generate with Okapi:
 2. Absolute URLs
 
 ```haskell
+data URL = URL { unURL :: Text }
 data RelURL = RelURL Path Query
 data AbsURL = AbsURL Scheme Host (Maybe Port) RelURL
 
-class URL a where
-  render :: a -> Text
+class ToURL a where
+  render :: a -> URL
   
-instance URL Path where
+instance ToURL Path where
 
-instance URL Query where
+instance ToURL Query where
  
-instance URL RelURL where
+instance ToURL RelURL where
   render (RelURL p q) = render p <> render q 
 
-instance URL AbsURL where
+instance ToURL AbsURL where
 
-instance URL Request where
+instance ToURL Request where
 
 blogRouteCategoryURL = render $ BlogRouteCategory "fiction"
 ```
