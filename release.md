@@ -75,10 +75,69 @@ There are 2 types of parsers:
 There are 5 types of parsers for each of the 5 parts of a HTTP request.
 
 1. Method Parsers
+
+```haskell
+method :: MonadOkapi m => m Method
+
+matchMethod :: MonadOkapi m => Method -> m ()
+
+get :: MonadOkapi m => m ()
+get = matchMethod "GET"
+```
+
 2. Path Parsers
-3. Query Parsers
-4. Body Parsers
-5. Headers Parsers
+
+```haskell
+path :: MonadOkapi m => m Path -- Parses entire remaining path
+path = many seg
+
+seg :: MonadOkapi m => m Text
+
+matchPath :: MonadOkapi m => Path -> m ()
+matchPath desiredPath = mapM_ matchSeg desiredPath
+
+matchSeg :: MonadOkapi m => Text -> m ()
+
+pathParam :: MonadOkapi m => FromHttpApiData a => m a
+
+pathEnd :: MonadOkapi m => m ()
+```
+
+4. Query Parsers
+
+```haskell
+query :: MonadOkapi m => m Query -- parses entire query
+
+queryParam :: MonadOkapi m => FromHttpApiData a => Text -> m a
+
+queryFlag :: MonadOkapi m => Text -> m ()
+
+queryParamRaw :: Text -> m Text
+```
+
+6. Body Parsers
+
+```haskell
+body :: MonadOkapi m => m Body
+
+bodyJSON :: MonadOkapi m, FromJSON a => m a
+
+bodyFormURLEncoded :: FromForm a, MonadOkapi m => m a
+
+bodyFormMultipart :: FromForm a, MonadOkapi m => m (a, [File])
+```
+
+8. Headers Parsers
+
+```haskell
+headers :: MonadOkapi m => m Headers
+
+header :: MonadOkapi m => HeaderName -> m Header
+
+cookie :: MonadOkapi m => m Cookie
+
+crumb :: MonadOkapi m => Text -> m Crumb
+```
 
 We can use these to create increasingly complex parsers. For example, let's say we wanted to implement a HTTP parser that matches the request `GET /blog`. That would look like this:
 
@@ -86,7 +145,7 @@ We can use these to create increasingly complex parsers. For example, let's say 
 blogRoute :: Parser ()
 blogRoute = do
   get            -- Make sure that the request is a GET request
-  pathSeg "blog" -- Match against the path segment /blog
+  matchSeg "blog" -- Match against the path segment /blog
   pathEnd        -- Make sure that there are no more path segments remaining in the request
 ```
 
@@ -96,7 +155,7 @@ Just like earlier, with our monadic string parser, we can sequence HTTP request 
 blogRoute :: Parser HTTPResponse
 blogRoute = do
   get
-  pathSeg "blog"
+  matchSeg "blog"
   pathEnd
   return ok
 ```
