@@ -257,5 +257,7 @@ instance URL RelURL where
 
 instance URL AbsURL where
 
+instance URL Request where
+
 blogRouteCategoryURL = render $ BlogRouteCategory "fiction"
 ```
