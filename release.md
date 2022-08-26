@@ -266,4 +266,11 @@ instance ToURL AbsURL where
 instance ToURL Request where
 
 blogRouteCategoryURL = render $ BlogRouteCategory "fiction"
+
+class ToURL a => Matchable a where
+  match :: (a -> m Response) -> m Response
+
+route          :: (Path -> m Response) -> m Response
+routeWithQuery :: (RelURL -> m Response) -> m Response
+routeVirtual   :: (AbsURL -> m Response) -> m Response
 ```
