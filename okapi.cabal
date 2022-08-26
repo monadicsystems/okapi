@@ -28,15 +28,7 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Application
-      Okapi.Event
-      Okapi.Middleware
-      Okapi.Parser
-      Okapi.Patterns
-      Okapi.Response
       Okapi.Route
-      Okapi.Test
-      Okapi.Types
   other-modules:
       Paths_okapi
   hs-source-dirs:
@@ -56,6 +48,7 @@ library
     , invariant
     , mmorph
     , mtl
+    , network
     , parser-combinators
     , random
     , stm
@@ -95,6 +88,7 @@ executable calculator-exe
     , invariant
     , mmorph
     , mtl
+    , network
     , okapi
     , parser-combinators
     , random
@@ -135,6 +129,7 @@ executable todo-exe
     , invariant
     , mmorph
     , mtl
+    , network
     , okapi
     , parser-combinators
     , random
@@ -178,6 +173,7 @@ test-suite okapi-test
     , invariant
     , mmorph
     , mtl
+    , network
     , okapi
     , parser-combinators
     , random

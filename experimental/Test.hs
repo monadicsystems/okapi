@@ -43,9 +43,6 @@ import Network.Wai (defaultRequest)
 import qualified Network.Wai as Wai
 import Network.Wai.Test (SRequest (..), setRawPathInfo)
 import qualified Network.Wai.Test as Wai.Test
-import Okapi.Application
-import Okapi.Response
-import Okapi.Types
 
 request :: Method -> URL -> Body -> Headers -> Maybe Request
 request method url body headers = case parseURL url of
@@ -98,10 +95,9 @@ pathToURL (pathSeg : path) = "/" <> URL pathSeg <> pathToURL path
 
 testParser ::
   Monad m =>
-  (forall a. m a -> IO a) ->
   OkapiT m Response ->
   Request ->
-  IO (Either Failure Response, State)
+  (Either Failure Response, State)
 testParser hoister okapiT request =
   (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT)
     (requestToState request)
