@@ -169,7 +169,7 @@ testMatcher = matchWith $ \case
   BlogRouteId blogID -> respond ok
   BlogRouteIdSection blogID sectionName -> respond ok
   BlogQueryRoute author category -> respond ok
-  _ -> Okapi.skip
+  _ -> Okapi.next
 
 testPattern :: (Pattern -> Bool) -> Pattern -> Bool
 testPattern f = f

@@ -120,7 +120,7 @@ routePartsToExp [] =
   pure $
     RecConE
       (mkName "Route")
-      [ (mkName "parser", VarE (mkName "Okapi.skip")),
+      [ (mkName "parser", VarE (mkName "Okapi.next")),
         (mkName "url", LamE [VarP $ mkName "unit"] (AppE (ConE $ mkName "Okapi.URL") (LitE $ StringL "")))
       ]
 routePartsToExp routeParts = do
@@ -183,7 +183,7 @@ routePartStmtAndBinding rp = case rp of
     "DELETE" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.delete"))
     "PUT" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.put"))
     "PATCH" -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.patch"))
-    _ -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.skip"))
+    _ -> pure (Nothing, Nothing, NoBindS (VarE $ mkName "Okapi.next"))
   PathSegMatch txt -> pure (Nothing, Just $ PathSegType txt, NoBindS (AppE (VarE $ mkName "Okapi.pathSeg") (LitE $ StringL $ unpack txt)))
   AnonPathSeg (CurlyExpr typeName functionNamesToApply maybeGuardFunction) -> do
     stmtBinding <- runIO randName

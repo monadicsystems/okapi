@@ -29,7 +29,7 @@ import qualified Web.HttpApiData as Web
 (??) action queryItemName =
   action >> do
     flag <- queryFlag queryItemName
-    if flag then pure () else skip
+    if flag then pure () else next
 
 (?:) :: forall m a. MonadOkapi m => m a -> Text.Text -> m ()
 (?:) = undefined -- This should be the query param version of

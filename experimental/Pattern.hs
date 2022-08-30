@@ -169,4 +169,4 @@ getRawURL = undefined
 -- match :: MonadOkapi m => Pattern a -> m a
 -- match pattern = do
 --   rawURL <- getRawURL
---   maybe skip return (matcher pattern rawURL)
+--   maybe next return (matcher pattern rawURL)

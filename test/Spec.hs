@@ -225,7 +225,7 @@ testMatcher = match $ \case
   BlogIDRoute blogID -> respond ok
   BlogIDSectionRoute blogID sectionName -> respond ok
   BlogQueryRoute author category -> respond ok
-  _ -> Okapi.skip
+  _ -> Okapi.next
 
 testPattern :: (Okapi.Request -> Bool) -> Okapi.Request -> Bool
 testPattern f = f

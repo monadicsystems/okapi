@@ -58,7 +58,7 @@ module Okapi.Parser
 
     -- | Various helper functions for throwing parser errors
     -- See for more information on how throwing error works
-    skip,
+    next,
     throw,
     (<!>),
     guardThrow,
@@ -213,7 +213,7 @@ method method = do
   method' <- parseMethod
   if method == method'
     then pure ()
-    else skip
+    else next
 
 -- | Parses and discards a single path segment matching the given @Text@ value
 --
@@ -263,7 +263,7 @@ path = mapM_ pathSeg
 pathParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => m a
 pathParam = do
   pathSeg <- parsePathSeg
-  maybe skip pure (Web.parseUrlPieceMaybe pathSeg)
+  maybe next pure (Web.parseUrlPieceMaybe pathSeg)
 
 -- | Parses a single path segment as raw @Text@.
 -- Use this instead of @pathParam@ if you want to process the path segment yourself
@@ -305,14 +305,14 @@ pathSegWith predicate = do
   pathSeg <- parsePathSeg
   if predicate pathSeg
     then pure ()
-    else skip
+    else next
 
 -- | Parses all the remaining path segments of a request
 pathWildcard :: forall m. MonadOkapi m => m (NonEmpty.NonEmpty Text.Text)
 pathWildcard = do
   segs <- some pathParamRaw
   case segs of
-    [] -> skip
+    [] -> next
     _ -> pure $ NonEmpty.fromList segs
 
 -- QUERY HELPERS
@@ -340,8 +340,8 @@ queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> 
 queryParam queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   case queryItemValue of
-    QueryFlag -> skip
-    QueryParam valueText -> maybe skip pure (Web.parseQueryParamMaybe valueText)
+    QueryFlag -> next
+    QueryParam valueText -> maybe next pure (Web.parseQueryParamMaybe valueText)
 
 -- | Parses the value of a query parameter as raw @Text@.
 -- Use this instead of @queryParam@ if you want to process the query parameter yourself
@@ -373,7 +373,7 @@ queryParamRaw :: forall m. MonadOkapi m => Text.Text -> m Text.Text
 queryParamRaw queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   case queryItemValue of
-    QueryFlag -> skip
+    QueryFlag -> next
     QueryParam raw -> pure raw
 
 -- | Test for the existance of a query flag
@@ -416,12 +416,12 @@ basicAuth = do
   case Text.words $ Text.decodeUtf8 authValue of
     ["Basic", encodedCreds] ->
       case decodeBase64 encodedCreds of
-        Left _ -> skip
+        Left _ -> next
         Right decodedCreds ->
           case Text.split (== ':') decodedCreds of
             [userID, password] -> pure (userID, password)
-            _ -> skip
-    _ -> skip
+            _ -> next
+    _ -> next
 
 -- TODO: cookie :: forall m. MonadOkapi m => Cookie
 
@@ -446,12 +446,12 @@ header headerName = do
 bodyJSON :: forall a m. (MonadOkapi m, Aeson.FromJSON a) => m a
 bodyJSON = do
   body <- bodyRaw
-  maybe skip pure (Aeson.decode body)
+  maybe next pure (Aeson.decode body)
 
 bodyForm :: forall a m. (MonadOkapi m, Web.FromForm a) => m a
 bodyForm = do
   body <- bodyRaw
-  maybe skip pure (eitherToMaybe $ Web.urlDecodeAsForm body)
+  maybe next pure (eitherToMaybe $ Web.urlDecodeAsForm body)
   where
     eitherToMaybe :: Either l r -> Maybe r
     eitherToMaybe either = case either of
@@ -469,14 +469,14 @@ respond response = do
   check1 <- methodParsed
   check2 <- pathParsed
   -- check3 <- queryParsed
-  if check1 && check2 then return response else skip
+  if check1 && check2 then return response else next
 
 -- TODO: add end parser similar to <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
 
 -- Error HELPERS
 
-skip :: forall a m. MonadOkapi m => m a
-skip = Except.throwError Skip
+next :: forall a m. MonadOkapi m => m a
+next = Except.throwError Skip
 
 throw :: forall a m. MonadOkapi m => Response -> m a
 throw = Except.throwError . Error
@@ -521,7 +521,7 @@ parseMethod :: MonadOkapi m => m HTTP.Method
 parseMethod = do
   isMethodParsed <- methodParsed
   if isMethodParsed
-    then skip
+    then next
     else do
       method <- State.gets (requestMethod . stateRequest)
       State.modify (\state -> state {stateRequestMethodParsed = True})
@@ -534,7 +534,7 @@ parsePathSeg :: MonadOkapi m => m Text.Text
 parsePathSeg = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
   case maybePathSeg of
-    Nothing -> skip
+    Nothing -> next
     Just pathSeg -> do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestPath = Prelude.drop 1 $ requestPath $ stateRequest state}})
       pure pathSeg
@@ -547,7 +547,7 @@ parseQueryItem :: MonadOkapi m => Text.Text -> m QueryItem
 parseQueryItem queryItemName = do
   maybeQueryItem <- State.gets (Foldable.find (\(queryItemName', _) -> queryItemName == queryItemName') . requestQuery . stateRequest)
   case maybeQueryItem of
-    Nothing -> skip
+    Nothing -> next
     Just queryItem -> do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = List.delete queryItem $ requestQuery $ stateRequest state}})
       pure queryItem
@@ -568,7 +568,7 @@ parseHeader :: MonadOkapi m => HTTP.HeaderName -> m Header
 parseHeader headerName = do
   maybeHeader <- State.gets (Foldable.find (\(headerName', _) -> headerName == headerName') . requestHeaders . stateRequest)
   case maybeHeader of
-    Nothing -> skip
+    Nothing -> next
     Just header -> do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = List.delete header $ requestHeaders $ stateRequest state}})
       pure header
@@ -577,7 +577,7 @@ parseBody :: forall m. MonadOkapi m => m LBS.ByteString
 parseBody = do
   isBodyParsed <- bodyParsed
   if isBodyParsed
-    then skip
+    then next
     else do
       body <- State.gets (requestBody . stateRequest)
       State.modify (\state -> state {stateRequestBodyParsed = True})
@@ -605,10 +605,10 @@ static
 -}
 
 lookupQuery :: MonadOkapi m => Text -> Query -> m QueryValue
-lookupQuery name query = maybe skip pure (List.lookup name query)
+lookupQuery name query = maybe next pure (List.lookup name query)
 
 lookupHeaders :: MonadOkapi m => HeaderName -> Headers -> m BS.ByteString
-lookupHeaders name headers = maybe skip pure (List.lookup name headers)
+lookupHeaders name headers = maybe next pure (List.lookup name headers)
 
 lookupForm :: (MonadOkapi m, Web.FromHttpApiData a) => Text -> Body -> m a
 lookupForm = undefined
