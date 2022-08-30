@@ -28,7 +28,6 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Route
   other-modules:
       Paths_okapi
   hs-source-dirs:

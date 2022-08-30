@@ -34,7 +34,7 @@ module Okapi
     Headers,
     Header,
     HeaderName,
-    Cookies,
+    Okapi.Cookie,
     Crumb,
 
     -- ** Method Parsers
@@ -55,10 +55,9 @@ module Okapi
     -- $pathParsers
     path,
     pathMatch,
-    pathParam,
-    pathParamMatch,
-    pathParamMatchWith,
-    pathEnd,
+    seg,
+    segMatch,
+    segMatchWith,
 
     -- ** Query Parsers
     -- $queryParsers
@@ -78,8 +77,6 @@ module Okapi
     -- $headerParsers
     headers,
     header,
-
-    -- *** Header Parser Helpers
     cookie,
     crumb,
     basicAuth,
@@ -115,11 +112,13 @@ module Okapi
     setHeader,
     setBody,
     setBodyRaw,
-    setFile,
-    setEventSource,
-    setFile,
+    setBodyFile,
+    setBodyEventSource,
+    setPlaintext,
     setJSON,
     setHTML,
+
+    -- *
   )
 where
 
@@ -352,7 +351,7 @@ look parser = do
 
 -- | Parses the entire request.
 request :: MonadOkapi m => m Request
-request = Request <$> method <*> path <*> query <*> body <*> headers
+request = Request <$> (Just <$> method) <*> path <*> query <*> body <*> headers
 
 -- $ methodParsers
 --
@@ -364,7 +363,7 @@ method = do
   case maybeMethod of
     Nothing -> next
     Just method' -> do
-      State.modify (\state -> state {stateRequest = stateRequest {requestMethod = Nothing}})
+      State.modify (\state -> state {stateRequest = (stateRequest state) {requestMethod = Nothing}})
       pure method'
 
 -- |
@@ -503,7 +502,7 @@ seg = do
     safeHead [] = Nothing
     safeHead (x : _) = Just x
 
-segMatch :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => a -> m ()
+segMatch :: forall a m. (Eq a, Web.FromHttpApiData a, MonadOkapi m) => a -> m ()
 segMatch desiredParam = segMatchWith (desiredParam ==)
 
 -- | Parses and discards a single path segment if it satisfies the given predicate function
@@ -613,13 +612,12 @@ queryList = undefined
 -- | TODO: Parse body in chunks abstraction?
 body :: forall m. MonadOkapi m => m Body
 body = do
-  isBodyParsed <- bodyParsed
-  if isBodyParsed
+  currentBody <- State.gets (requestBody . stateRequest)
+  if LBS.null currentBody
     then next
     else do
-      body <- State.gets (requestBody . stateRequest)
-      State.modify (\state -> state {stateRequestBodyParsed = True})
-      pure body
+      State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = ""}})
+      pure currentBody
 
 bodyJSON :: forall a m. (MonadOkapi m, Aeson.FromJSON a) => m a
 bodyJSON = do
@@ -715,8 +713,8 @@ vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
 
 methodEnd :: MonadOkapi m => m ()
 methodEnd = do
-  currentMethod <- method
-  case currentMethod of
+  maybeMethod <- Combinators.optional method
+  case maybeMethod of
     Nothing -> pure ()
     Just _ -> next
 
@@ -742,17 +740,17 @@ headersEnd = do
     then pure ()
     else next
 
-cookiesEnd :: MonadOkapi m => m ()
-cookiesEnd = do
-  currentCookies <- cookies
-  if List.null currentCookies
+cookieEnd :: MonadOkapi m => m ()
+cookieEnd = do
+  currentCookie <- cookie
+  if List.null currentCookie
     then pure ()
     else next
 
 bodyEnd :: MonadOkapi m => m ()
 bodyEnd = do
   currentBody <- body
-  if BS.null currentBody
+  if LBS.null currentBody
     then pure ()
     else next
 
@@ -817,8 +815,8 @@ notFound =
       responseBody = ResponseBodyRaw "Not Found"
    in Response {..}
 
-redirect :: Status -> URL -> Response
-redirect status (URL url) =
+redirect :: Status -> Text.Text -> Response
+redirect status url =
   let responseStatus = status
       responseHeaders = [("Location", Text.encodeUtf8 url)]
       responseBody = ResponseBodyRaw ""
@@ -1036,14 +1034,11 @@ app hoister defaultResponse okapiT waiRequest respond = do
     waiRequestToState :: WAI.Request -> IO State
     waiRequestToState waiRequest = do
       requestBody <- WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
-      let requestMethod = WAI.requestMethod waiRequest
+      let requestMethod = Just $ WAI.requestMethod waiRequest
           requestPath = WAI.pathInfo waiRequest
           requestQuery = map (\case (name, Nothing) -> (name, QueryFlag); (name, Just txt) -> (name, QueryParam txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
           requestHeaders = WAI.requestHeaders waiRequest
           stateRequest = Request {..}
-          stateRequestMethodParsed = False
-          stateRequestBodyParsed = False
-          stateResponded = False
           stateVault = WAI.vault waiRequest
 
       pure State {..}
@@ -1077,24 +1072,11 @@ clearHeadersMiddleware :: MonadOkapi m => Middleware m
 clearHeadersMiddleware handler = setHeaders [] <$> handler
 
 prefixPathMiddleware :: MonadOkapi m => [Text.Text] -> Middleware m
-prefixPathMiddleware prefix handler = path prefix >> handler
+prefixPathMiddleware prefix handler = pathMatch prefix >> handler
 
 -- | TODO: Is this needed? Idea taken from OCaml Dream framework
 scope :: MonadOkapi m => [Text.Text] -> [Middleware m] -> Middleware m
-scope prefix middlewares handler = do
-  path prefix
-  applyMiddlewares middlewares handler
-
-{-
-lookupQuery :: MonadOkapi m => Text.Text -> Query -> m QueryValue
-lookupQuery name query = maybe next pure (List.lookup name query)
-
-lookupHeaders :: MonadOkapi m => HeaderName -> Headers -> m BS.ByteString
-lookupHeaders name headers = maybe next pure (List.lookup name headers)
-
-lookupForm :: (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> Body -> m a
-lookupForm = undefined
--}
+scope prefix middlewares handler = pathMatch prefix >> applyMiddlewares middlewares handler
 
 -- $ Bidirectional Route Patterns
 
@@ -1102,9 +1084,6 @@ type Router m = Path -> m Response
 
 route :: MonadOkapi m => Router m -> m Response
 route router = path >>= router
-
-newtype URL = URL {unURL :: Text.Text}
-  deriving newtype (String.IsString, Semigroup, Monoid, Eq, Ord, Show)
 
 -- $patterns
 
@@ -1146,11 +1125,11 @@ data RelURL = RelURL Path Query
 
 parseRelURL :: Text.Text -> Maybe RelURL
 parseRelURL possibleRelURL = Either.eitherToMaybe $
-  flip Atto.parseOnly url $ do
+  flip Atto.parseOnly possibleRelURL $ do
     path <- Combinators.many pathSeg
     maybeQueryStart <- Combinators.optional $ Atto.char '?'
     case maybeQueryStart of
-      Nothing -> pure (path, [])
+      Nothing -> pure $ RelURL path []
       Just _ -> do
         query <- Combinators.many queryParam
         pure $ RelURL path query
@@ -1180,12 +1159,12 @@ renderRelURL (RelURL path query) = case (path, query) of
   where
     queryToURL :: Query -> Text.Text
     queryToURL [] = ""
-    queryToURL ((name, QueryFlag) : query) = URL name <> "&" <> queryToURL query
-    queryToURL ((name, QueryParam value) : query) = URL name <> "=" <> URL value <> "&" <> queryToURL query
+    queryToURL ((name, QueryFlag) : query) = name <> "&" <> queryToURL query
+    queryToURL ((name, QueryParam value) : query) = name <> "=" <> value <> "&" <> queryToURL query
 
     pathToURL :: Path -> Text.Text
     pathToURL [] = ""
-    pathToURL (pathSeg : path) = "/" <> URL pathSeg <> pathToURL path
+    pathToURL (pathSeg : path) = "/" <> pathSeg <> pathToURL path
 
 -- $ testing
 
@@ -1245,9 +1224,9 @@ testRequest :: Request -> WAI.Session WAI.SResponse
 testRequest = WAI.srequest . requestToSRequest
   where
     requestToSRequest :: Request -> WAI.SRequest
-    requestToSRequest request@(Request method path query body headers) =
-      let requestMethod = method
+    requestToSRequest request@(Request mbMethod path query body headers) =
+      let requestMethod = Maybe.fromMaybe HTTP.methodGet mbMethod
           sRequestBody = body
-          rawPath = requestURL request Function.& \(URL url) -> Text.encodeUtf8 url
-          sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = method, WAI.requestHeaders = headers}) rawPath
+          rawPath = RelURL path query Function.& \relURL -> Text.encodeUtf8 $ renderRelURL relURL
+          sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = requestMethod, WAI.requestHeaders = headers}) rawPath
        in WAI.SRequest sRequestRequest sRequestBody
