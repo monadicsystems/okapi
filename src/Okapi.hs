@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -136,10 +137,13 @@ import qualified Control.Monad.State as State
 import qualified Control.Monad.Trans.Except as ExceptT
 import qualified Control.Monad.Trans.State.Strict as StateT
 import qualified Control.Monad.Zip as Zip
+import qualified Crypto.Hash as Crypto
+import qualified Crypto.MAC.HMAC as HMAC
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Encoding as Aeson
 import qualified Data.Attoparsec.Text as Atto
 import qualified Data.Bifunctor as Bifunctor
+import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as BS
 import qualified Data.ByteString.Builder as Builder
@@ -159,6 +163,7 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
 import qualified Data.Vault.Lazy as Vault
 import qualified GHC.Natural as Natural
+import qualified Language.Haskell.TH.Syntax as BS
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Socket as Socket
 import qualified Network.Wai as WAI
@@ -286,19 +291,6 @@ instance Morph.MFunctor OkapiT where
   hoist :: Monad m => (forall a. m a -> n a) -> OkapiT m b -> OkapiT n b
   hoist nat okapiT = OkapiT . Except.ExceptT . State.StateT $ (nat . State.runStateT (Except.runExceptT $ unOkapiT okapiT))
 
--- TODO: Implement for more interesting monad comprehensions
--- instance Zip.MonadZip OkapiT where
---   mzip :: OkapiT m a -> OkapiT m b -> OkapiT m (a, b)
---   mzip (OkapiT (Except.ExceptT (State.StateT mx))) (OkapiT (Except.ExceptT (State.StateT my))) = OkapiT . Except.ExceptT . State.StateT $ \s -> do
---     (eitherX, stateX) <- mx s
---     (eitherY, stateY) <- my s
---     case (eitherX, eitherY) of
---       Left Skip -> pure (Left Skip, s)
---       Left error@(Error _) -> pure (Left error, s)
---       Right y -> pure (Right y, stateY)
---       Left error@(Error _) -> pure (Left error, s)
---       Right x -> pure (Right x, stateX)
-
 -- | Represents the state of a parser. Set on every request to the Okapi server.
 data State = State
   { stateRequest :: Request,
@@ -335,7 +327,7 @@ type HeaderName = HTTP.HeaderName
 
 type Cookie = [Crumb]
 
-type Crumb = (Text.Text, Text.Text)
+type Crumb = (BS.ByteString, BS.ByteString)
 
 -- $parsers
 --
@@ -347,7 +339,7 @@ look parser = do
   state <- State.get
   result <- parser
   State.put state
-  return result
+  pure result
 
 -- | Parses the entire request.
 request :: MonadOkapi m => m Request
@@ -658,9 +650,9 @@ header headerName = do
 cookie :: forall m. MonadOkapi m => m Cookie
 cookie = do
   cookieValue <- header "Cookie"
-  pure $ Web.parseCookiesText cookieValue
+  pure $ Web.parseCookies cookieValue
 
-crumb :: forall m. MonadOkapi m => Text.Text -> m Crumb
+crumb :: forall m. MonadOkapi m => BS.ByteString -> m BS.ByteString
 crumb name = do
   cookieValue <- cookie
   case List.lookup name cookieValue of
@@ -668,8 +660,8 @@ crumb name = do
     Just crumbValue -> do
       let crumb = (name, crumbValue)
       -- TODO: Needs testing to see if state is restored properly
-      State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookiesText $ List.delete crumb cookieValue) : requestHeaders (stateRequest state)}})
-      pure crumb
+      State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete crumb cookieValue) : requestHeaders (stateRequest state)}})
+      pure crumbValue
 
 basicAuth :: forall m. MonadOkapi m => m (Text.Text, Text.Text)
 basicAuth = do
@@ -708,6 +700,12 @@ vaultAdjust adjuster key = do
 
 vaultWipe :: MonadOkapi m => m ()
 vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
+
+static :: MonadOkapi m => m Response
+static = do
+  filePathText <- Text.intercalate "/" <$> path
+  let filePath = Text.unpack filePathText
+  ok Function.& setBodyFile filePath Function.& pure
 
 -- $ Completion Checks
 
@@ -841,6 +839,9 @@ setHeader header response@Response {..} =
         then pair : ps
         else pair' : update pair ps
 
+addHeader :: Header -> Response -> Response
+addHeader header response = response {responseHeaders = header : responseHeaders response}
+
 setBody :: ResponseBody -> Response -> Response
 setBody body response = response {responseBody = body}
 
@@ -919,7 +920,7 @@ eventSourceAppIO src _ sendResponse =
         Function.fix $ \loop -> do
           se <- src
           case eventToBuilder se of
-            Nothing -> return ()
+            Nothing -> pure ()
             Just b -> sendChunk b >> flush >> loop
 
 eventToBuilder :: WAI.ServerEvent -> Maybe Builder.Builder
@@ -1010,7 +1011,7 @@ app ::
   Monad m =>
   -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
   (forall a. m a -> IO a) ->
-  -- | The default response to return if parser fails
+  -- | The default response to pure if parser fails
   Response ->
   -- | The parser used to match the request
   OkapiT m Response ->
@@ -1153,18 +1154,18 @@ parseRelURL possibleRelURL = Either.eitherToMaybe $
 renderRelURL :: RelURL -> Text.Text
 renderRelURL (RelURL path query) = case (path, query) of
   ([], []) -> ""
-  ([], q) -> "?" <> queryToURL q
-  (p, []) -> pathToURL p
-  (p, q) -> pathToURL p <> "?" <> queryToURL q
-  where
-    queryToURL :: Query -> Text.Text
-    queryToURL [] = ""
-    queryToURL ((name, QueryFlag) : query) = name <> "&" <> queryToURL query
-    queryToURL ((name, QueryParam value) : query) = name <> "=" <> value <> "&" <> queryToURL query
+  ([], q) -> "?" <> renderQuery q
+  (p, []) -> renderPath p
+  (p, q) -> renderPath p <> "?" <> renderQuery q
 
-    pathToURL :: Path -> Text.Text
-    pathToURL [] = ""
-    pathToURL (pathSeg : path) = "/" <> pathSeg <> pathToURL path
+renderQuery :: Query -> Text.Text
+renderQuery [] = ""
+renderQuery ((name, QueryFlag) : query) = name <> "&" <> renderQuery query
+renderQuery ((name, QueryParam value) : query) = name <> "=" <> value <> "&" <> renderQuery query
+
+renderPath :: Path -> Text.Text
+renderPath [] = ""
+renderPath (pathSeg : path) = "/" <> pathSeg <> renderPath path
 
 -- $ testing
 
@@ -1202,23 +1203,23 @@ assert404Error = undefined
 
 -- $testingWithWAITest
 
-runSession ::
+testRunSession ::
   Monad m =>
   WAI.Session a ->
   (forall a. m a -> IO a) ->
   OkapiT m Response ->
   IO a
-runSession session hoister okapiT = do
+testRunSession session hoister okapiT = do
   let waiApp = app hoister notFound okapiT
   WAI.runSession session waiApp
 
-withSession ::
+testWithSession ::
   Monad m =>
   (forall a. m a -> IO a) ->
   OkapiT m Response ->
   WAI.Session a ->
   IO a
-withSession hoister okapiT session = runSession session hoister okapiT
+testWithSession hoister okapiT session = testRunSession session hoister okapiT
 
 testRequest :: Request -> WAI.Session WAI.SResponse
 testRequest = WAI.srequest . requestToSRequest
@@ -1230,3 +1231,87 @@ testRequest = WAI.srequest . requestToSRequest
           rawPath = RelURL path query Function.& \relURL -> Text.encodeUtf8 $ renderRelURL relURL
           sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = requestMethod, WAI.requestHeaders = headers}) rawPath
        in WAI.SRequest sRequestRequest sRequestBody
+
+-- $HasSession
+
+type Session = Map.Map BS.ByteString BS.ByteString
+
+class Monad m => HasSession m where
+  sessionSecret :: m BS.ByteString
+  getSession :: m (Maybe Session)
+  putSession :: Session -> m ()
+
+session :: (MonadOkapi m, HasSession m) => m Session
+session = do
+  cachedSession <- getSession
+  maybe sessionCrumb pure cachedSession
+
+sessionCrumb :: (MonadOkapi m, HasSession m) => m Session
+sessionCrumb = do
+  encodedSession <- crumb "session"
+  secret <- sessionSecret
+  pure $ decodeSession secret encodedSession
+
+sessionLookup :: HasSession m => MonadOkapi m => BS.ByteString -> m BS.ByteString
+sessionLookup key = do
+  mbValue <- Map.lookup key <$> session
+  maybe next pure mbValue
+
+sessionInsert :: HasSession m => MonadOkapi m => BS.ByteString -> BS.ByteString -> m ()
+sessionInsert key value = session >>= \sesh -> putSession (Map.insert key value sesh)
+
+sessionDelete :: HasSession m => MonadOkapi m => BS.ByteString -> m ()
+sessionDelete key = session >>= \sesh -> putSession (Map.delete key sesh)
+
+sessionClear :: HasSession m => m ()
+sessionClear = putSession Map.empty
+
+encodeSession :: BS.ByteString -> Session -> BS.ByteString
+encodeSession secret session =
+  let serial = HTTP.renderSimpleQuery False $ Map.toList session
+      digest = HMAC.hmacGetDigest $ HMAC.hmac secret serial :: Crypto.Digest Crypto.SHA256
+      b64 = BS.encodeBase64' $ Memory.convert digest
+   in b64 <> serial
+
+decodeSession :: BS.ByteString -> BS.ByteString -> Session
+decodeSession secret encodedSession =
+  let (b64, serial) = BS.splitAt 44 encodedSession
+      mbDigest :: Maybe (Crypto.Digest Crypto.SHA256) = Crypto.digestFromByteString $ Either.fromRight BS.empty $ BS.decodeBase64 b64
+   in case mbDigest of
+        Nothing -> Map.empty
+        Just digest ->
+          if HMAC.hmacGetDigest (HMAC.hmac secret serial :: HMAC.HMAC Crypto.SHA256) == digest
+            then Map.fromList $ HTTP.parseSimpleQuery serial
+            else Map.empty
+
+withSession :: (MonadOkapi m, HasSession m) => Middleware m
+withSession handler = do
+  mbSession <- getSession
+  case mbSession of
+    Nothing -> handler
+    Just session -> do
+      secret <- sessionSecret
+      response <- handler
+      response
+        Function.& addSetCookie ("session", encodeSession secret session)
+        Function.& pure
+
+addSetCookie :: (BS.ByteString, BS.ByteString) -> Response -> Response
+addSetCookie (key, value) response =
+  let setCookieValue =
+        LBS.toStrict $
+          Builder.toLazyByteString $
+            Web.renderSetCookie $
+              Web.defaultSetCookie -- TODO: Check that using default here is okay
+                { Web.setCookieName = key,
+                  Web.setCookieValue = value,
+                  Web.setCookiePath = Just "/"
+                }
+   in addHeader ("Set-Cookie", setCookieValue) response
+
+{-
+newtype UUID = UUID { unUUID :: Text.Text }
+
+class Monad m => HasUUID m where
+  uuid :: m UUID
+-}

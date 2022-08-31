@@ -41,10 +41,12 @@ library
     , containers
     , contravariant
     , cookie
+    , cryptonite
     , extra
     , http-api-data
     , http-types
     , invariant
+    , memory
     , mmorph
     , mtl
     , network
@@ -81,10 +83,12 @@ executable calculator-exe
     , containers
     , contravariant
     , cookie
+    , cryptonite
     , extra
     , http-api-data
     , http-types
     , invariant
+    , memory
     , mmorph
     , mtl
     , network
@@ -122,10 +126,12 @@ executable todo-exe
     , containers
     , contravariant
     , cookie
+    , cryptonite
     , extra
     , http-api-data
     , http-types
     , invariant
+    , memory
     , mmorph
     , mtl
     , network
@@ -165,11 +171,13 @@ test-suite okapi-test
     , containers
     , contravariant
     , cookie
+    , cryptonite
     , doctest-parallel
     , extra
     , http-api-data
     , http-types
     , invariant
+    , memory
     , mmorph
     , mtl
     , network

@@ -26,10 +26,12 @@ dependencies:
 - containers
 - contravariant
 - cookie
+- cryptonite
 - extra
 - http-api-data
 - http-types
 - invariant
+- memory
 - mmorph
 - mtl
 - network
