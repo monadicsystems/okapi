@@ -453,38 +453,38 @@ method = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestMethod = Nothing}})
       pure method'
 
-methodMatch :: forall m. MonadOkapi m => HTTP.Method -> m ()
+methodMatch :: MonadOkapi m => HTTP.Method -> m ()
 methodMatch desiredMethod = do
   currentMethod <- method
   if desiredMethod == currentMethod
     then pure ()
     else next
 
-methodGET :: forall m. MonadOkapi m => m ()
+methodGET :: MonadOkapi m => m ()
 methodGET = methodMatch HTTP.methodGet
 
-methodPOST :: forall m. MonadOkapi m => m ()
+methodPOST :: MonadOkapi m => m ()
 methodPOST = methodMatch HTTP.methodPost
 
-methodHEAD :: forall m. MonadOkapi m => m ()
+methodHEAD :: MonadOkapi m => m ()
 methodHEAD = methodMatch HTTP.methodHead
 
-methodPUT :: forall m. MonadOkapi m => m ()
+methodPUT :: MonadOkapi m => m ()
 methodPUT = methodMatch HTTP.methodPut
 
-methodDELETE :: forall m. MonadOkapi m => m ()
+methodDELETE :: MonadOkapi m => m ()
 methodDELETE = methodMatch HTTP.methodDelete
 
-methodTRACE :: forall m. MonadOkapi m => m ()
+methodTRACE :: MonadOkapi m => m ()
 methodTRACE = methodMatch HTTP.methodTrace
 
-methodCONNECT :: forall m. MonadOkapi m => m ()
+methodCONNECT :: MonadOkapi m => m ()
 methodCONNECT = methodMatch HTTP.methodConnect
 
-methodOPTIONS :: forall m. MonadOkapi m => m ()
+methodOPTIONS :: MonadOkapi m => m ()
 methodOPTIONS = methodMatch HTTP.methodOptions
 
-methodPATCH :: forall m. MonadOkapi m => m ()
+methodPATCH :: MonadOkapi m => m ()
 methodPATCH = methodMatch HTTP.methodPatch
 
 methodEnd :: MonadOkapi m => m ()
@@ -510,7 +510,7 @@ pathMatch desiredPath = do
     else next
 
 -- | Parses and discards a single path segment matching the given @Text@ value
-seg :: Web.FromHttpApiData a => MonadOkapi m => m a
+seg :: (Web.FromHttpApiData a, MonadOkapi m) => m a
 seg = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
   case maybePathSeg of
@@ -523,11 +523,11 @@ seg = do
     safeHead [] = Nothing
     safeHead (x : _) = Just x
 
-segMatch :: forall a m. (Eq a, Web.FromHttpApiData a, MonadOkapi m) => a -> m ()
+segMatch :: (Eq a, Web.FromHttpApiData a, MonadOkapi m) => a -> m ()
 segMatch desiredParam = segMatchWith (desiredParam ==)
 
 -- | Parses and discards a single path segment if it satisfies the given predicate function
-segMatchWith :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => (a -> Bool) -> m ()
+segMatchWith :: (Web.FromHttpApiData a, MonadOkapi m) => (a -> Bool) -> m ()
 segMatchWith predicate = do
   param <- seg
   if predicate param
@@ -562,14 +562,14 @@ queryValue queryItemName = do
       pure queryValue
 
 -- | Parses the value of a query parameter with the given type and name
-queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> m a
+queryParam :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m a
 queryParam queryItemName = do
   queryItemValue <- queryValue queryItemName
   case queryItemValue of
     QueryFlag -> next
     QueryParam valueText -> maybe next pure (Web.parseQueryParamMaybe valueText)
 
-queryParamMatch :: (MonadOkapi m, Web.FromHttpApiData a, Eq a) => Text.Text -> a -> m ()
+queryParamMatch :: (Eq a, Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> a -> m ()
 queryParamMatch queryItemName desiredParam = do
   param <- queryParam queryItemName
   if param == desiredParam
@@ -577,7 +577,7 @@ queryParamMatch queryItemName desiredParam = do
     else next
 
 -- | Test for the existance of a query flag
-queryFlag :: forall a m. MonadOkapi m => Text.Text -> m ()
+queryFlag :: MonadOkapi m => Text.Text -> m ()
 queryFlag queryItemName = do
   queryItemValue <- queryValue queryItemName
   case queryItemValue of
@@ -596,7 +596,7 @@ queryEnd = do
 
 -- $bodyParsers
 
-body :: forall m. MonadOkapi m => m Body
+body :: MonadOkapi m => m Body
 body = do
   currentBody <- State.gets (requestBody . stateRequest)
   if LBS.null currentBody
@@ -607,12 +607,12 @@ body = do
 
 -- TODO: Parse body in chunks abstraction?
 
-bodyJSON :: forall a m. (MonadOkapi m, Aeson.FromJSON a) => m a
+bodyJSON :: (Aeson.FromJSON a, MonadOkapi m) => m a
 bodyJSON = do
   lbs <- body
   maybe next pure (Aeson.decode lbs)
 
-bodyForm :: forall a m. (MonadOkapi m, Web.FromForm a) => m a
+bodyForm :: (Web.FromForm a, MonadOkapi m) => m a
 bodyForm = do
   lbs <- body
   maybe next pure (eitherToMaybe $ Web.urlDecodeAsForm lbs)
@@ -657,12 +657,12 @@ headersEnd = do
     then pure ()
     else next
 
-cookie :: forall m. MonadOkapi m => m Cookie
+cookie :: MonadOkapi m => m Cookie
 cookie = do
   cookieValue <- header "Cookie"
   pure $ Web.parseCookies cookieValue
 
-crumb :: forall m. MonadOkapi m => BS.ByteString -> m BS.ByteString
+crumb :: MonadOkapi m => BS.ByteString -> m BS.ByteString
 crumb name = do
   cookieValue <- cookie
   case List.lookup name cookieValue of
@@ -680,7 +680,7 @@ cookieEnd = do
     then pure ()
     else next
 
-basicAuth :: forall m. MonadOkapi m => m (Text.Text, Text.Text)
+basicAuth :: MonadOkapi m => m (Text.Text, Text.Text)
 basicAuth = do
   authValue <- header "Authorization"
   case Text.words $ Text.decodeUtf8 authValue of
@@ -735,16 +735,16 @@ instance Show Failure where
   show Skip = "Skipped"
   show (Error _) = "Error returned"
 
-next :: forall a m. MonadOkapi m => m a
+next :: MonadOkapi m => m a
 next = Except.throwError Skip
 
-throw :: forall a m. MonadOkapi m => Response -> m a
+throw :: MonadOkapi m => Response -> m a
 throw = Except.throwError . Error
 
-(<!>) :: forall a m. MonadOkapi m => m a -> m a -> m a
+(<!>) :: MonadOkapi m => m a -> m a -> m a
 parser1 <!> parser2 = Except.catchError parser1 (const parser2)
 
-guardThrow :: forall a m. MonadOkapi m => Response -> Bool -> m ()
+guardThrow :: MonadOkapi m => Response -> Bool -> m ()
 guardThrow _ True = pure ()
 guardThrow response False = throw response
 
@@ -857,7 +857,7 @@ setHTML htmlRaw response =
     Function.& setBody (ResponseBodyRaw htmlRaw)
     Function.& setHeader ("Content-Type", "text/html")
 
-setJSON :: forall a. Aeson.ToJSON a => a -> Response -> Response
+setJSON :: Aeson.ToJSON a => a -> Response -> Response
 setJSON value response =
   response
     Function.& setHeader ("Content-Type", "application/json")
