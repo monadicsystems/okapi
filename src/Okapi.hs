@@ -402,7 +402,7 @@ data Request = Request
   }
   deriving (Eq, Show)
 
-type Method = Maybe HTTP.Method
+type Method = Maybe BS.ByteString
 
 type Path = [Text.Text]
 
@@ -453,11 +453,6 @@ method = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestMethod = Nothing}})
       pure method'
 
--- |
--- >>> let parser = method "CUSTOM" >> respond ok
--- >>> result <- testParserIO parser (TestRequest "CUSTOM" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodMatch :: forall m. MonadOkapi m => HTTP.Method -> m ()
 methodMatch desiredMethod = do
   currentMethod <- method
@@ -465,75 +460,30 @@ methodMatch desiredMethod = do
     then pure ()
     else next
 
--- |
--- >>> let parser = get >> respond ok
--- >>> result <- testParserIO parser $ request GET "" "" []
--- >>> assertResponse is200 result
--- True
 methodGET :: forall m. MonadOkapi m => m ()
 methodGET = methodMatch HTTP.methodGet
 
--- |
--- >>> let parser = post >> respond ok
--- >>> result <- testParserIO parser (TestRequest "POST" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodPOST :: forall m. MonadOkapi m => m ()
 methodPOST = methodMatch HTTP.methodPost
 
--- |
--- >>> let parser = Okapi.Parser.head >> respond ok
--- >>> result <- testParserIO parser (TestRequest "HEAD" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodHEAD :: forall m. MonadOkapi m => m ()
 methodHEAD = methodMatch HTTP.methodHead
 
--- |
--- >>> let parser = put >> respond ok
--- >>> result <- testParserIO parser (TestRequest "PUT" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodPUT :: forall m. MonadOkapi m => m ()
 methodPUT = methodMatch HTTP.methodPut
 
--- |
--- >>> let parser = delete >> respond ok
--- >>> result <- testParserIO parser (TestRequest "DELETE" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodDELETE :: forall m. MonadOkapi m => m ()
 methodDELETE = methodMatch HTTP.methodDelete
 
--- |
--- >>> let parser = trace >> respond ok
--- >>> result <- testParserIO parser (TestRequest "TRACE" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodTRACE :: forall m. MonadOkapi m => m ()
 methodTRACE = methodMatch HTTP.methodTrace
 
--- |
--- >>> let parser = connect >> respond ok
--- >>> result <- testParserIO parser (TestRequest "CONNECT" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodCONNECT :: forall m. MonadOkapi m => m ()
 methodCONNECT = methodMatch HTTP.methodConnect
 
--- |
--- >>> let parser = options >> respond ok
--- >>> result <- testParserIO parser (TestRequest "OPTIONS" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodOPTIONS :: forall m. MonadOkapi m => m ()
 methodOPTIONS = methodMatch HTTP.methodOptions
 
--- |
--- >>> let parser = patch >> respond ok
--- >>> result <- testParserIO parser (TestRequest "PATCH" [] "" "")
--- >>> assertResponse is200 result
--- True
 methodPATCH :: forall m. MonadOkapi m => m ()
 methodPATCH = methodMatch HTTP.methodPatch
 
@@ -549,17 +499,6 @@ methodEnd = do
 -- These are the path parsers.
 
 -- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
---
--- >>> :{
--- parser = do
---   get
---   path ["store", "clothing"]
---   respond ok
--- :}
---
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
--- >>> assertResponse is200 result
--- True
 path :: MonadOkapi m => m [Text.Text]
 path = Combinators.many seg
 
@@ -571,18 +510,6 @@ pathMatch desiredPath = do
     else next
 
 -- | Parses and discards a single path segment matching the given @Text@ value
---
--- >>> :{
--- parser = do
---   get
---   pathSeg "store"
---   pathSeg "clothing"
---   respond ok;
--- :}
---
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
--- >>> assertResponse is200 result
--- True
 seg :: Web.FromHttpApiData a => MonadOkapi m => m a
 seg = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
@@ -600,23 +527,6 @@ segMatch :: forall a m. (Eq a, Web.FromHttpApiData a, MonadOkapi m) => a -> m ()
 segMatch desiredParam = segMatchWith (desiredParam ==)
 
 -- | Parses and discards a single path segment if it satisfies the given predicate function
---
--- >>> import qualified Data.Text
--- >>> isValidProductID = \pid -> Data.Text.length pid > 5
--- >>> :{
--- parser = do
---   get
---   pathSeg "product"
---   pathSegWith isValidProductID
---   respond ok
--- :}
---
--- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
--- >>> assertResponse is200 result1
--- True
--- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/product/5641" "")
--- >>> assertFailure isSkip result2
--- True
 segMatchWith :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => (a -> Bool) -> m ()
 segMatchWith predicate = do
   param <- seg
@@ -652,24 +562,6 @@ queryValue queryItemName = do
       pure queryValue
 
 -- | Parses the value of a query parameter with the given type and name
---
--- >>> :set -XTypeApplications
--- >>> import qualified Data.ByteString.Lazy as LBS
--- >>> import qualified Data.ByteString.Char8 as C8
--- >>> showLBS = LBS.fromStrict . C8.pack . show
--- >>> :{
--- parser = do
---   get
---   pathSeg "product"
---   minQty <- queryParam @Int "min_qty"
---   respond $ setBodyRaw (showLBS $ minQty + 3) $ ok
--- :}
---
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/product?min_qty=2" "")
--- >>> assertResponse is200 result
--- True
--- >>> assertResponse (hasBodyRaw "5") result
--- True
 queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> m a
 queryParam queryItemName = do
   queryItemValue <- queryValue queryItemName
@@ -685,27 +577,6 @@ queryParamMatch queryItemName desiredParam = do
     else next
 
 -- | Test for the existance of a query flag
---
--- >>> :{
--- parser = do
---   get
---   pathSeg "users"
---   isAdmin <- queryFlag "admin"
---   respond $
---     if isAdmin
---       then json ["Derek", "Alice"] $ ok
---       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ ok
--- :}
---
--- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/users?admin" "")
--- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result1
--- True
--- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/users?admin=foobarbaz" "")
--- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result2
--- True
--- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/users" "")
--- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\",\"Bob\",\"Casey\",\"Alex\",\"Larry\"]") result3
--- True
 queryFlag :: forall a m. MonadOkapi m => Text.Text -> m ()
 queryFlag queryItemName = do
   queryItemValue <- queryValue queryItemName
@@ -725,7 +596,6 @@ queryEnd = do
 
 -- $bodyParsers
 
--- | TODO: Parse body in chunks abstraction?
 body :: forall m. MonadOkapi m => m Body
 body = do
   currentBody <- State.gets (requestBody . stateRequest)
@@ -734,6 +604,8 @@ body = do
     else do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = ""}})
       pure currentBody
+
+-- TODO: Parse body in chunks abstraction?
 
 bodyJSON :: forall a m. (MonadOkapi m, Aeson.FromJSON a) => m a
 bodyJSON = do

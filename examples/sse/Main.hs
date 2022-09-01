@@ -28,7 +28,7 @@ type Okapi a = OkapiT IO a
 api :: EventSource -> Okapi Response
 api eventSource = do
   methodGET
-  index <|> (sse eventSource)
+  index <|> sse eventSource
   where
     index :: Okapi Response
     index = do
