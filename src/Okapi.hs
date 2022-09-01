@@ -125,6 +125,7 @@ module Okapi
     ok,
     notFound,
     redirect,
+    forbidden,
     internalServerError,
 
     -- ** Setters
@@ -787,6 +788,13 @@ redirect status url =
   let responseStatus = status
       responseHeaders = [("Location", Text.encodeUtf8 url)]
       responseBody = ResponseBodyRaw ""
+   in Response {..}
+
+forbidden :: Response
+forbidden =
+  let responseStatus = 403
+      responseHeaders = []
+      responseBody = ResponseBodyRaw "Forbidden"
    in Response {..}
 
 internalServerError :: Response

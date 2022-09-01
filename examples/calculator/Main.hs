@@ -27,6 +27,7 @@ respond :: Response -> Okapi Response
 respond response = do
   methodEnd
   pathEnd
+  queryEnd
   pure response
 
 addOp :: Okapi Response
@@ -63,12 +64,10 @@ divOp :: Okapi Response
 divOp = do
   segMatch @Text "div"
   (x, y) <- getArgs
-  if y == 0
-    then throw $ Response 403 [] $ ResponseBodyRaw "Forbidden"
-    else
-      ok
-        & setJSON DivResult {answer = x `div` y, remainder = x `mod` y}
-        & respond
+  guardThrow forbidden (y == 0)
+  ok
+    & setJSON DivResult {answer = x `div` y, remainder = x `mod` y}
+    & respond
 
 getArgs :: Okapi (Int, Int)
 getArgs = getArgsFromPath <|> getArgsFromQueryParams

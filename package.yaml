@@ -75,6 +75,18 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - okapi
+  calculator-route-exe:
+    main:                Main.hs
+    source-dirs:         examples/calculator-route
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - aeson
+    - parser-combinators
+    - text
   todo-exe:
     main:                Main.hs
     source-dirs:         examples/todo
