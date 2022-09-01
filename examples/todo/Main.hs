@@ -53,7 +53,7 @@ Deletes the todo with the matching :uid from the server.
 data Todo = Todo
   { todoID :: Int,
     todoName :: Text,
-    todoStatus :: Status
+    todoStatus :: TodoStatus
   }
   deriving (Eq, Ord, Generic, ToJSON, Show)
 
@@ -62,44 +62,44 @@ instance FromRow Todo where
 
 data TodoForm = TodoForm
   { todoFormName :: Text,
-    todoFormStatus :: Status
+    todoFormStatus :: TodoStatus
   }
   deriving (Eq, Ord, Generic, FromForm, Show)
 
 instance ToRow TodoForm where
   toRow (TodoForm name status) = toRow (name, status)
 
-data Status
+data TodoStatus
   = Incomplete
   | Archived
   | Complete
   deriving (Eq, Ord, Show)
 
-instance ToJSON Status where
+instance ToJSON TodoStatus where
   toJSON Incomplete = "incomplete"
   toJSON Archived = "archived"
   toJSON Complete = "complete"
 
-instance FromHttpApiData Status where
+instance FromHttpApiData TodoStatus where
   parseQueryParam "incomplete" = Right Incomplete
   parseQueryParam "archived" = Right Archived
   parseQueryParam "complete" = Right Complete
-  parseQueryParam _ = Left "Incorrect format for Status value"
+  parseQueryParam _ = Left "Incorrect format for TodoStatus value"
 
-instance ToField Status where
+instance ToField TodoStatus where
   toField status =
     case status of
       Incomplete -> SQLText "incomplete"
       Archived -> SQLText "archived"
       Complete -> SQLText "complete"
 
-instance FromField Status where
+instance FromField TodoStatus where
   fromField field = do
     case fieldData field of
       SQLText "incomplete" -> pure Incomplete
       SQLText "archived" -> pure Archived
       SQLText "complete" -> pure Complete
-      _ -> returnError ConversionFailed field "Couldn't get Status value from field"
+      _ -> returnError ConversionFailed field "Couldn't methodGET TodoStatus value from field"
 
 type Okapi = OkapiT IO
 
@@ -109,10 +109,16 @@ main :: IO ()
 main = do
   conn <- open "todo.db"
   execute_ conn "CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, name TEXT, status TEXT)"
-  run id notFound 3000 (todoAPI conn)
+  run id (todoAPI conn)
   close conn
 
 -- SERVER FUNCTIONS
+
+respond :: Response -> Okapi Response
+respond response = do
+  methodEnd
+  pathEnd
+  return response
 
 todoAPI :: Connection -> Okapi Response
 todoAPI conn =
@@ -125,50 +131,50 @@ todoAPI conn =
 
 healthCheck :: Okapi Response
 healthCheck = do
-  get
-  optional $ pathSeg ""
+  methodGET
+  optional $ segMatch @Text ""
   respond ok
 
 getTodo :: Connection -> Okapi Response
 getTodo conn = do
-  get
-  pathSeg "todos"
-  todoID <- pathParam @Int
+  methodGET
+  segMatch @Text "todos"
+  todoID <- seg
   maybeTodo <- lift $ selectTodo conn todoID
   case maybeTodo of
-    Nothing -> throw $ Response 500 [] $ ResponseBodyRaw ""
-    Just todo -> ok & json todo & respond
+    Nothing -> throw internalServerError
+    Just todo -> ok & setJSON todo & respond
 
 getAllTodos :: Connection -> Okapi Response
 getAllTodos conn = do
-  get
-  pathSeg "todos"
-  status <- optional $ queryParam @Status "status"
+  methodGET
+  segMatch @Text "todos"
+  status <- optional $ queryParam @TodoStatus "status"
   todos <- lift $ selectAllTodos conn status
-  ok & json todos & respond
+  ok & setJSON todos & respond
 
 createTodo :: Connection -> Okapi Response
 createTodo conn = do
-  post
-  pathSeg "todos"
+  methodPOST
+  segMatch @Text "todos"
   todoForm <- bodyForm
   lift $ insertTodoForm conn todoForm
   respond ok
 
 editTodo :: Connection -> Okapi Response
 editTodo conn = do
-  put
-  pathSeg "todos"
-  todoID <- pathParam @Int
+  methodPUT
+  segMatch @Text "todos"
+  todoID <- seg @Int
   todoForm <- bodyForm @TodoForm
   lift $ updateTodo conn todoID todoForm
   respond ok
 
 forgetTodo :: Connection -> Okapi Response
 forgetTodo conn = do
-  delete
-  pathSeg "todos"
-  todoID <- pathParam @Int
+  methodDELETE
+  segMatch @Text "todos"
+  todoID <- seg @Int
   lift $ deleteTodo conn todoID
   respond ok
 
@@ -178,12 +184,12 @@ insertTodoForm :: Connection -> TodoForm -> IO ()
 insertTodoForm conn = execute conn "INSERT INTO todos (name, status) VALUES (?, ?)"
 
 selectTodo :: Connection -> Int -> IO (Maybe Todo)
-selectTodo conn todoID = listToMaybe <$> query conn "SELECT * FROM todos WHERE id = ?" (Only todoID)
+selectTodo conn todoID = listToMaybe <$> Database.SQLite.Simple.query conn "SELECT * FROM todos WHERE id = ?" (Only todoID)
 
-selectAllTodos :: Connection -> Maybe Status -> IO [Todo]
+selectAllTodos :: Connection -> Maybe TodoStatus -> IO [Todo]
 selectAllTodos conn maybeStatus = case maybeStatus of
   Nothing -> query_ conn "SELECT * FROM todos"
-  Just status -> query conn "SELECT * FROM todos WHERE status = ?" (Only status)
+  Just status -> Database.SQLite.Simple.query conn "SELECT * FROM todos WHERE status = ?" (Only status)
 
 updateTodo :: Connection -> Int -> TodoForm -> IO ()
 updateTodo conn todoID TodoForm {..} =

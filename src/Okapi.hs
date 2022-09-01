@@ -18,13 +18,14 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
+-- | Okapi is the microframework you should use if you get the chance.
 module Okapi
-  ( -- * Parser
-
-    -- ** Types
+  ( -- * Parsing
+    -- $parsers
     MonadOkapi,
     OkapiT (..),
-    State,
+    Failure (..),
+    State (..),
     Request,
     Method,
     Path,
@@ -38,7 +39,11 @@ module Okapi
     Okapi.Cookie,
     Crumb,
 
-    -- ** Method Parsers
+    -- ** Request Parsers
+    request,
+    requestEnd,
+
+    -- *** Method Parsers
     -- $methodParsers
     method,
     methodMatch,
@@ -51,53 +56,67 @@ module Okapi
     methodOPTIONS,
     methodTRACE,
     methodCONNECT,
+    methodEnd,
 
-    -- ** Path Parsers
+    -- *** Path Parsers
     -- $pathParsers
     path,
     pathMatch,
     seg,
     segMatch,
     segMatchWith,
+    pathEnd,
 
-    -- ** Query Parsers
+    -- *** Query Parsers
     -- $queryParsers
     query,
-    queryItem,
+    queryValue,
     queryFlag,
     queryParam,
+    queryParamMatch,
     queryList,
+    queryEnd,
 
-    -- ** Body Parsers
+    -- *** Body Parsers
     -- $bodyParsers
     body,
     bodyJSON,
     bodyForm,
+    bodyEnd,
 
-    -- ** Header Parsers
+    -- *** Header Parsers
     -- $headerParsers
     headers,
     header,
+    basicAuth,
+    headersEnd,
     cookie,
     crumb,
-    basicAuth,
+    cookieEnd,
 
-    -- * Error
+    -- ** Vault Parsers
+    -- $vaultParsers
+    vaultLookup,
+    vaultInsert,
+    vaultDelete,
+    vaultAdjust,
+    vaultWipe,
 
-    -- ** Types
-    Failure (..),
+    -- ** Combinators
+    -- $combinators
+    Okapi.look,
+    module Combinators,
 
-    -- ** Helpers
-    -- $errorHelpers
+    -- ** Failure
+    -- $failure
     next,
     throw,
     (<!>),
     guardThrow,
 
-    -- * Response
-    -- $response
-
-    -- ** Types
+    -- * Responding
+    -- $responding
+    Handler (..),
     Response (..),
     Status,
     ResponseBody (..),
@@ -106,31 +125,108 @@ module Okapi
     ok,
     notFound,
     redirect,
+    internalServerError,
 
     -- ** Setters
     setStatus,
     setHeaders,
     setHeader,
+    addHeader,
+    addSetCookie,
     setBody,
     setBodyRaw,
     setBodyFile,
     setBodyEventSource,
     setPlaintext,
-    setJSON,
     setHTML,
+    setJSON,
 
-    -- *
+    -- ** Special
+    static,
+
+    -- * Middleware
+    -- $middleware
+    Middleware (..),
+    applyMiddlewares,
+    scope,
+    clearHeadersMiddleware,
+    prefixPathMiddleware,
+
+    -- * Routing
+    -- $routing
+    Router (..),
+    route,
+    pattern Seg,
+    pattern GET,
+    pattern POST,
+    pattern DELETE,
+    pattern HasQueryParam,
+    pattern HasQueryFlag,
+    viewQuery,
+
+    -- * Relative URLs
+    -- $relativeURLs
+    RelURL (..),
+    renderRelURL,
+    renderPath,
+    renderQuery,
+    parseRelURL,
+
+    -- * Testing
+    -- $testing
+    testParser,
+    testParserPure,
+    testParserIO,
+    assert,
+    assert200,
+    assert404,
+    assert500,
+
+    -- * WAI
+    -- $wai
+    run,
+    serve,
+    serveTLS,
+    serveWebsockets,
+    serveWebsocketsTLS,
+    app,
+    websocketsApp,
+    testRunSession,
+    testWithSession,
+    testRequest,
+
+    -- * Utilities
+
+    -- ** Server Sent Events
+    -- $serverSentEvents
+    Event (..),
+    ToSSE (..),
+    EventSource,
+    newEventSource,
+    sendValue,
+    sendEvent,
+
+    -- ** Sessions
+    Session (..),
+    HasSession (..),
+    session,
+    sessionLookup,
+    sessionInsert,
+    sessionDelete,
+    sessionClear,
+    withSession,
   )
 where
 
 import qualified Control.Applicative as Applicative
-import qualified Control.Applicative.Combinators as Combinators
 import qualified Control.Concurrent as Concurrent
 import qualified Control.Concurrent.Chan.Unagi as Unagi
-import qualified Control.Concurrent.STM.TVar as TVar
 import qualified Control.Monad as Monad
+import qualified Control.Monad.Combinators as Combinators
+import qualified Control.Monad.Combinators.NonEmpty as Combinators.NonEmpty
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.IO.Class as IO
+import qualified Control.Monad.Identity as Identity
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.Reader as Reader
 import qualified Control.Monad.State as State
@@ -163,7 +259,6 @@ import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
 import qualified Data.Vault.Lazy as Vault
 import qualified GHC.Natural as Natural
-import qualified Language.Haskell.TH.Syntax as BS
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Socket as Socket
 import qualified Network.Wai as WAI
@@ -180,9 +275,9 @@ import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 
--- $parsing
+-- $parserTypes
 --
--- At it's core, Okapi is an HTTP parser.
+-- The types are as follows
 
 -- | A type constraint representing monads that have the ability to parse an HTTP request.
 type MonadOkapi m =
@@ -333,17 +428,17 @@ type Crumb = (BS.ByteString, BS.ByteString)
 --
 -- These are the parsers that you'll use to build you own app.
 
--- | Parses without modifying the state, even if it succeeds.
-look :: MonadOkapi m => m a -> m a
-look parser = do
-  state <- State.get
-  result <- parser
-  State.put state
-  pure result
-
 -- | Parses the entire request.
 request :: MonadOkapi m => m Request
 request = Request <$> (Just <$> method) <*> path <*> query <*> body <*> headers
+
+requestEnd :: MonadOkapi m => m ()
+requestEnd = do
+  methodEnd
+  pathEnd
+  queryEnd
+  headersEnd
+  bodyEnd
 
 -- $ methodParsers
 --
@@ -442,6 +537,13 @@ methodOPTIONS = methodMatch HTTP.methodOptions
 methodPATCH :: forall m. MonadOkapi m => m ()
 methodPATCH = methodMatch HTTP.methodPatch
 
+methodEnd :: MonadOkapi m => m ()
+methodEnd = do
+  maybeMethod <- Combinators.optional method
+  case maybeMethod of
+    Nothing -> pure ()
+    Just _ -> next
+
 -- $pathParsers
 --
 -- These are the path parsers.
@@ -522,6 +624,14 @@ segMatchWith predicate = do
     then pure ()
     else next
 
+-- | Similar to `end` function in <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
+pathEnd :: MonadOkapi m => m ()
+pathEnd = do
+  currentPath <- path
+  if List.null currentPath
+    then pure ()
+    else next
+
 -- $queryParsers
 --
 -- These are the query parsers.
@@ -532,14 +642,14 @@ query = do
   State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
   pure query
 
-queryItem :: MonadOkapi m => Text.Text -> m QueryItem
-queryItem queryItemName = do
+queryValue :: MonadOkapi m => Text.Text -> m QueryValue
+queryValue queryItemName = do
   maybeQueryItem <- State.gets (Foldable.find (\(queryItemName', _) -> queryItemName == queryItemName') . requestQuery . stateRequest)
   case maybeQueryItem of
     Nothing -> next
-    Just queryItem -> do
+    Just queryItem@(_, queryValue) -> do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = List.delete queryItem $ requestQuery $ stateRequest state}})
-      pure queryItem
+      pure queryValue
 
 -- | Parses the value of a query parameter with the given type and name
 --
@@ -562,10 +672,17 @@ queryItem queryItemName = do
 -- True
 queryParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => Text.Text -> m a
 queryParam queryItemName = do
-  (_, queryItemValue) <- queryItem queryItemName
+  queryItemValue <- queryValue queryItemName
   case queryItemValue of
     QueryFlag -> next
     QueryParam valueText -> maybe next pure (Web.parseQueryParamMaybe valueText)
+
+queryParamMatch :: (MonadOkapi m, Web.FromHttpApiData a, Eq a) => Text.Text -> a -> m ()
+queryParamMatch queryItemName desiredParam = do
+  param <- queryParam queryItemName
+  if param == desiredParam
+    then pure ()
+    else next
 
 -- | Test for the existance of a query flag
 --
@@ -591,13 +708,20 @@ queryParam queryItemName = do
 -- True
 queryFlag :: forall a m. MonadOkapi m => Text.Text -> m ()
 queryFlag queryItemName = do
-  (_, queryItemValue) <- queryItem queryItemName
+  queryItemValue <- queryValue queryItemName
   case queryItemValue of
     QueryFlag -> pure ()
     _ -> next
 
-queryList :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m [a]
-queryList = undefined
+queryList :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m (NonEmpty.NonEmpty a)
+queryList = Combinators.NonEmpty.some . queryParam
+
+queryEnd :: MonadOkapi m => m ()
+queryEnd = do
+  currentQuery <- query
+  if List.null currentQuery
+    then pure ()
+    else next
 
 -- $bodyParsers
 
@@ -628,6 +752,13 @@ bodyForm = do
 
 -- TODO: Add abstraction for multipart forms
 
+bodyEnd :: MonadOkapi m => m ()
+bodyEnd = do
+  currentBody <- body
+  if LBS.null currentBody
+    then pure ()
+    else next
+
 -- $headerParsers
 --
 -- These are header parsers.
@@ -647,6 +778,13 @@ header headerName = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = List.delete header $ requestHeaders $ stateRequest state}})
       pure headerValue
 
+headersEnd :: MonadOkapi m => m ()
+headersEnd = do
+  currentHeaders <- headers
+  if List.null currentHeaders
+    then pure ()
+    else next
+
 cookie :: forall m. MonadOkapi m => m Cookie
 cookie = do
   cookieValue <- header "Cookie"
@@ -662,6 +800,13 @@ crumb name = do
       -- TODO: Needs testing to see if state is restored properly
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete crumb cookieValue) : requestHeaders (stateRequest state)}})
       pure crumbValue
+
+cookieEnd :: MonadOkapi m => m ()
+cookieEnd = do
+  currentCookie <- cookie
+  if List.null currentCookie
+    then pure ()
+    else next
 
 basicAuth :: forall m. MonadOkapi m => m (Text.Text, Text.Text)
 basicAuth = do
@@ -701,64 +846,13 @@ vaultAdjust adjuster key = do
 vaultWipe :: MonadOkapi m => m ()
 vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
 
-static :: MonadOkapi m => m Response
-static = do
-  filePathText <- Text.intercalate "/" <$> path
-  let filePath = Text.unpack filePathText
-  ok Function.& setBodyFile filePath Function.& pure
-
--- $ Completion Checks
-
-methodEnd :: MonadOkapi m => m ()
-methodEnd = do
-  maybeMethod <- Combinators.optional method
-  case maybeMethod of
-    Nothing -> pure ()
-    Just _ -> next
-
--- | Similar to `end` function in <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
-pathEnd :: MonadOkapi m => m ()
-pathEnd = do
-  currentPath <- path
-  if List.null currentPath
-    then pure ()
-    else next
-
-queryEnd :: MonadOkapi m => m ()
-queryEnd = do
-  currentQuery <- query
-  if List.null currentQuery
-    then pure ()
-    else next
-
-headersEnd :: MonadOkapi m => m ()
-headersEnd = do
-  currentHeaders <- headers
-  if List.null currentHeaders
-    then pure ()
-    else next
-
-cookieEnd :: MonadOkapi m => m ()
-cookieEnd = do
-  currentCookie <- cookie
-  if List.null currentCookie
-    then pure ()
-    else next
-
-bodyEnd :: MonadOkapi m => m ()
-bodyEnd = do
-  currentBody <- body
-  if LBS.null currentBody
-    then pure ()
-    else next
-
-requestEnd :: MonadOkapi m => m ()
-requestEnd = do
-  methodEnd
-  pathEnd
-  queryEnd
-  headersEnd
-  bodyEnd
+-- | Parses without modifying the state, even if it succeeds.
+look :: MonadOkapi m => m a -> m a
+look parser = do
+  state <- State.get
+  result <- parser
+  State.put state
+  pure result
 
 -- $error
 
@@ -783,6 +877,9 @@ guardThrow _ True = pure ()
 guardThrow response False = throw response
 
 -- $response
+
+-- | Represents monadic actions that return a @Response@, for some @m@.
+type Handler m = m Response
 
 -- | Represents HTTP responses that can be returned by a parser.
 data Response = Response
@@ -820,6 +917,13 @@ redirect status url =
       responseBody = ResponseBodyRaw ""
    in Response {..}
 
+internalServerError :: Response
+internalServerError =
+  let responseStatus = 500
+      responseHeaders = []
+      responseBody = ResponseBodyRaw "Internal Server Error"
+   in Response {..}
+
 -- RESPONSE SETTERS
 
 setStatus :: Status -> Response -> Response
@@ -841,6 +945,19 @@ setHeader header response@Response {..} =
 
 addHeader :: Header -> Response -> Response
 addHeader header response = response {responseHeaders = header : responseHeaders response}
+
+addSetCookie :: (BS.ByteString, BS.ByteString) -> Response -> Response
+addSetCookie (key, value) response =
+  let setCookieValue =
+        LBS.toStrict $
+          Builder.toLazyByteString $
+            Web.renderSetCookie $
+              Web.defaultSetCookie -- TODO: Check that using default here is okay
+                { Web.setCookieName = key,
+                  Web.setCookieValue = value,
+                  Web.setCookiePath = Just "/"
+                }
+   in addHeader ("Set-Cookie", setCookieValue) response
 
 setBody :: ResponseBody -> Response -> Response
 setBody body response = response {responseBody = body}
@@ -873,6 +990,12 @@ setJSON value response =
   response
     Function.& setHeader ("Content-Type", "application/json")
     Function.& setBodyRaw (Aeson.encode value)
+
+static :: MonadOkapi m => Handler m
+static = do
+  filePathText <- Text.intercalate "/" <$> path
+  let filePath = Text.unpack filePathText
+  ok Function.& setBodyFile filePath Function.& pure
 
 -- $serverSentEvents
 
@@ -960,63 +1083,70 @@ eventToServerEvent Event {..} =
 eventToServerEvent (CommentEvent comment) = WAI.CommentEvent $ Builder.lazyByteString comment
 eventToServerEvent CloseEvent = WAI.CloseEvent
 
--- $execution
+-- $wai
+--
+-- These functions are for interfacing with WAI (Web Application Interface).
 
-run ::
+run :: Monad m => (forall a. m a -> IO a) -> OkapiT m Response -> IO ()
+run = serve 3000 notFound
+
+serve ::
   Monad m =>
+  -- | Port
   Int ->
-  (forall a. m a -> IO a) ->
+  -- | Default Response
   Response ->
+  -- | Monad unlift function
+  (forall a. m a -> IO a) ->
+  -- | Parser
   OkapiT m Response ->
   IO ()
-run port hoister defaultResponse okapiT = WAI.run port $ app hoister defaultResponse okapiT
+serve port defaultResponse hoister okapiT = WAI.run port $ app defaultResponse hoister okapiT
 
-runTLS ::
+serveTLS ::
   Monad m =>
   WAI.TLSSettings ->
   WAI.Settings ->
-  (forall a. m a -> IO a) ->
   Response ->
+  (forall a. m a -> IO a) ->
   OkapiT m Response ->
   IO ()
-runTLS tlsSettings settings hoister defaultResponse okapiT = WAI.runTLS tlsSettings settings $ app hoister defaultResponse okapiT
+serveTLS tlsSettings settings defaultResponse hoister okapiT = WAI.runTLS tlsSettings settings $ app defaultResponse hoister okapiT
 
-runWebsockets ::
+serveWebsockets ::
   Monad m =>
   WebSockets.ConnectionOptions ->
   WebSockets.ServerApp ->
   Int ->
-  (forall a. m a -> IO a) ->
   Response ->
+  (forall a. m a -> IO a) ->
   OkapiT m Response ->
   IO ()
-runWebsockets connSettings serverApp port hoister defaultResponse okapiT = WAI.run port $ websocketsApp connSettings serverApp hoister defaultResponse okapiT
+serveWebsockets connSettings serverApp port defaultResponse hoister okapiT = WAI.run port $ websocketsApp connSettings serverApp defaultResponse hoister okapiT
 
-runWebsocketsTLS ::
+serveWebsocketsTLS ::
   Monad m =>
   WAI.TLSSettings ->
   WAI.Settings ->
   WebSockets.ConnectionOptions ->
   WebSockets.ServerApp ->
-  (forall a. m a -> IO a) ->
   Response ->
+  (forall a. m a -> IO a) ->
   OkapiT m Response ->
   IO ()
-runWebsocketsTLS tlsSettings settings connSettings serverApp hoister defaultResponse okapiT = WAI.runTLS tlsSettings settings $ websocketsApp connSettings serverApp hoister defaultResponse okapiT
-
--- APPLICATION.HS
+serveWebsocketsTLS tlsSettings settings connSettings serverApp defaultResponse hoister okapiT = WAI.runTLS tlsSettings settings $ websocketsApp connSettings serverApp defaultResponse hoister okapiT
 
 -- | Turns a parser into a WAI application
 app ::
   Monad m =>
-  -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
-  (forall a. m a -> IO a) ->
   -- | The default response to pure if parser fails
   Response ->
+  -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
+  (forall a. m a -> IO a) ->
   -- | The parser used to match the request
   OkapiT m Response ->
   WAI.Application
-app hoister defaultResponse okapiT waiRequest respond = do
+app defaultResponse hoister okapiT waiRequest respond = do
   state <- waiRequestToState waiRequest
   (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) state
   let response =
@@ -1052,22 +1182,34 @@ websocketsApp ::
   WebSockets.ConnectionOptions ->
   -- | The server to use for handling WebSocket connections
   WebSockets.ServerApp ->
-  (forall a. m a -> IO a) ->
   Response ->
+  (forall a. m a -> IO a) ->
   OkapiT m Response ->
   WAI.Application
-websocketsApp connSettings serverApp hoister defaultResponse okapiT =
-  let backupApp = app hoister defaultResponse okapiT
+websocketsApp connSettings serverApp defaultResponse hoister okapiT =
+  let backupApp = app defaultResponse hoister okapiT
    in WebSockets.websocketsOr connSettings serverApp backupApp
 
 -- $middleware
+--
+-- Middlewares allow you to modify the behavior of Okapi handlers.
+-- Middlewares are functions that take a handler and return another handler.
+-- Middlewares can be composed with the fish operator @>=>@.
+--
+-- @
+--  clearHeadersMiddleware >=> pathPrefix ["jello"] :: forall m. Middleware m
+-- @
 
 -- | A middleware takes an action that returns a @Response@ and can modify the action in various ways
-type Middleware m = m Response -> m Response
+type Middleware m = Handler m -> Handler m
 
 applyMiddlewares :: MonadOkapi m => [Middleware m] -> Middleware m
 applyMiddlewares ms handler =
   Prelude.foldl (\handler m -> m handler) handler ms
+
+-- | TODO: Is this needed? Idea taken from OCaml Dream framework
+scope :: MonadOkapi m => [Text.Text] -> [Middleware m] -> Middleware m
+scope prefix middlewares handler = pathMatch prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: MonadOkapi m => Middleware m
 clearHeadersMiddleware handler = setHeaders [] <$> handler
@@ -1075,20 +1217,24 @@ clearHeadersMiddleware handler = setHeaders [] <$> handler
 prefixPathMiddleware :: MonadOkapi m => [Text.Text] -> Middleware m
 prefixPathMiddleware prefix handler = pathMatch prefix >> handler
 
--- | TODO: Is this needed? Idea taken from OCaml Dream framework
-scope :: MonadOkapi m => [Text.Text] -> [Middleware m] -> Middleware m
-scope prefix middlewares handler = pathMatch prefix >> applyMiddlewares middlewares handler
+-- $routing
+--
+-- Okapi implements routes and type-safe relative URLs using bidirectional pattern synonyms and view patterns.
+-- Routing can be extended to dispatch on any property of the request, including method, path, query, headers, and even body.
+-- By default, Okapi provides a @route@ function for dispatching on the path of the request.
 
--- $ Bidirectional Route Patterns
+type Router m = Path -> Handler m
 
-type Router m = Path -> m Response
-
-route :: MonadOkapi m => Router m -> m Response
+route :: MonadOkapi m => Router m -> Handler m
 route router = path >>= router
 
 -- $patterns
 
--- $methodPatterns
+pattern Seg :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
+pattern Seg param <-
+  (Web.parseUrlPiece -> Right param)
+  where
+    Seg param = Web.toUrlPiece param
 
 pattern GET :: Method
 pattern GET = Just "GET"
@@ -1099,30 +1245,41 @@ pattern POST = Just "POST"
 pattern DELETE :: Method
 pattern DELETE = Just "DELETE"
 
--- $pathPatterns
-
-pattern Seg :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
-pattern Seg param <-
-  (Web.parseUrlPiece -> Right param)
-  where
-    Seg param = Web.toUrlPiece param
-
--- $queryPatterns
-
 pattern HasQueryParam :: Web.FromHttpApiData a => a -> Maybe QueryValue
 pattern HasQueryParam value <- Just (QueryParam (Web.parseQueryParam -> Right value))
 
 pattern HasQueryFlag :: Maybe QueryValue
 pattern HasQueryFlag <- Just QueryFlag
 
-queryView :: Text.Text -> Query -> (Maybe QueryValue, Query)
-queryView name query = case List.lookup name query of
+viewQuery :: Text.Text -> Query -> (Maybe QueryValue, Query)
+viewQuery name query = case List.lookup name query of
   Nothing -> (Nothing, query)
   Just value -> (Just value, List.delete (name, value) query)
 
 -- $relativeURLs
+--
+-- Relative URLs are useful when we want to refer to other locations within our app.
+-- Thanks to bidirectional patterns, we can use the same pattern to deconstruct an incoming request
+-- AND construct the relative URL that leads to itself.
 
 data RelURL = RelURL Path Query
+
+-- TODO: Use ToURL typeclass for Path and Query, then combine for RelURL??
+renderRelURL :: RelURL -> Text.Text
+renderRelURL (RelURL path query) = case (path, query) of
+  ([], []) -> ""
+  ([], q) -> "?" <> renderQuery q
+  (p, []) -> renderPath p
+  (p, q) -> renderPath p <> "?" <> renderQuery q
+
+renderPath :: Path -> Text.Text
+renderPath [] = ""
+renderPath (pathSeg : path) = "/" <> pathSeg <> renderPath path
+
+renderQuery :: Query -> Text.Text
+renderQuery [] = ""
+renderQuery ((name, QueryFlag) : query) = name <> "&" <> renderQuery query
+renderQuery ((name, QueryParam value) : query) = name <> "=" <> value <> "&" <> renderQuery query
 
 parseRelURL :: Text.Text -> Maybe RelURL
 parseRelURL possibleRelURL = Either.eitherToMaybe $
@@ -1150,24 +1307,9 @@ parseRelURL possibleRelURL = Either.eitherToMaybe $
           queryParamValue <- Atto.takeWhile (/= '&')
           pure (queryParamName, QueryParam queryParamValue)
 
--- TODO: Use ToURL typeclass for Path and Query, then combine for RelURL??
-renderRelURL :: RelURL -> Text.Text
-renderRelURL (RelURL path query) = case (path, query) of
-  ([], []) -> ""
-  ([], q) -> "?" <> renderQuery q
-  (p, []) -> renderPath p
-  (p, q) -> renderPath p <> "?" <> renderQuery q
-
-renderQuery :: Query -> Text.Text
-renderQuery [] = ""
-renderQuery ((name, QueryFlag) : query) = name <> "&" <> renderQuery query
-renderQuery ((name, QueryParam value) : query) = name <> "=" <> value <> "&" <> renderQuery query
-
-renderPath :: Path -> Text.Text
-renderPath [] = ""
-renderPath (pathSeg : path) = "/" <> pathSeg <> renderPath path
-
--- $ testing
+-- $testing
+--
+-- There are two ways to test in Okapi.
 
 testParser ::
   Monad m =>
@@ -1181,13 +1323,19 @@ testParser okapiT request =
     requestToState :: Request -> State
     requestToState stateRequest = let stateVault = mempty in State {..}
 
+testParserPure ::
+  OkapiT Identity.Identity Response ->
+  Request ->
+  Identity.Identity (Either Failure Response, State)
+testParserPure = testParser
+
 testParserIO ::
   OkapiT IO Response ->
   Request ->
   IO (Either Failure Response, State)
 testParserIO = testParser
 
--- ASSERTION FUNCTIONS TODO: Add common assertion helpers
+-- TODO: Add common assertion helpers. Use Predicate for Contravariant interface??
 
 assert ::
   ((Either Failure Response, State) -> Bool) ->
@@ -1195,13 +1343,20 @@ assert ::
   Bool
 assert assertion = assertion
 
-assertNext = undefined
+assert200 :: (Either Failure Response, State) -> Bool
+assert200 = \case
+  (Right (Response 200 _ _), _) -> True
+  _ -> False
 
-assert200Response = undefined
+assert404 :: (Either Failure Response, State) -> Bool
+assert404 = \case
+  (Right (Response 404 _ _), _) -> True
+  _ -> False
 
-assert404Error = undefined
-
--- $testingWithWAITest
+assert500 :: (Either Failure Response, State) -> Bool
+assert500 = \case
+  (Right (Response 500 _ _), _) -> True
+  _ -> False
 
 testRunSession ::
   Monad m =>
@@ -1210,7 +1365,7 @@ testRunSession ::
   OkapiT m Response ->
   IO a
 testRunSession session hoister okapiT = do
-  let waiApp = app hoister notFound okapiT
+  let waiApp = app notFound hoister okapiT
   WAI.runSession session waiApp
 
 testWithSession ::
@@ -1244,10 +1399,10 @@ class Monad m => HasSession m where
 session :: (MonadOkapi m, HasSession m) => m Session
 session = do
   cachedSession <- getSession
-  maybe sessionCrumb pure cachedSession
+  maybe sessionInCookie pure cachedSession
 
-sessionCrumb :: (MonadOkapi m, HasSession m) => m Session
-sessionCrumb = do
+sessionInCookie :: (MonadOkapi m, HasSession m) => m Session
+sessionInCookie = do
   encodedSession <- crumb "session"
   secret <- sessionSecret
   pure $ decodeSession secret encodedSession
@@ -1296,22 +1451,8 @@ withSession handler = do
         Function.& addSetCookie ("session", encodeSession secret session)
         Function.& pure
 
-addSetCookie :: (BS.ByteString, BS.ByteString) -> Response -> Response
-addSetCookie (key, value) response =
-  let setCookieValue =
-        LBS.toStrict $
-          Builder.toLazyByteString $
-            Web.renderSetCookie $
-              Web.defaultSetCookie -- TODO: Check that using default here is okay
-                { Web.setCookieName = key,
-                  Web.setCookieValue = value,
-                  Web.setCookiePath = Just "/"
-                }
-   in addHeader ("Set-Cookie", setCookieValue) response
+-- $csrfProtection
 
 {-
-newtype UUID = UUID { unUUID :: Text.Text }
-
-class Monad m => HasUUID m where
-  uuid :: m UUID
+class Monad m => HasCSRFProtection m where
 -}

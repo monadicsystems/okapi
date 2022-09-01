@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
@@ -12,35 +13,45 @@ import GHC.Generics (Generic)
 import Okapi
 
 main :: IO ()
-main = run id notFound 3000 calc
+main = run id calc
 
 type Okapi a = OkapiT IO a
 
 calc :: Okapi Response
 calc = do
-  get
-  pathSeg "calc"
+  methodGET
+  segMatch @Text "calc"
   addOp <|> subOp <|> mulOp <|> divOp
+
+respond :: Response -> Okapi Response
+respond response = do
+  methodEnd
+  pathEnd
+  pure response
 
 addOp :: Okapi Response
 addOp = do
-  pathSeg "add"
+  segMatch @Text "add"
   (x, y) <- getArgs
-  respond $
-    json (x + y) ok
+  ok
+    & setJSON (x + y)
+    & respond
 
 subOp :: Okapi Response
 subOp = do
-  pathSeg "sub" <|> pathSeg "minus"
+  segMatch @Text "sub" <|> segMatch @Text "minus"
   (x, y) <- getArgs
-  respond $
-    ok & json (x - y)
+  ok
+    & setJSON (x - y)
+    & respond
 
 mulOp :: Okapi Response
 mulOp = do
-  pathSeg "mul"
+  segMatch @Text "mul"
   (x, y) <- getArgs
-  ok & json (x * y) & respond
+  ok
+    & setJSON (x * y)
+    & respond
 
 data DivResult = DivResult
   { answer :: Int,
@@ -50,13 +61,13 @@ data DivResult = DivResult
 
 divOp :: Okapi Response
 divOp = do
-  pathSeg "div"
+  segMatch @Text "div"
   (x, y) <- getArgs
   if y == 0
     then throw $ Response 403 [] $ ResponseBodyRaw "Forbidden"
     else
       ok
-        & json DivResult {answer = x `div` y, remainder = x `mod` y}
+        & setJSON DivResult {answer = x `div` y, remainder = x `mod` y}
         & respond
 
 getArgs :: Okapi (Int, Int)
@@ -64,8 +75,8 @@ getArgs = getArgsFromPath <|> getArgsFromQueryParams
   where
     getArgsFromPath :: Okapi (Int, Int)
     getArgsFromPath = do
-      x <- pathParam
-      y <- pathParam
+      x <- seg
+      y <- seg
       pure (x, y)
 
     getArgsFromQueryParams :: Okapi (Int, Int)
