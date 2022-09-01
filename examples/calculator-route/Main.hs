@@ -22,9 +22,6 @@ data DivResult = DivResult
   }
   deriving (Eq, Show, Generics.Generic, Aeson.ToJSON)
 
-pattern PathParams :: Int -> Int -> Okapi.Path
-pattern PathParams x y = [Okapi.Seg x, Okapi.Seg y]
-
 pattern OpNoPathParams :: Text.Text -> Okapi.Path
 pattern OpNoPathParams op = ["calc", op]
 
@@ -32,7 +29,7 @@ pattern OpHasPathParams :: Text.Text -> Int -> Int -> Okapi.Path
 pattern OpHasPathParams op x y = ["calc", op, Okapi.Seg x, Okapi.Seg y]
 
 main :: IO ()
-main = Okapi.run id $ do
+main = Okapi.run id $
   Okapi.route $ \case
     OpNoPathParams op -> do
       (x, y) <- getArgsFromQuery
@@ -55,6 +52,7 @@ handle op x y = case op of
   "div" -> do
     Okapi.guardThrow Okapi.forbidden (y == 0)
     Okapi.ok Function.& Okapi.setJSON DivResult {answer = x `div` y, remainder = x `mod` y} Function.& respond
+  _ -> Okapi.next
 
 respond :: Okapi.Response -> Okapi Okapi.Response
 respond response = do
