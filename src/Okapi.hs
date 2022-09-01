@@ -1087,7 +1087,8 @@ applyMiddlewares :: MonadOkapi m => [Middleware m] -> Middleware m
 applyMiddlewares ms handler =
   Prelude.foldl (\handler m -> m handler) handler ms
 
--- | TODO: Is this needed? Idea taken from OCaml Dream framework
+-- TODO: Is this needed? Idea taken from OCaml Dream framework
+
 scope :: MonadOkapi m => [Text.Text] -> [Middleware m] -> Middleware m
 scope prefix middlewares handler = pathMatch prefix >> applyMiddlewares middlewares handler
 
