@@ -132,14 +132,14 @@ todoAPI conn =
 healthCheck :: Okapi Response
 healthCheck = do
   methodGET
-  optional $ segMatch @Text ""
+  optional $ pathParam @Text `equals` ""
   respond ok
 
 getTodo :: Connection -> Okapi Response
 getTodo conn = do
   methodGET
-  segMatch @Text "todos"
-  todoID <- seg
+  pathParam @Text `equals` "todos"
+  todoID <- pathParam @Int
   maybeTodo <- lift $ selectTodo conn todoID
   case maybeTodo of
     Nothing -> throw internalServerError
@@ -148,7 +148,7 @@ getTodo conn = do
 getAllTodos :: Connection -> Okapi Response
 getAllTodos conn = do
   methodGET
-  segMatch @Text "todos"
+  pathParam @Text `equals` "todos"
   status <- optional $ queryParam @TodoStatus "status"
   todos <- lift $ selectAllTodos conn status
   ok & setJSON todos & respond
@@ -156,7 +156,7 @@ getAllTodos conn = do
 createTodo :: Connection -> Okapi Response
 createTodo conn = do
   methodPOST
-  segMatch @Text "todos"
+  pathParam @Text `equals` "todos"
   todoForm <- bodyForm
   lift $ insertTodoForm conn todoForm
   respond ok
@@ -164,8 +164,8 @@ createTodo conn = do
 editTodo :: Connection -> Okapi Response
 editTodo conn = do
   methodPUT
-  segMatch @Text "todos"
-  todoID <- seg @Int
+  equals @Text pathParam "todos"
+  todoID <- pathParam @Int
   todoForm <- bodyForm @TodoForm
   lift $ updateTodo conn todoID todoForm
   respond ok
@@ -173,8 +173,8 @@ editTodo conn = do
 forgetTodo :: Connection -> Okapi Response
 forgetTodo conn = do
   methodDELETE
-  segMatch @Text "todos"
-  todoID <- seg @Int
+  pathParam @Text `equals` "todos"
+  todoID <- pathParam @Int
   lift $ deleteTodo conn todoID
   respond ok
 

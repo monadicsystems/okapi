@@ -20,7 +20,7 @@ type Okapi a = OkapiT IO a
 calc :: Okapi Response
 calc = do
   methodGET
-  segMatch @Text "calc"
+  pathParam @Text `equals` "calc"
   addOp <|> subOp <|> mulOp <|> divOp
 
 respond :: Response -> Okapi Response
@@ -32,7 +32,7 @@ respond response = do
 
 addOp :: Okapi Response
 addOp = do
-  segMatch @Text "add"
+  pathParam @Text `equals` "add"
   (x, y) <- getArgs
   ok
     & setJSON (x + y)
@@ -40,7 +40,7 @@ addOp = do
 
 subOp :: Okapi Response
 subOp = do
-  segMatch @Text "sub" <|> segMatch @Text "minus"
+  pathParam @Text `equals` "sub" <|> pathParam @Text `equals` "minus"
   (x, y) <- getArgs
   ok
     & setJSON (x - y)
@@ -48,7 +48,7 @@ subOp = do
 
 mulOp :: Okapi Response
 mulOp = do
-  segMatch @Text "mul"
+  pathParam @Text `equals` "mul"
   (x, y) <- getArgs
   ok
     & setJSON (x * y)
@@ -62,7 +62,7 @@ data DivResult = DivResult
 
 divOp :: Okapi Response
 divOp = do
-  segMatch @Text "div"
+  pathParam @Text `equals` "div"
   (x, y) <- getArgs
   guardThrow forbidden (y == 0)
   ok
@@ -74,8 +74,8 @@ getArgs = getArgsFromPath <|> getArgsFromQueryParams
   where
     getArgsFromPath :: Okapi (Int, Int)
     getArgsFromPath = do
-      x <- seg
-      y <- seg
+      x <- pathParam
+      y <- pathParam
       pure (x, y)
 
     getArgsFromQueryParams :: Okapi (Int, Int)

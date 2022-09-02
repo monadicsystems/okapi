@@ -46,7 +46,6 @@ module Okapi
     -- *** Method Parsers
     -- $methodParsers
     method,
-    methodMatch,
     methodGET,
     methodPOST,
     methodHEAD,
@@ -61,10 +60,7 @@ module Okapi
     -- *** Path Parsers
     -- $pathParsers
     path,
-    pathMatch,
-    seg,
-    segMatch,
-    segMatchWith,
+    pathParam,
     pathEnd,
 
     -- *** Query Parsers
@@ -73,7 +69,6 @@ module Okapi
     queryValue,
     queryFlag,
     queryParam,
-    queryParamMatch,
     queryList,
     queryEnd,
 
@@ -104,6 +99,8 @@ module Okapi
 
     -- ** Combinators
     -- $combinators
+    equals,
+    satisfies,
     Okapi.look,
     module Combinators,
 
@@ -454,39 +451,32 @@ method = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestMethod = Nothing}})
       pure method'
 
-methodMatch :: MonadOkapi m => HTTP.Method -> m ()
-methodMatch desiredMethod = do
-  currentMethod <- method
-  if desiredMethod == currentMethod
-    then pure ()
-    else next
-
 methodGET :: MonadOkapi m => m ()
-methodGET = methodMatch HTTP.methodGet
+methodGET = equals method HTTP.methodGet
 
 methodPOST :: MonadOkapi m => m ()
-methodPOST = methodMatch HTTP.methodPost
+methodPOST = equals method HTTP.methodPost
 
 methodHEAD :: MonadOkapi m => m ()
-methodHEAD = methodMatch HTTP.methodHead
+methodHEAD = equals method HTTP.methodHead
 
 methodPUT :: MonadOkapi m => m ()
-methodPUT = methodMatch HTTP.methodPut
+methodPUT = equals method HTTP.methodPut
 
 methodDELETE :: MonadOkapi m => m ()
-methodDELETE = methodMatch HTTP.methodDelete
+methodDELETE = equals method HTTP.methodDelete
 
 methodTRACE :: MonadOkapi m => m ()
-methodTRACE = methodMatch HTTP.methodTrace
+methodTRACE = equals method HTTP.methodTrace
 
 methodCONNECT :: MonadOkapi m => m ()
-methodCONNECT = methodMatch HTTP.methodConnect
+methodCONNECT = equals method HTTP.methodConnect
 
 methodOPTIONS :: MonadOkapi m => m ()
-methodOPTIONS = methodMatch HTTP.methodOptions
+methodOPTIONS = equals method HTTP.methodOptions
 
 methodPATCH :: MonadOkapi m => m ()
-methodPATCH = methodMatch HTTP.methodPatch
+methodPATCH = equals method HTTP.methodPatch
 
 methodEnd :: MonadOkapi m => m ()
 methodEnd = do
@@ -501,18 +491,11 @@ methodEnd = do
 
 -- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
 path :: MonadOkapi m => m [Text.Text]
-path = Combinators.many seg
-
-pathMatch :: MonadOkapi m => Path -> m ()
-pathMatch desiredPath = do
-  currentPath <- path
-  if currentPath == desiredPath
-    then pure ()
-    else next
+path = Combinators.many pathParam
 
 -- | Parses and discards a single path segment matching the given @Text@ value
-seg :: (Web.FromHttpApiData a, MonadOkapi m) => m a
-seg = do
+pathParam :: (Web.FromHttpApiData a, MonadOkapi m) => m a
+pathParam = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
   case maybePathSeg of
     Nothing -> next
@@ -523,17 +506,6 @@ seg = do
     safeHead :: [a] -> Maybe a
     safeHead [] = Nothing
     safeHead (x : _) = Just x
-
-segMatch :: (Eq a, Web.FromHttpApiData a, MonadOkapi m) => a -> m ()
-segMatch desiredParam = segMatchWith (desiredParam ==)
-
--- | Parses and discards a single path segment if it satisfies the given predicate function
-segMatchWith :: (Web.FromHttpApiData a, MonadOkapi m) => (a -> Bool) -> m ()
-segMatchWith predicate = do
-  param <- seg
-  if predicate param
-    then pure ()
-    else next
 
 -- | Similar to `end` function in <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
 pathEnd :: MonadOkapi m => m ()
@@ -569,13 +541,6 @@ queryParam queryItemName = do
   case queryItemValue of
     QueryFlag -> next
     QueryParam valueText -> maybe next pure (Web.parseQueryParamMaybe valueText)
-
-queryParamMatch :: (Eq a, Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> a -> m ()
-queryParamMatch queryItemName desiredParam = do
-  param <- queryParam queryItemName
-  if param == desiredParam
-    then pure ()
-    else next
 
 -- | Test for the existance of a query flag
 queryFlag :: MonadOkapi m => Text.Text -> m ()
@@ -718,6 +683,18 @@ vaultAdjust adjuster key = do
 
 vaultWipe :: MonadOkapi m => m ()
 vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
+
+-- $combinators
+
+equals :: (Eq a, MonadOkapi m) => m a -> a -> m ()
+equals action desired = satisfies action (desired ==)
+
+satisfies :: (Eq a, MonadOkapi m) => m a -> (a -> Bool) -> m ()
+satisfies action predicate = do
+  value <- action
+  if predicate value
+    then pure ()
+    else next
 
 -- | Parses without modifying the state, even if it succeeds.
 look :: MonadOkapi m => m a -> m a
@@ -1023,7 +1000,7 @@ app ::
   Response ->
   -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
   (forall a. m a -> IO a) ->
-  -- | The parser used to match the request
+  -- | The parser used to equals the request
   OkapiT m Response ->
   WAI.Application
 app defaultResponse hoister okapiT waiRequest respond = do
@@ -1084,19 +1061,19 @@ websocketsApp connSettings serverApp defaultResponse hoister okapiT =
 type Middleware m = Handler m -> Handler m
 
 applyMiddlewares :: MonadOkapi m => [Middleware m] -> Middleware m
-applyMiddlewares ms handler =
-  Prelude.foldl (\handler m -> m handler) handler ms
+applyMiddlewares middlewares handler =
+  List.foldl (\handler middleware -> middleware handler) handler middlewares
 
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
-scope :: MonadOkapi m => [Text.Text] -> [Middleware m] -> Middleware m
-scope prefix middlewares handler = pathMatch prefix >> applyMiddlewares middlewares handler
+scope :: MonadOkapi m => Path -> [Middleware m] -> Middleware m
+scope prefix middlewares handler = path `equals` prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: MonadOkapi m => Middleware m
 clearHeadersMiddleware handler = setHeaders [] <$> handler
 
-prefixPathMiddleware :: MonadOkapi m => [Text.Text] -> Middleware m
-prefixPathMiddleware prefix handler = pathMatch prefix >> handler
+prefixPathMiddleware :: MonadOkapi m => Path -> Middleware m
+prefixPathMiddleware prefix handler = path `equals` prefix >> handler
 
 -- $routing
 --
@@ -1104,9 +1081,9 @@ prefixPathMiddleware prefix handler = pathMatch prefix >> handler
 -- Routing can be extended to dispatch on any property of the request, including method, path, query, headers, and even body.
 -- By default, Okapi provides a @route@ function for dispatching on the path of the request.
 
-type Router m = Path -> Handler m
+type Router m a = a -> Handler m
 
-route :: MonadOkapi m => Router m -> Handler m
+route :: MonadOkapi m => Router m Path -> Handler m
 route router = path >>= router
 
 -- $patterns
