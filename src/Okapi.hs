@@ -86,7 +86,7 @@ module Okapi
     basicAuth,
     headersEnd,
     cookie,
-    crumb,
+    cookieCrumb,
     cookieEnd,
 
     -- ** Vault Parsers
@@ -628,8 +628,8 @@ cookie = do
   cookieValue <- header "Cookie"
   pure $ Web.parseCookies cookieValue
 
-crumb :: MonadOkapi m => BS.ByteString -> m BS.ByteString
-crumb name = do
+cookieCrumb :: MonadOkapi m => BS.ByteString -> m BS.ByteString
+cookieCrumb name = do
   cookieValue <- cookie
   case List.lookup name cookieValue of
     Nothing -> next
@@ -1261,7 +1261,7 @@ session = do
 
 sessionInCookie :: (MonadOkapi m, HasSession m) => m Session
 sessionInCookie = do
-  encodedSession <- crumb "session"
+  encodedSession <- cookieCrumb "session"
   secret <- sessionSecret
   pure $ decodeSession secret encodedSession
 
