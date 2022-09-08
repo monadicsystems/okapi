@@ -53,8 +53,8 @@ pattern PathParam param <-
   where
     PathParam param = toUrlPiece param
 
-pattern HasQueryParam :: FromHttpApiData a => a -> Maybe QueryParam
-pattern HasQueryParam value <- Just (QueryParam (parseUrlPiece -> Just value))
+pattern IsQueryParam :: FromHttpApiData a => a -> Maybe QueryParam
+pattern IsQueryParam value <- Just (QueryParam (parseUrlPiece -> Just value))
 
 pattern HasQueryFlag :: Maybe QueryParam
 pattern HasQueryFlag <- Just QueryFlag
@@ -138,7 +138,7 @@ pattern BlogQueryRoute author category <-
   Pattern
     GET
     ["blog"]
-    (viewQuery "author" -> (HasQueryParam author, viewQuery "category" -> (HasQueryParam category, _)))
+    (viewQuery "author" -> (IsQueryParam author, viewQuery "category" -> (IsQueryParam category, _)))
   where
     BlogQueryRoute author category = Pattern GET ["blog"] (Map.fromList [("author", QueryParam author), ("category", QueryParam category)])
 

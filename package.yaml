@@ -86,10 +86,32 @@ executables:
     - okapi
     - aeson
     - parser-combinators
+    - http-types
+    - http-api-data
     - text
   todo-exe:
     main:                Main.hs
     source-dirs:         examples/todo
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - sqlite-simple
+  todo-route-exe:
+    main:                Main.hs
+    source-dirs:         examples/todo-route
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - sqlite-simple
+  todo-full-route-exe:
+    main:                Main.hs
+    source-dirs:         examples/todo-full-route
     ghc-options:
     - -threaded
     - -rtsopts

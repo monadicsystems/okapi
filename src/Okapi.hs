@@ -158,9 +158,11 @@ module Okapi
     pattern GET,
     pattern POST,
     pattern DELETE,
-    pattern HasQueryParam,
+    pattern PUT,
+    pattern IsQueryParam,
     pattern HasQueryFlag,
     viewQuery,
+    viewQueryParam,
 
     -- * Relative URLs
     -- $relativeURLs
@@ -428,7 +430,7 @@ type Crumb = (BS.ByteString, BS.ByteString)
 
 -- | Parses the entire request.
 request :: MonadOkapi m => m Request
-request = Request <$> (Just <$> method) <*> path <*> query <*> body <*> headers
+request = Request <$> method <*> path <*> query <*> body <*> headers
 
 requestEnd :: MonadOkapi m => m ()
 requestEnd = do
@@ -442,41 +444,41 @@ requestEnd = do
 --
 -- These are parsers for parsing the HTTP request method.
 
-method :: MonadOkapi m => m HTTP.Method
+method :: MonadOkapi m => m Method
 method = do
   maybeMethod <- State.gets (requestMethod . stateRequest)
   case maybeMethod of
-    Nothing -> next
-    Just method' -> do
+    Nothing -> pure Nothing
+    method'@(Just _) -> do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestMethod = Nothing}})
       pure method'
 
 methodGET :: MonadOkapi m => m ()
-methodGET = equals method HTTP.methodGet
+methodGET = equals method $ Just HTTP.methodGet
 
 methodPOST :: MonadOkapi m => m ()
-methodPOST = equals method HTTP.methodPost
+methodPOST = equals method $ Just HTTP.methodPost
 
 methodHEAD :: MonadOkapi m => m ()
-methodHEAD = equals method HTTP.methodHead
+methodHEAD = equals method $ Just HTTP.methodHead
 
 methodPUT :: MonadOkapi m => m ()
-methodPUT = equals method HTTP.methodPut
+methodPUT = equals method $ Just HTTP.methodPut
 
 methodDELETE :: MonadOkapi m => m ()
-methodDELETE = equals method HTTP.methodDelete
+methodDELETE = equals method $ Just HTTP.methodDelete
 
 methodTRACE :: MonadOkapi m => m ()
-methodTRACE = equals method HTTP.methodTrace
+methodTRACE = equals method $ Just HTTP.methodTrace
 
 methodCONNECT :: MonadOkapi m => m ()
-methodCONNECT = equals method HTTP.methodConnect
+methodCONNECT = equals method $ Just HTTP.methodConnect
 
 methodOPTIONS :: MonadOkapi m => m ()
-methodOPTIONS = equals method HTTP.methodOptions
+methodOPTIONS = equals method $ Just HTTP.methodOptions
 
 methodPATCH :: MonadOkapi m => m ()
-methodPATCH = equals method HTTP.methodPatch
+methodPATCH = equals method $ Just HTTP.methodPatch
 
 methodEnd :: MonadOkapi m => m ()
 methodEnd = do
@@ -1081,9 +1083,9 @@ prefixPathMiddleware prefix handler = path `equals` prefix >> handler
 -- Routing can be extended to dispatch on any property of the request, including method, path, query, headers, and even body.
 -- By default, Okapi provides a @route@ function for dispatching on the path of the request.
 
-type Router m a = a -> Handler m
+type Router m a = (a -> Handler m) -> Handler m
 
-route :: MonadOkapi m => Router m Path -> Handler m
+route :: MonadOkapi m => Router m Path
 route router = path >>= router
 
 -- $patterns
@@ -1094,6 +1096,12 @@ pattern Seg param <-
   where
     Seg param = Web.toUrlPiece param
 
+pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> QueryValue
+pattern IsQueryParam param <-
+  QueryParam (Web.parseUrlPiece -> Right param)
+  where
+    IsQueryParam param = QueryParam $ Web.toUrlPiece param
+
 pattern GET :: Method
 pattern GET = Just "GET"
 
@@ -1103,8 +1111,11 @@ pattern POST = Just "POST"
 pattern DELETE :: Method
 pattern DELETE = Just "DELETE"
 
-pattern HasQueryParam :: Web.FromHttpApiData a => a -> Maybe QueryValue
-pattern HasQueryParam value <- Just (QueryParam (Web.parseQueryParam -> Right value))
+pattern PUT :: Method
+pattern PUT = Just "PUT"
+
+-- pattern IsQueryParam :: Web.FromHttpApiData a => a -> Maybe QueryValue
+-- pattern IsQueryParam value <- Just (QueryParam (Web.parseQueryParam -> Right value))
 
 pattern HasQueryFlag :: Maybe QueryValue
 pattern HasQueryFlag <- Just QueryFlag
@@ -1113,6 +1124,13 @@ viewQuery :: Text.Text -> Query -> (Maybe QueryValue, Query)
 viewQuery name query = case List.lookup name query of
   Nothing -> (Nothing, query)
   Just value -> (Just value, List.delete (name, value) query)
+
+viewQueryParam :: Web.FromHttpApiData a => Text.Text -> Query -> (Maybe a, Query)
+viewQueryParam name query = case List.lookup name query of
+  Just (QueryParam param) -> case Web.parseQueryParamMaybe param of
+    Nothing -> (Nothing, query)
+    Just value -> (Just value, List.delete (name, QueryParam param) query)
+  _ -> (Nothing, query)
 
 -- $relativeURLs
 --

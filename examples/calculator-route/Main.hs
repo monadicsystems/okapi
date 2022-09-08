@@ -13,6 +13,7 @@ import qualified Data.Function as Function
 import qualified Data.Text as Text
 import qualified GHC.Generics as Generics
 import qualified Okapi
+import qualified Web.HttpApiData as Web
 
 type Okapi a = Okapi.OkapiT IO a
 
@@ -22,37 +23,51 @@ data DivResult = DivResult
   }
   deriving (Eq, Show, Generics.Generic, Aeson.ToJSON)
 
-pattern OpNoPathParams :: Text.Text -> Okapi.Path
-pattern OpNoPathParams op = ["calc", op]
+data Op = AddOp | SubOp | MulOp | DivOp deriving (Eq, Show)
 
-pattern OpHasPathParams :: Text.Text -> Int -> Int -> Okapi.Path
-pattern OpHasPathParams op x y = ["calc", op, Okapi.Seg x, Okapi.Seg y]
+instance Web.FromHttpApiData Op where
+  parseUrlPiece = \case
+    "add" -> Right AddOp
+    "sub" -> Right SubOp
+    "minus" -> Right SubOp
+    "mul" -> Right MulOp
+    "div" -> Right DivOp
+    _ -> Left "Couldn't parse operator from URL piece"
+
+instance Web.ToHttpApiData Op where
+  toUrlPiece = \case
+    AddOp -> "add"
+    SubOp -> "sub"
+    MulOp -> "mul"
+    DivOp -> "div"
+
+pattern OpNoPathParams :: Op -> Okapi.Path
+pattern OpNoPathParams op = ["calc", Okapi.Seg op]
+
+pattern OpHasPathParams :: Op -> Int -> Int -> Okapi.Path
+pattern OpHasPathParams op x y = ["calc", Okapi.Seg op, Okapi.Seg x, Okapi.Seg y]
 
 main :: IO ()
-main = Okapi.run id $
+main = Okapi.run id calculator
+
+calculator :: Okapi Okapi.Response
+calculator =
   Okapi.route $ \case
     OpNoPathParams op -> do
-      (x, y) <- getArgsFromQuery
+      x <- Okapi.queryParam "x"
+      y <- Okapi.queryParam "y"
       handle op x y
     OpHasPathParams op x y -> handle op x y
     _ -> Okapi.next
 
-getArgsFromQuery :: Okapi (Int, Int)
-getArgsFromQuery = do
-  x <- Okapi.queryParam "x"
-  y <- Okapi.queryParam "y"
-  pure (x, y)
-
-handle :: Text.Text -> Int -> Int -> Okapi Okapi.Response
+handle :: Op -> Int -> Int -> Okapi Okapi.Response
 handle op x y = case op of
-  "add" -> Okapi.ok Function.& Okapi.setJSON (x + y) Function.& respond
-  "sub" -> Okapi.ok Function.& Okapi.setJSON (x - y) Function.& respond
-  "minus" -> Okapi.ok Function.& Okapi.setJSON (x - y) Function.& respond
-  "mul" -> Okapi.ok Function.& Okapi.setJSON (x * y) Function.& respond
-  "div" -> do
+  AddOp -> Okapi.ok Function.& Okapi.setJSON (x + y) Function.& respond
+  SubOp -> Okapi.ok Function.& Okapi.setJSON (x - y) Function.& respond
+  MulOp -> Okapi.ok Function.& Okapi.setJSON (x * y) Function.& respond
+  DivOp -> do
     Okapi.guardThrow Okapi.forbidden (y == 0)
     Okapi.ok Function.& Okapi.setJSON DivResult {answer = x `div` y, remainder = x `mod` y} Function.& respond
-  _ -> Okapi.next
 
 respond :: Okapi.Response -> Okapi Okapi.Response
 respond response = do

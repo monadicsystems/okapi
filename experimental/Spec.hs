@@ -81,7 +81,7 @@ pattern BlogIDSectionRoute blogID sectionName <-
 
 pattern BlogQueryParamsRoute :: (FromHttpApiData a1, FromHttpApiData a2, ToHttpApiData a1, ToHttpApiData a2) => a1 -> a2 -> Okapi.Query
 pattern BlogQueryParamsRoute author category <-
-  (viewQuery "author" -> (HasQueryParam author, viewQuery "category" -> (HasQueryParam category, _)))
+  (viewQuery "author" -> (IsQueryParam author, viewQuery "category" -> (IsQueryParam category, _)))
   where
     BlogQueryParamsRoute author category = [("author", QueryParam $ toQueryParam author), ("category", QueryParam $ toQueryParam category)]
 

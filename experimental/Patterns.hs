@@ -31,8 +31,8 @@ pattern PathParam param <-
   where
     PathParam param = toUrlPiece param
 
-pattern HasQueryParam :: FromHttpApiData a => a -> Maybe QueryValue
-pattern HasQueryParam value <- Just (QueryParam (parseQueryParam -> Right value))
+pattern IsQueryParam :: FromHttpApiData a => a -> Maybe QueryValue
+pattern IsQueryParam value <- Just (QueryParam (parseQueryParam -> Right value))
 
 pattern HasQueryFlag :: Maybe QueryValue
 pattern HasQueryFlag <- Just QueryFlag

@@ -249,6 +249,82 @@ executable todo-exe
     , websockets
   default-language: Haskell2010
 
+executable todo-full-route-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_okapi
+  hs-source-dirs:
+      examples/todo-full-route
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.4.7
+    , attoparsec
+    , base >=4.7 && <5
+    , base64
+    , bytestring
+    , containers
+    , cookie
+    , cryptonite
+    , extra
+    , http-api-data
+    , http-types
+    , memory
+    , mmorph
+    , mtl
+    , network
+    , okapi
+    , parser-combinators
+    , sqlite-simple
+    , text
+    , transformers
+    , unagi-chan
+    , vault
+    , wai
+    , wai-extra
+    , wai-websockets
+    , warp
+    , warp-tls
+    , websockets
+  default-language: Haskell2010
+
+executable todo-route-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_okapi
+  hs-source-dirs:
+      examples/todo-route
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.4.7
+    , attoparsec
+    , base >=4.7 && <5
+    , base64
+    , bytestring
+    , containers
+    , cookie
+    , cryptonite
+    , extra
+    , http-api-data
+    , http-types
+    , memory
+    , mmorph
+    , mtl
+    , network
+    , okapi
+    , parser-combinators
+    , sqlite-simple
+    , text
+    , transformers
+    , unagi-chan
+    , vault
+    , wai
+    , wai-extra
+    , wai-websockets
+    , warp
+    , warp-tls
+    , websockets
+  default-language: Haskell2010
+
 test-suite okapi-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
