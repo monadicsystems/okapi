@@ -125,16 +125,16 @@ pattern GetAllTodosWithStatus :: TodoStatus -> RequestParts
 pattern GetAllTodosWithStatus status = (GET, ["todos"], [("status", IsQueryParam status)])
 
 pattern GetTodo :: Int -> RequestParts
-pattern GetTodo todoID = (GET, ["todos", Seg todoID], [])
+pattern GetTodo todoID = (GET, ["todos", PathParam todoID], [])
 
 pattern PutTodo :: Int -> RequestParts
-pattern PutTodo todoID = (PUT, ["todos", Seg todoID], [])
+pattern PutTodo todoID = (PUT, ["todos", PathParam todoID], [])
 
 pattern CreateTodo :: RequestParts
 pattern CreateTodo = (POST, ["todos"], [])
 
 pattern ForgetTodo :: Int -> RequestParts
-pattern ForgetTodo todoID = (DELETE, ["todos", Seg todoID], [])
+pattern ForgetTodo todoID = (DELETE, ["todos", PathParam todoID], [])
 
 -- MAIN --
 

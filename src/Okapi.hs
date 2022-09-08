@@ -154,7 +154,7 @@ module Okapi
     -- $routing
     Router (..),
     route,
-    pattern Seg,
+    pattern PathParam,
     pattern GET,
     pattern POST,
     pattern DELETE,
@@ -1095,11 +1095,11 @@ route parser dispatcher = parser >>= dispatcher
 
 -- $patterns
 
-pattern Seg :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
-pattern Seg param <-
+pattern PathParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
+pattern PathParam param <-
   (Web.parseUrlPiece -> Right param)
   where
-    Seg param = Web.toUrlPiece param
+    PathParam param = Web.toUrlPiece param
 
 pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> QueryValue
 pattern IsQueryParam param <-

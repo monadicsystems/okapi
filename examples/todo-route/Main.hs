@@ -129,16 +129,16 @@ pattern GetAllTodos :: Path
 pattern GetAllTodos = ["todos"]
 
 pattern GetTodo :: Int -> Path
-pattern GetTodo todoID = ["todos", Seg todoID]
+pattern GetTodo todoID = ["todos", PathParam todoID]
 
 pattern PutTodo :: Int -> Path
-pattern PutTodo todoID = ["todos", Seg todoID]
+pattern PutTodo todoID = ["todos", PathParam todoID]
 
 pattern CreateTodo :: Path
 pattern CreateTodo = ["todos"]
 
 pattern ForgetTodo :: Int -> Path
-pattern ForgetTodo todoID = ["todos", Seg todoID]
+pattern ForgetTodo todoID = ["todos", PathParam todoID]
 
 todoAPI :: Connection -> Okapi Response
 todoAPI conn =

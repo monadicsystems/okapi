@@ -42,10 +42,10 @@ instance Web.ToHttpApiData Op where
     DivOp -> "div"
 
 pattern OpNoPathParams :: Op -> Okapi.Path
-pattern OpNoPathParams op = ["calc", Okapi.Seg op]
+pattern OpNoPathParams op = ["calc", Okapi.PathParam op]
 
 pattern OpHasPathParams :: Op -> Int -> Int -> Okapi.Path
-pattern OpHasPathParams op x y = ["calc", Okapi.Seg op, Okapi.Seg x, Okapi.Seg y]
+pattern OpHasPathParams op x y = ["calc", Okapi.PathParam op, Okapi.PathParam x, Okapi.PathParam y]
 
 main :: IO ()
 main = Okapi.run id calculator
