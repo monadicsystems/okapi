@@ -25,7 +25,7 @@ import Database.SQLite.Simple
 import Database.SQLite.Simple.FromField
 import Database.SQLite.Simple.ToField
 import GHC.Generics (Generic, Par1)
-import Okapi hiding (route)
+import Okapi
 import Web.FormUrlEncoded (FromForm)
 import Web.HttpApiData (ToHttpApiData)
 import Web.Internal.HttpApiData
@@ -143,7 +143,7 @@ main = do
   conn <- open "todo.db"
   execute_ conn "CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, name TEXT, status TEXT)"
   run id $
-    route $ \case
+    route requestParts $ \case
       HealthCheck -> respond ok
       GetTodo todoID -> do
         maybeTodo <- lift $ selectTodo conn todoID
@@ -178,12 +178,12 @@ respond response = do
   pathEnd
   return response
 
-route :: MonadOkapi m => Router m RequestParts
-route router = do
+requestParts :: MonadOkapi m => m RequestParts
+requestParts = do
   m <- method
   p <- path
   q <- Okapi.query
-  router (m, p, q)
+  pure (m, p, q)
 
 -- DATABASE FUNCTIONS
 

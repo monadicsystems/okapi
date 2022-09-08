@@ -52,7 +52,7 @@ main = Okapi.run id calculator
 
 calculator :: Okapi Okapi.Response
 calculator =
-  Okapi.route $ \case
+  Okapi.route Okapi.path $ \case
     OpNoPathParams op -> do
       x <- Okapi.queryParam "x"
       y <- Okapi.queryParam "y"

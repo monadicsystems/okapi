@@ -1083,10 +1083,15 @@ prefixPathMiddleware prefix handler = path `equals` prefix >> handler
 -- Routing can be extended to dispatch on any property of the request, including method, path, query, headers, and even body.
 -- By default, Okapi provides a @route@ function for dispatching on the path of the request.
 
-type Router m a = (a -> Handler m) -> Handler m
+type Router m a =
+  -- | Parser for dispatcher
+  m a ->
+  -- | Dispatches parser result to the correct handler
+  (a -> Handler m) ->
+  Handler m
 
-route :: MonadOkapi m => Router m Path
-route router = path >>= router
+route :: MonadOkapi m => Router m a
+route parser dispatcher = parser >>= dispatcher
 
 -- $patterns
 

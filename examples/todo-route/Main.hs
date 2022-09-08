@@ -150,7 +150,7 @@ todoAPI conn =
 getRoutes :: Connection -> Okapi Response
 getRoutes conn = do
   methodGET
-  route $ \case
+  route path $ \case
     HealthCheck -> respond ok
     GetTodo todoID -> do
       maybeTodo <- lift $ selectTodo conn todoID
@@ -166,7 +166,7 @@ getRoutes conn = do
 postRoutes :: Connection -> Okapi Response
 postRoutes conn = do
   methodPOST
-  route $ \case
+  route path $ \case
     CreateTodo -> do
       todoForm <- bodyForm
       lift $ insertTodoForm conn todoForm
@@ -176,7 +176,7 @@ postRoutes conn = do
 putRoutes :: Connection -> Okapi Response
 putRoutes conn = do
   methodPUT
-  route $ \case
+  route path $ \case
     PutTodo todoID -> do
       todoForm <- bodyForm @TodoForm
       lift $ updateTodo conn todoID todoForm
@@ -186,7 +186,7 @@ putRoutes conn = do
 deleteRoutes :: Connection -> Okapi Response
 deleteRoutes conn = do
   methodDELETE
-  route $ \case
+  route path $ \case
     ForgetTodo todoID -> do
       lift $ deleteTodo conn todoID
       respond ok
