@@ -13,6 +13,8 @@ const code =
 `{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
+module Main where
+
 import Data.Text
 import Data.Function
 import Okapi
@@ -24,20 +26,19 @@ main = run id $ do
   pathEnd
   ok
     & setPlainText ("Hello, " <> name <> ".")
-    & return
-`
+    & return`
 
 const tabs = [
   { name: 'Main.hs', isActive: true },
-  // { name: 'package.json', isActive: false },
+  { name: 'package.yaml', isActive: false },
 ]
 
 function TrafficLightsIcon(props) {
   return (
     <svg aria-hidden="true" viewBox="0 0 42 10" fill="none" {...props}>
-      <circle cx="5" cy="5" r="4.5" />
-      <circle cx="21" cy="5" r="4.5" />
-      <circle cx="37" cy="5" r="4.5" />
+      <circle cx="5" cy="5" r="4.5" fill="#008450"/>
+      <circle cx="21" cy="5" r="4.5" fill="#EFB700"/>
+      <circle cx="37" cy="5" r="4.5" fill="#B81D13"/>
     </svg>
   )
 }
@@ -59,8 +60,8 @@ export function Hero() {
             /> */}
             <div className="relative">
               {/* <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent"> */}
-              <p className="inline text-leaf-100 font-display text-5xl tracking-tight text-transparent">
-                A microframework for Haskell.
+              <p className="inline text-leaf-100 font-display text-5xl tracking-tight">
+                A server-side framework for Haskell.
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Build web servers using an easy to understand syntax.
@@ -74,9 +75,9 @@ export function Hero() {
             </div>
           </div>
           <div className="relative lg:static xl:pl-10">
-            <div className="absolute inset-x-[-50vw] -top-32 -bottom-48 [mask-image:linear-gradient(transparent,white,white)] dark:[mask-image:linear-gradient(transparent,white,transparent)] lg:left-[calc(50%+14rem)] lg:right-0 lg:-top-32 lg:-bottom-32 lg:[mask-image:none] lg:dark:[mask-image:linear-gradient(white,white,transparent)]">
+            {/* <div className="absolute inset-x-[-50vw] -top-32 -bottom-48 [mask-image:linear-gradient(transparent,white,white)] dark:[mask-image:linear-gradient(transparent,white,transparent)] lg:left-[calc(50%+14rem)] lg:right-0 lg:-top-32 lg:-bottom-32 lg:[mask-image:none] lg:dark:[mask-image:linear-gradient(white,white,transparent)]">
               <HeroBackground className="absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2 lg:left-0 lg:translate-x-0 lg:translate-y-[-60%]" />
-            </div>
+            </div> */}
             <div className="relative">
               {/* <Image
                 className="absolute -top-64 -right-64"
@@ -96,28 +97,29 @@ export function Hero() {
                 unoptimized
                 priority
               /> */}
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10 blur-lg" />
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10" />
-              <div className="relative rounded-2xl bg-[#0A101F]/80 ring-1 ring-white/10 backdrop-blur">
-                <div className="absolute -top-px left-20 right-11 h-px bg-gradient-to-r from-sky-300/0 via-sky-300/70 to-sky-300/0" />
-                <div className="absolute -bottom-px left-11 right-20 h-px bg-gradient-to-r from-blue-400/0 via-blue-400 to-blue-400/0" />
+              {/* <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10 blur-lg" />
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10" /> */}
+              {/* <div className="relative rounded-2xl bg-[#0A101F]/80 ring-1 ring-white/10 backdrop-blur"> */}
+              <div className="relative rounded-2xl bg-brown-900/80 ring-1 ring-white/10">
+                {/* <div className="absolute -top-px left-20 right-11 h-px bg-gradient-to-r from-sky-300/0 via-sky-300/70 to-sky-300/0" />
+                <div className="absolute -bottom-px left-11 right-20 h-px bg-gradient-to-r from-blue-400/0 via-blue-400 to-blue-400/0" /> */}
                 <div className="pl-4 pt-4">
                   <TrafficLightsIcon className="h-2.5 w-auto stroke-slate-500/30" />
-                  <div className="mt-4 flex space-x-2 text-xs">
+                  <div className="mt-6 flex space-x-2 text-sm">
                     {tabs.map((tab) => (
                       <div
                         key={tab.name}
                         className={clsx(
-                          'flex h-6 rounded-full',
+                          'flex h-6',
                           tab.isActive
-                            ? 'bg-gradient-to-r from-sky-400/30 via-sky-400 to-sky-400/30 p-px font-medium text-sky-300'
+                            ? 'text-leaf-100 border border-leaf-100 rounded-md'
                             : 'text-slate-500'
                         )}
                       >
                         <div
                           className={clsx(
                             'flex items-center rounded-full px-2.5',
-                            tab.isActive && 'bg-slate-800'
+                            tab.isActive && 'bg-brown-900'
                           )}
                         >
                           {tab.name}

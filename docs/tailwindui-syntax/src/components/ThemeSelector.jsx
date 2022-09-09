@@ -86,10 +86,10 @@ export function ThemeSelector(props) {
               clsx(
                 'flex cursor-pointer select-none items-center rounded-[0.625rem] p-1',
                 {
-                  'text-sky-500': selected,
+                  'text-leaf-100': selected,
                   'text-slate-900 dark:text-white': active && !selected,
                   'text-slate-700 dark:text-slate-400': !active && !selected,
-                  'bg-slate-100 dark:bg-slate-900/40': active,
+                  'bg-slate-100 dark:bg-brown-900/40': active,
                 }
               )
             }
