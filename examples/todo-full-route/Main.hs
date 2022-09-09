@@ -161,7 +161,7 @@ main = do
         lift $ insertTodoForm conn todoForm
         respond ok
       PutTodo todoID -> do
-        todoForm <- bodyForm @TodoForm
+        todoForm <- bodyForm
         lift $ updateTodo conn todoID todoForm
         respond ok
       ForgetTodo todoID -> do
