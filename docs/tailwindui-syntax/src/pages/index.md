@@ -10,11 +10,11 @@ Learn how to get CacheAdvance set up in your project in under thirty minutes or 
 
 {% quick-link title="Installation" icon="installation" href="/" description="Step-by-step guides to setting up your system and installing the library." /%}
 
-{% quick-link title="Architecture guide" icon="presets" href="/" description="Learn how the internals work and contribute." /%}
+{% quick-link title="Todo App Tutorial" icon="presets" href="/" description="Learn how to use Okapi by building a simple todo app." /%}
 
-{% quick-link title="Plugins" icon="plugins" href="/" description="Extend the library with third-party plugins or write your own." /%}
+{% quick-link title="WAI Integration" icon="plugins" href="/" description="Use Okapi with any web framework that's built on WAI." /%}
 
-{% quick-link title="API reference" icon="theming" href="/" description="Learn to easily customize and modify your app's visual design to fit your brand." /%}
+{% quick-link title="Learn Haskell" icon="theming" href="/" description="New to Haskell? Take our official Haskell course before learning Okapi." /%}
 
 {% /quick-links %}
 
