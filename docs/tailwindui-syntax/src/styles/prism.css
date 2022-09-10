@@ -9,11 +9,14 @@ pre[class*='language-'] {
 .token.selector.class,
 .token.constant,
 .token.function {
-  color: theme('colors.pink.400');
+  color: theme('colors.red.600');
+}
+
+.token.keyword {
+  color: theme('colors.violet.600');
 }
 
 .token.attr-name,
-.token.keyword,
 .token.rule,
 .token.pseudo-class,
 .token.important {
@@ -41,7 +44,6 @@ pre[class*='language-'] {
   color: theme('colors.teal.200');
 }
 
-.token.comment,
 .token.operator {
   color: theme('colors.yellow.400');
 }

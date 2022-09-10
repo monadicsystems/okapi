@@ -10,23 +10,24 @@ import blurIndigoImage from '@/images/blur-indigo.png'
 
 const codeLanguage = 'haskell'
 const code =
-`{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
-
-module Main where
+`module Main where
 
 import Data.Text
 import Data.Function
 import Okapi
 
+-- | Run a web server on port 3000 that responds to GET requests of the form:
+--   /greet/<name> OR /greet?name=<name> OR /greet, where <name> is some text.
 main :: IO ()
 main = run id $ do
+  methodGET
   pathParam @Text \`is\` "greet"
-  name <- pathParam @Text
+  maybeName <- optional $ pathParam <|> queryParam "name"
   pathEnd
-  ok
-    & setPlainText ("Hello, " <> name <> ".")
-    & return`
+  let greeting = case maybeName of
+        Nothing   -> "Hello there."
+        Just name -> "Hello, " <> name <> "."
+  ok & setPlainText greeting & return`
 
 const tabs = [
   { name: 'Main.hs', isActive: true },
@@ -45,8 +46,8 @@ function TrafficLightsIcon(props) {
 
 export function Hero() {
   return (
-    <div className="overflow-hidden bg-brown-900 dark:-mb-32 dark:mt-[-4.5rem] dark:pb-32 dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
-      <div className="py-16 sm:px-2 lg:relative lg:py-20 lg:px-0">
+    <div className="overflow-hidden bg-white dark:bg-brown-900 dark:-mb-32 dark:mt-[-4.5rem] dark:pb-32 dark:pt-[4.5rem] dark:lg:mt-[-4.75rem] dark:lg:pt-[4.75rem]">
+      <div className="py-10 sm:px-2 lg:relative lg:py-16 lg:px-0">
         <div className="mx-auto grid max-w-2xl grid-cols-1 items-center gap-y-16 gap-x-8 px-4 lg:max-w-8xl lg:grid-cols-2 lg:px-8 xl:gap-x-16 xl:px-12">
           <div className="relative z-10 md:text-center lg:text-left">
             {/* <Image
@@ -60,11 +61,11 @@ export function Hero() {
             /> */}
             <div className="relative">
               {/* <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent"> */}
-              <p className="inline text-leaf-100 font-display text-5xl tracking-tight">
-                A server-side framework for Haskell.
+              <p className="inline text-brown-900 dark:text-white font-display text-5xl tracking-tight">
+                An algebraic, micro web framework for Haskell
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
-                Build web servers using an easy to understand syntax.
+                Build any web application using Okapi's minimal set of operations and combinators.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
                 <Button href="/">Get started</Button>
@@ -100,7 +101,7 @@ export function Hero() {
               {/* <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10 blur-lg" />
               <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-300 via-sky-300/70 to-blue-300 opacity-10" /> */}
               {/* <div className="relative rounded-2xl bg-[#0A101F]/80 ring-1 ring-white/10 backdrop-blur"> */}
-              <div className="relative rounded-2xl bg-brown-900/80 ring-1 ring-white/10">
+              <div className="relative rounded-2xl bg-slate-900 dark:bg-[#1e293b99]">
                 {/* <div className="absolute -top-px left-20 right-11 h-px bg-gradient-to-r from-sky-300/0 via-sky-300/70 to-sky-300/0" />
                 <div className="absolute -bottom-px left-11 right-20 h-px bg-gradient-to-r from-blue-400/0 via-blue-400 to-blue-400/0" /> */}
                 <div className="pl-4 pt-4">
@@ -119,7 +120,7 @@ export function Hero() {
                         <div
                           className={clsx(
                             'flex items-center rounded-full px-2.5',
-                            tab.isActive && 'bg-brown-900'
+                            tab.isActive && 'bg-transparent'
                           )}
                         >
                           {tab.name}

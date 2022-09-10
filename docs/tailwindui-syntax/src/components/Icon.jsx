@@ -21,6 +21,7 @@ const iconStyles = {
   blue: '[--icon-foreground:theme(colors.slate.900)] [--icon-background:theme(colors.white)]',
   amber:
     '[--icon-foreground:theme(colors.amber.900)] [--icon-background:theme(colors.amber.100)]',
+  leaf: '[--icon-foreground:theme(colors.leaf.100)] [--icon-background:theme(colors.leaf.50)]'
 }
 
 export function Icon({ color = 'blue', icon, className, ...props }) {
@@ -49,6 +50,10 @@ const gradients = {
   amber: [
     { stopColor: '#FDE68A', offset: '.08' },
     { stopColor: '#F59E0B', offset: '.837' },
+  ],
+  leaf: [
+    { stopColor: '#94c38a', offset: '.08' },
+    { stopColor: '#78a467', offset: '.837' },
   ],
 }
 
