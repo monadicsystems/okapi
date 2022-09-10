@@ -57,10 +57,6 @@ const navigation = [
       {
         title: 'Typeclasses',
         href: '/docs/introduction-to-string-theory',
-      },
-      {
-        title: 'Backtracking & Performance',
-        href: '/docs/introduction-to-string-theory',
       }
     ],
   },
