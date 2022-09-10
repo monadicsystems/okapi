@@ -65,7 +65,7 @@ export function Hero() {
                 An algebraic, micro web framework for Haskell
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
-                Build any web application using Okapi's minimal set of operations and combinators.
+                Build any web application using a minimal set of operations and combinators.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
                 <Button href="/">Get started</Button>
