@@ -4,7 +4,7 @@ pageTitle: Okapi - An algebraic, micro web framework for Haskell
 description: Build any web application using a minimal set of operations and combinators.
 ---
 
-Learn how to get CacheAdvance set up in your project in under thirty minutes or it's free. {% .lead %}
+Learn how to get Okapi set up in your project and start building for the Web. {% .lead %}
 
 {% quick-links %}
 

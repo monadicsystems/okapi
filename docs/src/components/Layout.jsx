@@ -20,42 +20,48 @@ const navigation = [
     ],
   },
   {
-    title: 'Core concepts',
+    title: 'Tutorials',
     links: [
-      { title: 'Understanding caching', href: '/docs/understanding-caching' },
+      { title: 'Todo app', href: '/docs/cacheadvance-predict' },
+      { title: 'Blog app', href: '/docs/cacheadvance-flush' },
+    ],
+  },
+  {
+    title: 'Guides',
+    links: [
+      { title: 'Route patterns', href: '/docs/compile-time-caching' },
+      { title: 'Middleware', href: '/docs/compile-time-caching' },
+      { title: 'Testing', href: '/docs/testing' },
+      { title: 'Virtual hosting', href: '/docs/compile-time-caching' },
+      { title: 'Sessions', href: '/docs/compile-time-caching' },
+      { title: 'Flash messages', href: '/docs/compile-time-caching' },
+      { title: 'Server Sent Events', href: '/docs/compile-time-caching' },
+      { title: 'Websockets', href: '/docs/compile-time-caching' },
+      { title: 'WAI integration', href: '/docs/writing-plugins' },
+      { title: 'Servant integration', href: '/docs/neuralink-integration' },
+    ],
+  },
+  {
+    title: 'Concepts',
+    links: [
       {
-        title: 'Predicting user behavior',
-        href: '/docs/predicting-user-behavior',
-      },
-      { title: 'Basics of time-travel', href: '/docs/basics-of-time-travel' },
-      {
-        title: 'Introduction to string theory',
+        title: 'Typeclasses',
         href: '/docs/introduction-to-string-theory',
       },
-      { title: 'The butterfly effect', href: '/docs/the-butterfly-effect' },
-    ],
-  },
-  {
-    title: 'Advanced guides',
-    links: [
-      { title: 'Writing plugins', href: '/docs/writing-plugins' },
-      { title: 'Neuralink integration', href: '/docs/neuralink-integration' },
-      { title: 'Temporal paradoxes', href: '/docs/temporal-paradoxes' },
-      { title: 'Testing', href: '/docs/testing' },
-      { title: 'Compile-time caching', href: '/docs/compile-time-caching' },
       {
-        title: 'Predictive data generation',
-        href: '/docs/predictive-data-generation',
+        title: 'Monad transformers',
+        href: '/docs/predicting-user-behavior',
       },
-    ],
-  },
-  {
-    title: 'API reference',
-    links: [
-      { title: 'CacheAdvance.predict()', href: '/docs/cacheadvance-predict' },
-      { title: 'CacheAdvance.flush()', href: '/docs/cacheadvance-flush' },
-      { title: 'CacheAdvance.revert()', href: '/docs/cacheadvance-revert' },
-      { title: 'CacheAdvance.regret()', href: '/docs/cacheadvance-regret' },
+      { title: 'Monadic parsing', href: '/docs/understanding-caching' },
+      { title: 'Bidirectional patterns', href: '/docs/basics-of-time-travel' },
+      {
+        title: 'Typeclasses',
+        href: '/docs/introduction-to-string-theory',
+      },
+      {
+        title: 'Backtracking & Performance',
+        href: '/docs/introduction-to-string-theory',
+      }
     ],
   },
   {

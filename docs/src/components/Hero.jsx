@@ -2,7 +2,6 @@ import { Fragment } from 'react'
 import Image from 'next/future/image'
 import clsx from 'clsx'
 import Highlight, { defaultProps } from 'prism-react-renderer'
-// import dracula from 'prism-react-renderer/themes/dracula';
 import { Button } from '@/components/Button'
 import { HeroBackground } from '@/components/HeroBackground'
 import blurCyanImage from '@/images/blur-cyan.png'
@@ -62,7 +61,7 @@ export function Hero() {
             <div className="relative">
               {/* <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent"> */}
               <p className="inline text-brown-900 dark:text-white font-display text-5xl tracking-tight">
-                An algebraic, micro web framework for Haskell
+                An algebraic, micro web framework for <a target="_blank" className='text-violet-800' href='https://haskell.org'>Haskell</a>
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Build any web application using a minimal set of operations and combinators.
