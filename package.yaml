@@ -119,6 +119,17 @@ executables:
     dependencies:
     - okapi
     - sqlite-simple
+  todo-htmx-exe:
+    main:                Main.hs
+    source-dirs:         examples/todo-htmx
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - sqlite-simple
+    - text
   # chess-exe:
   #   main:                Main.hs
   #   source-dirs:         examples/chess

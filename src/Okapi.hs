@@ -159,6 +159,7 @@ module Okapi
     pattern POST,
     pattern DELETE,
     pattern PUT,
+    pattern PATCH,
     pattern IsQueryParam,
     pattern HasQueryFlag,
     viewQuery,
@@ -1112,6 +1113,9 @@ pattern GET = Just "GET"
 
 pattern POST :: Method
 pattern POST = Just "POST"
+
+pattern PATCH :: Method
+pattern PATCH = Just "PATCH"
 
 pattern DELETE :: Method
 pattern DELETE = Just "DELETE"
