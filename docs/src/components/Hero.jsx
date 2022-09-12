@@ -59,7 +59,7 @@ export function Hero() {
             <div className="relative">
               {/* <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent"> */}
               <p className="inline text-brown-900 dark:text-white font-display text-5xl tracking-tight">
-                A micro web framework for <a target="_blank" className='text-violet-700' href='https://haskell.org'>Haskell</a>
+                A micro web framework for <a target="_blank" rel="noreferrer" className='text-violet-700' href='https://haskell.org'>Haskell</a>
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Build any web application using a minimal set of operations and combinators.
