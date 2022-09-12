@@ -16,7 +16,7 @@ import Data.Function
 import Okapi
 
 -- | Run a web server on port 3000 that responds to GET requests of the form:
---   /greet/<name> OR /greet?name=<name> OR /greet, where <name> is some text.
+--   /greet/<name> OR /greet?name=<name> OR /greet
 main :: IO ()
 main = run id $ do
   methodGET
@@ -61,7 +61,7 @@ export function Hero() {
             <div className="relative">
               {/* <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent"> */}
               <p className="inline text-brown-900 dark:text-white font-display text-5xl tracking-tight">
-                An algebraic, micro web framework for <a target="_blank" className='text-violet-800' href='https://haskell.org'>Haskell</a>
+                A micro web framework for <a target="_blank" className='text-violet-700' href='https://haskell.org'>Haskell</a>
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 Build any web application using a minimal set of operations and combinators.

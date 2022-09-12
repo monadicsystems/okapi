@@ -16,55 +16,43 @@ const navigation = [
     title: 'Introduction',
     links: [
       { title: 'Getting started', href: '/' },
-      { title: 'Installation', href: '/docs/installation' },
+      { title: 'Intro to Haskell', href: '/docs/intro-to-haskell' },
     ],
   },
   {
     title: 'Tutorials',
     links: [
-      { title: 'Todo app', href: '/docs/cacheadvance-predict' },
-      { title: 'Blog app', href: '/docs/cacheadvance-flush' },
+      { title: 'Blog app', href: '/docs/blog-app' },
+      { title: 'Todo app', href: '/docs/todo-app' },
     ],
   },
   {
     title: 'Guides',
     links: [
-      { title: 'Route patterns', href: '/docs/compile-time-caching' },
-      { title: 'Middleware', href: '/docs/compile-time-caching' },
+      { title: 'Route patterns', href: '/docs/route-patterns' },
+      { title: 'Middleware', href: '/docs/middleware' },
       { title: 'Testing', href: '/docs/testing' },
-      { title: 'Virtual hosting', href: '/docs/compile-time-caching' },
-      { title: 'Sessions', href: '/docs/compile-time-caching' },
-      { title: 'Flash messages', href: '/docs/compile-time-caching' },
-      { title: 'Server Sent Events', href: '/docs/compile-time-caching' },
-      { title: 'Websockets', href: '/docs/compile-time-caching' },
-      { title: 'WAI integration', href: '/docs/writing-plugins' },
-      { title: 'Servant integration', href: '/docs/neuralink-integration' },
+      { title: 'Sessions', href: '/docs/sessions' },
+      { title: 'Server sent events', href: '/docs/server-sent-events' },
+      { title: 'Websockets', href: '/docs/websockets' },
+      { title: 'WAI integration', href: '/docs/wai-integration' },
+      { title: 'Servant integration', href: '/docs/servant-integration' },
     ],
   },
   {
     title: 'Concepts',
     links: [
-      {
-        title: 'Typeclasses',
-        href: '/docs/introduction-to-string-theory',
-      },
-      {
-        title: 'Monad transformers',
-        href: '/docs/predicting-user-behavior',
-      },
-      { title: 'Monadic parsing', href: '/docs/understanding-caching' },
-      { title: 'Bidirectional patterns', href: '/docs/basics-of-time-travel' },
-      {
-        title: 'Typeclasses',
-        href: '/docs/introduction-to-string-theory',
-      }
+      { title: 'Algebra', href: '/docs/algebra' },
+      { title: 'Typeclasses', href: '/docs/typeclasses' },
+      { title: 'Monad transformers', href: '/docs/monad-transformers' },
+      { title: 'Monadic parsing', href: '/docs/monadic-parsing' },
+      { title: 'Patterns', href: '/docs/patterns' },
     ],
   },
   {
     title: 'Contributing',
     links: [
       { title: 'How to contribute', href: '/docs/how-to-contribute' },
-      { title: 'Architecture guide', href: '/docs/architecture-guide' },
       { title: 'Design principles', href: '/docs/design-principles' },
     ],
   },

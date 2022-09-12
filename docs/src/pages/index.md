@@ -18,97 +18,402 @@ Learn how to get Okapi set up in your project and start building for the Web. {%
 
 {% /quick-links %}
 
-Possimus saepe veritatis sint nobis et quam eos. Architecto consequatur odit perferendis fuga eveniet possimus rerum cumque. Ea deleniti voluptatum deserunt voluptatibus ut non iste.
-
 ---
 
-## Quick start
+## Project setup
 
-Sit commodi iste iure molestias qui amet voluptatem sed quaerat. Nostrum aut pariatur. Sint ipsa praesentium dolor error cumque velit tenetur.
+You can bring Okapi into your Haskell project using Stack, Cabal, or Nix. Here are the directions for each method.
 
-### Installing dependencies
+### Stack
 
-Sit commodi iste iure molestias qui amet voluptatem sed quaerat. Nostrum aut pariatur. Sint ipsa praesentium dolor error cumque velit tenetur quaerat exercitationem. Consequatur et cum atque mollitia qui quia necessitatibus.
+1. Add `okapi` to your project's `package.yaml` file:
 
-```shell
-npm install @tailwindlabs/cache-advance
-```
+    ```yaml
+    dependencies:
+    - base >= 4.7 && < 5
+    - aeson
+    - text
+    - okapi
+    ```
 
-Possimus saepe veritatis sint nobis et quam eos. Architecto consequatur odit perferendis fuga eveniet possimus rerum cumque. Ea deleniti voluptatum deserunt voluptatibus ut non iste. Provident nam asperiores vel laboriosam omnis ducimus enim nesciunt quaerat. Minus tempora cupiditate est quod.
+2. (Optional) Add the latest commit hash of the Okapi GitHub repo to your `stack.yaml` file, under `extra-deps`:
 
-{% callout type="warning" title="Oh no! Something bad happened!" %}
-This is what a disclaimer message looks like. You might want to include inline `code` in it. Or maybe you’ll want to include a [link](/) in it. I don’t think we should get too carried away with other scenarios like lists or tables — that would be silly.
-{% /callout %}
+    ```yaml
+    extra-deps:
+    - git: https://github.com/monadicsystems/okapi.git
+      commit: 826225af458d5e9c28d6e6eed5df468489638a3a
+    ```
 
-### Configuring the library
+    {% callout type="warning" title="Warning" %}
+      The commit hash used in the example above will be outdated. Make sure you check for the correct commit hash [here]().
+    {% /callout %}
 
-Sit commodi iste iure molestias qui amet voluptatem sed quaerat. Nostrum aut pariatur. Sint ipsa praesentium dolor error cumque velit tenetur quaerat exercitationem. Consequatur et cum atque mollitia qui quia necessitatibus.
+3. Run the command `stack build` to make sure your project builds.
 
-```js
-// cache-advance.config.js
-export default {
-  strategy: 'predictive',
-  engine: {
-    cpus: 12,
-    backups: ['./storage/cache.wtf'],
-  },
-}
-```
+4. Add an `import Okapi` statement to your modules:
 
-Possimus saepe veritatis sint nobis et quam eos. Architecto consequatur odit perferendis fuga eveniet possimus rerum cumque. Ea deleniti voluptatum deserunt voluptatibus ut non iste. Provident nam asperiores vel laboriosam omnis ducimus enim nesciunt quaerat. Minus tempora cupiditate est quod.
+    ```haskell
+    module MyModule where
 
-{% callout title="You should know!" %}
-This is what a disclaimer message looks like. You might want to include inline `code` in it. Or maybe you’ll want to include a [link](/) in it. I don’t think we should get too carried away with other scenarios like lists or tables — that would be silly.
-{% /callout %}
+    import Okapi
+
+    ...
+    ```
+
+### Cabal
+
+Coming soon
+
+### Nix
+
+Coming soon
 
 ---
 
 ## Basic usage
 
-Praesentium laudantium magni. Consequatur reiciendis aliquid nihil iusto ut in et. Quisquam ut et aliquid occaecati. Culpa veniam aut et voluptates amet perspiciatis. Qui exercitationem in qui. Vel qui dignissimos sit quae distinctio.
+A server takes a request and returns the appropriate response. In Okapi, the correct response for any
+given request is decided by *extracting data from* or *verifying properties of* the request using **parsers**.
 
-### Your first cache
+### Types
 
-Minima vel non iste debitis. Consequatur repudiandae et quod accusamus sit molestias consequatur aperiam. Et sequi ipsa eum voluptatibus ipsam. Et quisquam ut.
+The core type of the Okapi library is `OkapiT m a`.
 
-Qui quae esse aspernatur fugit possimus. Quam sed molestiae temporibus. Eum perferendis dignissimos provident ea et. Et repudiandae quasi accusamus consequatur dolore nobis. Quia reiciendis necessitatibus a blanditiis iste quia. Ut quis et amet praesentium sapiente.
+```haskell
+newtype OkapiT m a = OkapiT {unOkapiT :: Except.ExceptT Failure (State.StateT State m) a}
+  deriving newtype
+    ( Except.MonadError Failure,
+      State.MonadState State
+    )
+```
 
-Atque eos laudantium. Optio odit aspernatur consequuntur corporis soluta quidem sunt aut doloribus. Laudantium assumenda commodi.
+Okapi also exports the type constraint `MonadOkapi m`, which is the abstract interface of `OkapiT m`.
 
-### Clearing the cache
+```haskell
+type MonadOkapi m =
+  ( Functor m,
+    Applicative m,
+    Applicative.Alternative m,
+    Monad m,
+    Monad.MonadPlus m,
+    Except.MonadError Failure m,
+    State.MonadState State m
+  )
+```
 
-Vel aut velit sit dolor aut suscipit at veritatis voluptas. Laudantium tempore praesentium. Qui ut voluptatem.
+We recommend using the type constraint instead of the concrete type to annotate your parsers.
 
-Ea est autem fugiat velit esse a alias earum. Dolore non amet soluta eos libero est. Consequatur qui aliquam qui odit eligendi ut impedit illo dignissimos.
+```haskell
+myParser :: OkapiT (ReaderT AppConfig IO) (Int, Char)
+myParser = ... -- Concrete not good. Lot's of boilerplate code for unwrapping and wrapping values. 
 
-Ut dolore qui aut nam. Natus temporibus nisi voluptatum labore est ex error vel officia. Vero repellendus ut. Suscipit voluptate et placeat. Eius quo corporis ab et consequatur quisquam. Nihil officia facere dolorem occaecati alias deleniti deleniti in.
+myParser' :: (MonadOkapi m, MonadIO m, MonadReader AppConfig m) => m (Int, Char)
+myParser' = do
+  ... -- Abstract good. Less boilerplate. Can reuse and test easily.
+```
 
-### Adding middleware
+Your top level parser definition will probably need a concrete type annotation for your program to compile. To start, we recommend just using `IO`.
 
-Officia nobis tempora maiores id iusto magni reprehenderit velit. Quae dolores inventore molestiae perspiciatis aut. Quis sequi officia quasi rem officiis officiis. Nesciunt ut cupiditate. Sunt aliquid explicabo enim ipsa eum recusandae. Vitae sunt eligendi et non beatae minima aut.
+```haskell
+module Main where
 
-Harum perferendis aut qui quibusdam tempore laboriosam voluptatum qui sed. Amet error amet totam exercitationem aut corporis accusantium dolorum. Perspiciatis aut animi et. Sed unde error ut aut rerum.
+import Okapi
 
-Ut quo libero aperiam mollitia est repudiandae quaerat corrupti explicabo. Voluptas accusantium sed et doloribus voluptatem fugiat a mollitia. Numquam est magnam dolorem asperiores fugiat. Soluta et fuga amet alias temporibus quasi velit. Laudantium voluptatum perspiciatis doloribus quasi facere. Eveniet deleniti veniam et quia veritatis minus veniam perspiciatis.
+type Server = OkapiT IO -- Can parse HTTP requests + perform I/O
+
+main :: IO ()
+main =
+  run
+    id
+    -- ^ This argument is a function for changing an effectful computation `m a` into `IO a`.
+    --   In this case it's just `id` since `id :: IO a -> IO a`
+    myServer
+
+myServer :: Server Response
+myServer = myParser1 <|> myParser2
+
+myParser1 :: (MonadOkapi m, MonadIO m) => m Response
+myParser1 = do
+  logIO "Using handler 1"
+  ...
+
+myParser2 :: MonadOkapi m => m Response
+myParser2 = ...
+
+logIO :: MonadIO m => String -> m ()
+logIO msg = ...
+```
+
+See [Custom monad stack]() for more information on how to integrate your custom monad stack with
+this library.
+
+### Parsers
+
+Okapi provides **parsers** to extract data from or verify properties of HTTP requests. They all have a
+return type of `MonadOkapi m => m a`, where `a` is some value.
+
+Parsers can either **succeed** or **fail**.
+
+For example, the `methodGET` parser succeeds if the HTTP request has the GET method, otherwise it fails.
+
+Parsers in Okapi are analagous to what most other web frameworks would call *routes*, but parsers are more granular and modular.
+
+There is a category of parsers for each component of an HTTP request:
+
+1. Method parsers
+   
+   These parsers are for parsing the request method and are prefixed with `method-`.
+
+   Examples: `method`, `methodGET`, `methodPOST`, `methodPATCH`, `methodOPTIONS`
+
+2. Path parsers
+   
+   These parsers are for parsing the request path (excluding the query string) and are prefixed with `path-`.
+
+   Examples: `path`, `pathParam`
+
+3. Query parsers
+   
+   These parsers are for parsing the request query and are prefixed with `query-`.
+
+   Examples: `query`, `queryParam`, `queryFlag`
+
+4. Body parsers
+
+   These parsers are for parsing the request body and are prefixed with `body-`.
+
+   Examples: `body`, `bodyJSON`, `bodyForm`
+
+5. Header parsers
+
+   These parsers are for parsing the request headers and are prefixed with `header-` or `cookie-`.
+
+   Examples: `headers`, `header`, `cookie`, `cookieCrumb`
+
+To learn more about each parser, I recommend reading the [haddock documentation]() for each parser and looking at the examples.
+
+### Combining Parsers
+
+There are two ways to combine parsers and create more complex ones:
+
+1. Sequencing
+
+   You can execute one parser after another parser using `do` notation:
+
+   ```haskell
+   getUser = do
+     methodGET                 -- Check that the request method is GET
+     pathParam `is` "users"    -- Check that the first path parameter is "users"
+     uid <- pathParam @UserID  -- Bind second path parameter to `uid` as a `UserID`
+     return $ setJSON uid $ ok -- Respond with 200 OK and the user's ID
+   ```
+
+   You can also use `>>` and `>>=`:
+
+   ```haskell
+   getUser = methodGET >> pathParam `is` "user" >> pathParam @UserID >>= \uid -> return $ setJSON uid $ ok
+   ```
+
+   A parser composed of a sequence of other parsers ONLY succeeds if all of the parsers in the sequence succeed. If any one of the parsers in the sequence fails, the entire parser fails.
+
+   For example, the `getUser` parser defined above would fail if the HTTP request was `POST /users/5`, because the `methodGET` parser would fail. If the HTTP request was `GET /guests/9`, `getUser` would fail because the ``pathParam `is` "users"`` parser would fail.
+
+   In summary, given parsers `p1` and `p2`, the parser `p3` defined as:
+
+    ```haskell
+    p3 = do
+      p1
+      p2
+    ```
+
+   succeeds if `p1` AND `p2` succeed. `p1` and `p2` MAY be different types.
+
+2. Branching
+
+   You can create a parser that tries multiple parsers using the `<|>` operator from `Control.Applicative.Alternative`:
+
+   ```haskell
+   pingpong = ping <|> pong
+
+   ping = do
+     methodGET
+     pathParam `is` "ping"
+     return $ setJSON "pong" $ ok
+
+   pong = do
+     methodGET
+     pathParam `is` "pong"
+     return $ setJSON "ping" $ ok
+   ```
+
+   A parser composed of a set of parsers using the `<|>` operator succeeds if ANY of the parsers succeed.
+
+    If all of the parsers in the composition fail, the entire parser fails.
+
+    Using the `pingpong` parser as an example, if the incoming HTTP request was `GET /ping`, `pingpong` would succeed because the `ping` parser in `ping <|> pong` succeeds. If the incoming request was `GET /pong`, `pingpong` would still succeed. Eventhough `ping` in `ping <|> pong` would fail, `pong` would succeed, so `pingpong = ping <|> pong` succeeds.
+
+    In summary, given parsers `p1` and `p2`, the parser `p3` defined as:
+
+    ```haskell
+    p3 = p1 <|> p2
+    ```
+
+    succeeds if `p1` OR `p2` succeed. `p1` and `p2` MUST be the same type.
+
+### Failure
+
+There are two functions that you can use to throw an error and terminate the parser: `next` and `throw`.
+The difference between the two mainly has to do with how they affect the behavior of the `<|>` operator.
+
+In short, given parsers `p1` and `p2`, and a parser `p3` defined as `p3 = p1 <|> p2`:
+
+1. If `p1` fails with `next`, `p2` is tried next.
+2. If `p1` fails with `throw`, `p2` isn't tried. Instead a response is returned immediately.
+
+As an example, let's say we have a simple calculator API defined like so:
+
+```haskell
+getXY :: Okapi (Int, Int)    -- (1)
+getXY = do
+  x <- pathParam
+  y <- pathParam
+  pure (x, y)
+
+divide :: Okapi Response     -- (2)
+divide = do
+  pathParam `is` "div"
+  (x, y) <- getXY
+  if y == 0
+    then next
+    else return $ setJSON (x / y) $ ok
+
+multiply :: Okapi Response   -- (3)
+multiply = do
+  pathParam `is` "mul"
+  (x, y) <- getXY
+  return $ setJSON (x * y) $ ok
+
+calculator :: Okapi Response -- (4)
+calculator = do
+  methodGET
+  divide <|> multiply
+```
+
+If the path parameter assigned to `y` is equal to `0`, then the `divide` parser will fail and the `multiply` parser is tried next because `next` is used.
+
+If the `divide` parser was defined like this,
+
+```haskell
+divide :: Okapi Response
+divide = do
+  pathParam `is` "div"
+  (x, y) <- getXY
+  if y == 0
+    then throw $ setJSON "Dividing by 0 is forbidden" $ forbidden
+    else return $ setJSON (x / y) $ ok
+
+calculator :: Okapi Response
+calculator = do
+  methodGET
+  divide <|> multiply
+```
+
+the `calculator` parser would immediately return a `forbidden` error response if the path parameter assigned to `y` was equal 0. The `multiply` parser isn't tried.
+
+Notice how `throw` takes a `Response` value as an argument. This is the response that is immediately returned by the parser when `throw` is called. No other parsers are tried.
+
+If you want to try the next parser, even if `throw` is used in the first branch, you can use the `<!>` operator.
+
+```haskell
+divide :: Okapi Response
+divide = do
+  pathParam `is` "div"
+  (x, y) <- getXY
+  if y == 0
+    then throw $ setJSON "Dividing by 0 is forbidden" $ forbidden
+    else return $ setJSON (x / y) $ ok
+
+calculator :: Okapi Response
+calculator = do
+  methodGET
+  divide <!> multiply
+```
+
+If we feed the request `GET /div/5/0` to this definition of `calculator`, both `div` and `multiply` would be tried. `calculator` is defined using `<!>` instead of `<|>`, so even though `divide` calls `throw` when `y == 0`, the next parser `multiply` is tried anyway!
+
+See [Error handling]() for more information on errors and how to handle them.
+
+### Combinators
+
+Combinators are functions that modify parsers. They are higher order parsers, meaning they take a parser as an argument and give you back a parser. Most of these combinators can be found in the `parser-combinators` library. To use it, just add `parser-combinators` to your dependencies and import
+`Control.Monad.Combinators` into your modules. There are several, but the most used ones are `is`, `optional`, and `option` so let's cover those.
+
+`is` is for comparing some data in the request to a value. It's mostly used for matching on the request path
+
+```haskell
+-- | Works for GET /books/fiction/sci-fi
+bookstore = do
+  methodGET
+  pathParam `is` "books"
+  pathParam `is` "fiction"
+  pathParam `is` "sci-fi"
+  sciFiBooks <- execDBQuery ...
+  return $ setJSON sciFiBooks $ ok
+```
+
+, but can be used with any parser.
+
+```haskell
+-- | Works for GET /books/fiction?subgenre=sci-fi
+bookstore = do
+  methodGET
+  pathParam `is` "books"
+  pathParam `is` "fiction"
+  queryParam "subgenre" `is` "sci-fi"
+  sciFiBooks <- execDBQuery ...
+  return $ setJSON sciFiBooks $ ok
+```
+
+Another important combinator is `optional`. `optional` allows you to handle a parser that fails, in your own way by turning the result of type `a` in to a result of type `Maybe a`. If the parser fails, it returns a `Nothing`. If it succeeds, it returns `Just x` where `x :: a`. Let's look at the example used
+in the hero of this page, the `greet` server:
+
+```haskell
+-- | Works for /greet/<name> OR /greet?name=<name> OR /greet
+greet = do
+  methodGET
+  pathParam @Text `is` "greet"
+  maybeName <- optional (pathParam <|> queryParam "name")
+  pathEnd
+  let greeting = case maybeName of
+        Nothing   -> "Hello there."
+        Just name -> "Hello, " <> name <> "."
+   return $ setPlainText greeting $ ok
+```
+
+Thanks to `optional`, if `pathParam <|> queryParam "name"` fails, we can provide a default value. In this case, we assign `greeting` to `"Hello there."` because we have no `name`.
+
+Another way to catch failures and use a default value is by using `option`. Using `option`, we can modify the `greet` server defined above like this:
+
+```haskell
+-- | Works for /greet/<name> OR /greet?name=<name> OR /greet
+greet = do
+  methodGET
+  pathParam @Text `is` "greet"
+  name <- option "Stranger" (pathParam <|> queryParam "name")
+  pathEnd
+  let greeting = "Hello, " <> name <> "."
+   return $ setPlainText greeting $ ok
+```
+
+`option` takes a default value as its first argument, and a parser. If the parser passed into `option` succeeds, a value is returned as usual. If the parser fails then no value can be returned by the parser, so the default value passed into `option` is used instead. For example, if we sent the request `GET /greet`
+to the `greet` server defined using `option`, we'd get `"Hello, Stranger."` because we don't give it a `name` parameter and it uses the default `"Stranger"`.
+
+See [Parser combinators]() for more information on combinators and how to use them.
 
 ---
 
 ## Getting help
 
-Consequuntur et aut quisquam et qui consequatur eligendi. Necessitatibus dolorem sit. Excepturi cumque quibusdam soluta ullam rerum voluptatibus. Porro illo sequi consequatur nisi numquam nisi autem. Ut necessitatibus aut. Veniam ipsa voluptatem sed.
-
-### Submit an issue
-
-Inventore et aut minus ut voluptatem nihil commodi doloribus consequatur. Facilis perferendis nihil sit aut aspernatur iure ut dolores et. Aspernatur odit dignissimos. Aut qui est sint sint.
-
-Facere aliquam qui. Dolorem officia ipsam adipisci qui molestiae. Error voluptatem reprehenderit ex.
-
-Consequatur enim quia maiores aperiam et ipsum dicta. Quam ut sit facere sit quae. Eligendi veritatis aut ut veritatis iste ut adipisci illo.
-
-### Join the community
-
-Praesentium facilis iste aliquid quo quia a excepturi. Fuga reprehenderit illo sequi voluptatem voluptatem omnis. Id quia consequatur rerum consectetur eligendi et omnis. Voluptates iusto labore possimus provident praesentium id vel harum quisquam. Voluptatem provident corrupti.
-
-Eum et ut. Qui facilis est ipsa. Non facere quia sequi commodi autem. Dicta autem sit sequi omnis impedit. Eligendi amet dolorum magnam repudiandae in a.
-
-Molestiae iusto ut exercitationem dolorem unde iusto tempora atque nihil. Voluptatem velit facere laboriosam nobis ea. Consequatur rerum velit ipsum ipsam. Et qui saepe consequatur minima laborum tempore voluptatum et. Quia eveniet eaque sequi consequatur nihil eos.
+Click on the GitHub icon in the upper right corner to go to the repository and submit an issue.
+You should be able to get someone to help you out this way.
+A Discord channel, or probably some other communication channel, is coming soon.
