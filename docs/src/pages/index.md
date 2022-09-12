@@ -8,13 +8,13 @@ Learn how to get Okapi set up in your project and start building for the Web. {%
 
 {% quick-links %}
 
-{% quick-link title="Installation" icon="installation" href="/" description="Step-by-step guides to setting up your system and installing the library." /%}
+{% quick-link title="Project setup" icon="installation" href="/#project-setup" description="Step-by-step guides to using Okapi in your latest Haskell project." /%}
 
-{% quick-link title="Todo App Tutorial" icon="presets" href="/" description="Learn how to use Okapi by building a simple todo app." /%}
+{% quick-link title="Todo App Tutorial" icon="presets" href="/docs/todo-app" description="Learn how to use Okapi by building a simple todo app." /%}
 
-{% quick-link title="WAI Integration" icon="plugins" href="/" description="Use Okapi with any web framework that's built on WAI." /%}
+{% quick-link title="Servant integration" icon="plugins" href="/servant-integration" description="Use Okapi with your Servant API easily." /%}
 
-{% quick-link title="Learn Haskell" icon="theming" href="/" description="New to Haskell? Take our official Haskell course before learning Okapi." /%}
+{% quick-link title="Learn Haskell" icon="theming" href="/intro-to-haskell" description="New to Haskell? Take our official Haskell course before learning Okapi." /%}
 
 {% /quick-links %}
 

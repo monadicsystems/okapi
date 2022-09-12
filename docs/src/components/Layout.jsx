@@ -29,6 +29,7 @@ const navigation = [
   {
     title: 'Guides',
     links: [
+      { title: 'Authentication', href: '/docs/authentication' },
       { title: 'Route patterns', href: '/docs/route-patterns' },
       { title: 'Middleware', href: '/docs/middleware' },
       { title: 'Testing', href: '/docs/testing' },

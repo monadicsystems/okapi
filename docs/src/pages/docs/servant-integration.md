@@ -6,6 +6,8 @@ description: A guide on integrating Okapi with a Servant application.
 Okapi and Servant make a great combo. Since Okapi is built directly on top of [wai](https://hackage.haskell.org/package/wai),
 you can embed your Okapi application into Servant easily. Here's how.
 
+---
+
 1. Define your Servant API type and handlers as usual:
 
     ```haskell

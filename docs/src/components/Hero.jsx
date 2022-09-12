@@ -11,8 +11,6 @@ const codeLanguage = 'haskell'
 const code =
 `module Main where
 
-import Data.Text
-import Data.Function
 import Okapi
 
 -- | Run a web server on port 3000 that responds to GET requests of the form:
@@ -20,13 +18,13 @@ import Okapi
 main :: IO ()
 main = run id $ do
   methodGET
-  pathParam @Text \`is\` "greet"
+  pathParam \`is\` "greet"
   maybeName <- optional $ pathParam <|> queryParam "name"
   pathEnd
   let greeting = case maybeName of
         Nothing   -> "Hello there."
         Just name -> "Hello, " <> name <> "."
-  ok & setPlainText greeting & return`
+  return $ setJSON greeting $ ok`
 
 const tabs = [
   { name: 'Main.hs', isActive: true },

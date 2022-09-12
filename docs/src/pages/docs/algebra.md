@@ -83,6 +83,3 @@ pong = do
 ```
 
 In many cases, we can apply algebraic properties like the distributive property to simplify our parsers.
-
-
-
