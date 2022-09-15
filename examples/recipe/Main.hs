@@ -22,11 +22,20 @@ data Recipe = Recipe
   , recipeCookTime :: Int -- ^ Cook time of the recipe in minutes
   }
 
-pattern HomeRoute = (GET, [""]) -- ^ @[""]@ represents the trailing slash e.g. www.example.com/
+pattern HomeRoute = (GET, []) -- ^ @[""]@ represents the trailing slash e.g. www.example.com/
 
 pattern QueryRecipesRoute = (GET, ["recipes"])
 
+pattern QuerySuccessRoute :: Int -> (Method, Path)
+pattern QuerySuccessRoute rID = (GET, ["recipes", "query", PathParam rID])
+
+pattern QueryFailureRoute = (GET, ["recipes", "query", "failure"])
+
 pattern PostRecipesRoute = (POST, ["recipes"])
+
+pattern PostSuccessRoute = (GET, ["recipes", "post", "success"])
+
+pattern PostFailureRoute = (GET, ["recipes", "post", "failure"])
   
 renderURL :: (Method, Path) -> Text
 renderURL (_, p) = renderPath p
@@ -65,6 +74,10 @@ main = run id $ route methodAndPath $ \case
     return $ setHTML html $ ok
   QueryRecipesRoute -> do
     return $ setJSON True $ ok
+  QueryFailureRoute -> undefined
+  QuerySuccessRoute rID -> undefined
   PostRecipesRoute -> do
     return $ setJSON True $ ok
+  PostSuccessRoute -> undefined
+  PostFailureRoute -> undefined
   _ -> next
