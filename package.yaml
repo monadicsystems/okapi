@@ -75,9 +75,9 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - okapi
-  calculator-route-exe:
+  calculator2-exe:
     main:                Main.hs
-    source-dirs:         examples/calculator-route
+    source-dirs:         examples/calculator2
     ghc-options:
     - -threaded
     - -rtsopts
@@ -99,9 +99,9 @@ executables:
     dependencies:
     - okapi
     - sqlite-simple
-  todo-route-exe:
+  todo2-exe:
     main:                Main.hs
-    source-dirs:         examples/todo-route
+    source-dirs:         examples/todo2
     ghc-options:
     - -threaded
     - -rtsopts
@@ -109,19 +109,22 @@ executables:
     dependencies:
     - okapi
     - sqlite-simple
-  todo-full-route-exe:
+  todo3-exe:
     main:                Main.hs
-    source-dirs:         examples/todo-full-route
+    source-dirs:         examples/todo3
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
     - okapi
-    - sqlite-simple
-  todo-htmx-exe:
+    - sqlite-simple    
+    - text
+    - bytestring
+    - interpolatedstring-perl6
+  recipe-exe:
     main:                Main.hs
-    source-dirs:         examples/todo-htmx
+    source-dirs:         examples/recipe
     ghc-options:
     - -threaded
     - -rtsopts
@@ -130,6 +133,8 @@ executables:
     - okapi
     - sqlite-simple
     - text
+    - bytestring
+    - interpolatedstring-perl6
   # chess-exe:
   #   main:                Main.hs
   #   source-dirs:         examples/chess

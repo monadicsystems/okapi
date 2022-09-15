@@ -98,12 +98,12 @@ executable calculator-exe
     , websockets
   default-language: Haskell2010
 
-executable calculator-route-exe
+executable calculator2-exe
   main-is: Main.hs
   other-modules:
       Paths_okapi
   hs-source-dirs:
-      examples/calculator-route
+      examples/calculator2
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
@@ -123,6 +123,45 @@ executable calculator-route-exe
     , network
     , okapi
     , parser-combinators
+    , text
+    , transformers
+    , unagi-chan
+    , vault
+    , wai
+    , wai-extra
+    , wai-websockets
+    , warp
+    , warp-tls
+    , websockets
+  default-language: Haskell2010
+
+executable recipe-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_okapi
+  hs-source-dirs:
+      examples/recipe
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.4.7
+    , attoparsec
+    , base >=4.7 && <5
+    , base64
+    , bytestring
+    , containers
+    , cookie
+    , cryptonite
+    , extra
+    , http-api-data
+    , http-types
+    , interpolatedstring-perl6
+    , memory
+    , mmorph
+    , mtl
+    , network
+    , okapi
+    , parser-combinators
+    , sqlite-simple
     , text
     , transformers
     , unagi-chan
@@ -249,12 +288,12 @@ executable todo-exe
     , websockets
   default-language: Haskell2010
 
-executable todo-full-route-exe
+executable todo2-exe
   main-is: Main.hs
   other-modules:
       Paths_okapi
   hs-source-dirs:
-      examples/todo-full-route
+      examples/todo2
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7
@@ -287,12 +326,12 @@ executable todo-full-route-exe
     , websockets
   default-language: Haskell2010
 
-executable todo-htmx-exe
+executable todo3-exe
   main-is: Main.hs
   other-modules:
       Paths_okapi
   hs-source-dirs:
-      examples/todo-htmx
+      examples/todo3
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=1.4.7
@@ -306,44 +345,7 @@ executable todo-htmx-exe
     , extra
     , http-api-data
     , http-types
-    , memory
-    , mmorph
-    , mtl
-    , network
-    , okapi
-    , parser-combinators
-    , sqlite-simple
-    , text
-    , transformers
-    , unagi-chan
-    , vault
-    , wai
-    , wai-extra
-    , wai-websockets
-    , warp
-    , warp-tls
-    , websockets
-  default-language: Haskell2010
-
-executable todo-route-exe
-  main-is: Main.hs
-  other-modules:
-      Paths_okapi
-  hs-source-dirs:
-      examples/todo-route
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      aeson >=1.4.7
-    , attoparsec
-    , base >=4.7 && <5
-    , base64
-    , bytestring
-    , containers
-    , cookie
-    , cryptonite
-    , extra
-    , http-api-data
-    , http-types
+    , interpolatedstring-perl6
     , memory
     , mmorph
     , mtl
