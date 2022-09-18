@@ -377,6 +377,9 @@ instance Reader.MonadReader r m => Reader.MonadReader r (OkapiT m) where
       mapOkapiT f okapiT = OkapiT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
   reader = Morph.lift . Reader.reader
 
+instance IO.MonadIO m => IO.MonadIO (OkapiT m) where
+  liftIO = Morph.lift . IO.liftIO 
+
 instance Morph.MonadTrans OkapiT where
   lift :: Monad m => m a -> OkapiT m a
   lift action = OkapiT . Except.ExceptT . State.StateT $ \s -> do
@@ -1158,8 +1161,12 @@ renderRelURL (RelURL path query) = case (path, query) of
   (p, q) -> renderPath p <> "?" <> renderQuery q
 
 renderPath :: Path -> Text.Text
-renderPath [] = ""
-renderPath (pathSeg : path) = "/" <> pathSeg <> renderPath path
+renderPath [] = "/"
+renderPath (pathSeg : path) = "/" <> pathSeg <> loop path
+  where
+    loop :: Path -> Text.Text
+    loop [] = ""
+    loop (pathSeg : path) = "/" <> pathSeg <> loop path
 
 renderQuery :: Query -> Text.Text
 renderQuery [] = ""

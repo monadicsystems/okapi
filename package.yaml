@@ -122,9 +122,9 @@ executables:
     - text
     - bytestring
     - interpolatedstring-perl6
-  recipe-exe:
+  car-dealership-exe:
     main:                Main.hs
-    source-dirs:         examples/recipe
+    source-dirs:         examples/car-dealership
     ghc-options:
     - -threaded
     - -rtsopts
@@ -135,6 +135,8 @@ executables:
     - text
     - bytestring
     - interpolatedstring-perl6
+    - parser-combinators
+    - random
   # chess-exe:
   #   main:                Main.hs
   #   source-dirs:         examples/chess
@@ -193,6 +195,16 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - okapi
+  twitter-clone-exe:
+    main:                Main.hs
+    source-dirs:         examples/twitter-clone
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - rel8
 
 tests:
   okapi-test:
