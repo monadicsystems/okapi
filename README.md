@@ -1,6 +1,6 @@
 # Okapi
 
-A microframework based on monadic parsing. Official documentation [here](https://www.okapi.wiki/).
+A micro web framework based on monadic parsing. Official documentation [here](https://www.okapi.wiki/).
 
 ## Introduction
 
