@@ -1,6 +1,6 @@
 ---
 title: Getting started
-pageTitle: Okapi - An algebraic, micro web framework for Haskell
+pageTitle: Okapi - A micro web framework for Haskell
 description: Build any web application using a minimal set of operations and combinators.
 ---
 

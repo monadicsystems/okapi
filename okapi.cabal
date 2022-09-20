@@ -6,24 +6,24 @@ cabal-version: 1.12
 
 name:           okapi
 version:        0.2.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/okapi#readme>
+description:    Please see the README on GitHub at <https://github.com/monadicsystems/okapi#readme>
 category:       Web
-homepage:       https://github.com/MonadicSystems/okapi#readme
-bug-reports:    https://github.com/MonadicSystems/okapi/issues
+homepage:       https://github.com/monadicsystems/okapi#readme
+bug-reports:    https://github.com/monadicsystems/okapi/issues
 author:         Monadic Systems LLC
 maintainer:     tech@monadic.systems
 copyright:      2022 Monadic Systems LLC
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
-synopsis:       A microframework based on monadic parsing
+synopsis:       A micro web framework based on monadic parsing
 extra-source-files:
     README.md
     ChangeLog.md
 
 source-repository head
   type: git
-  location: https://github.com/MonadicSystems/okapi
+  location: https://github.com/monadicsystems/okapi
 
 library
   exposed-modules:

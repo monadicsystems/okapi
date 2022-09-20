@@ -1,12 +1,12 @@
 name:                okapi
 version:             0.2.0.0
-github:              "MonadicSystems/okapi"
+github:              "monadicsystems/okapi"
 license:             BSD3
 author:              "Monadic Systems LLC"
 maintainer:          "tech@monadic.systems"
 copyright:           "2022 Monadic Systems LLC"
 category:            "Web"
-synopsis:            "A microframework based on monadic parsing"
+synopsis:            "A micro web framework based on monadic parsing"
 
 extra-source-files:
 - README.md
@@ -15,7 +15,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/okapi#readme>
+description:         Please see the README on GitHub at <https://github.com/monadicsystems/okapi#readme>
 
 dependencies:
 - aeson >= 1.4.7
