@@ -32,7 +32,7 @@ api eventSource = do
   where
     index :: Okapi Response
     index = do
-      pathEnd <|> pathParam @String `equals` ""
+      pathEnd <|> pathParam @String `is` ""
       ok
         & setHeader ("Content-Type", "text/html")
         & setBodyFile "examples/sse/sse.html"
@@ -40,7 +40,7 @@ api eventSource = do
 
     sse :: EventSource -> Okapi Response
     sse eventSource = do
-      pathParam @String `equals` "events"
+      pathParam @String `is` "events"
       ok
         & setBodyEventSource eventSource
         & return

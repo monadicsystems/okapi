@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           okapi
-version:        0.1.0.2
+version:        0.2.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/okapi#readme>
 category:       Web
 homepage:       https://github.com/MonadicSystems/okapi#readme

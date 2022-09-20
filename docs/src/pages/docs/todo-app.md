@@ -185,13 +185,13 @@ todoAPI conn =
 healthCheck :: Okapi Response
 healthCheck = do
   methodGET
-  optional $ pathParam @Text `equals` ""
+  optional $ pathParam @Text `is` ""
   respond ok
 
 getTodo :: Connection -> Okapi Response
 getTodo conn = do
   methodGET
-  pathParam @Text `equals` "todos"
+  pathParam @Text `is` "todos"
   todoID <- pathParam @Int
   maybeTodo <- lift $ selectTodo conn todoID
   case maybeTodo of
@@ -201,7 +201,7 @@ getTodo conn = do
 getAllTodos :: Connection -> Okapi Response
 getAllTodos conn = do
   methodGET
-  pathParam @Text `equals` "todos"
+  pathParam @Text `is` "todos"
   status <- optional $ queryParam @TodoStatus "status"
   todos <- lift $ selectAllTodos conn status
   ok & setJSON todos & respond
@@ -209,7 +209,7 @@ getAllTodos conn = do
 createTodo :: Connection -> Okapi Response
 createTodo conn = do
   methodPOST
-  pathParam @Text `equals` "todos"
+  pathParam @Text `is` "todos"
   todoForm <- bodyForm
   lift $ insertTodoForm conn todoForm
   respond ok
@@ -217,7 +217,7 @@ createTodo conn = do
 editTodo :: Connection -> Okapi Response
 editTodo conn = do
   methodPUT
-  equals @Text pathParam "todos"
+  is @Text pathParam "todos"
   todoID <- pathParam @Int
   todoForm <- bodyForm @TodoForm
   lift $ updateTodo conn todoID todoForm
@@ -226,7 +226,7 @@ editTodo conn = do
 forgetTodo :: Connection -> Okapi Response
 forgetTodo conn = do
   methodDELETE
-  pathParam @Text `equals` "todos"
+  pathParam @Text `is` "todos"
   todoID <- pathParam @Int
   lift $ deleteTodo conn todoID
   respond ok

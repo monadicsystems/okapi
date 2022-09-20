@@ -6,6 +6,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Main where
 
@@ -54,9 +55,7 @@ data Car = Car
   , carYear  :: Int
   , carMiles :: Int
   , carPrice :: Float
-  } deriving (Eq, Show, Generic)
-
-instance FromForm Car where
+  } deriving (Eq, Show, Generic, FromForm)
 
 pattern HomeRoute = (GET, [])
 

@@ -20,7 +20,7 @@ type Okapi a = OkapiT IO a
 calc :: Okapi Response
 calc = do
   methodGET
-  pathParam @Text `equals` "calc"
+  pathParam @Text `is` "calc"
   addOp <|> subOp <|> mulOp <|> divOp
 
 respond :: Response -> Okapi Response
@@ -32,7 +32,7 @@ respond response = do
 
 addOp :: Okapi Response
 addOp = do
-  pathParam @Text `equals` "add"
+  pathParam @Text `is` "add"
   (x, y) <- getArgs
   ok
     & setJSON (x + y)
@@ -40,7 +40,7 @@ addOp = do
 
 subOp :: Okapi Response
 subOp = do
-  pathParam @Text `equals` "sub" <|> pathParam @Text `equals` "minus"
+  pathParam @Text `is` "sub" <|> pathParam @Text `is` "minus"
   (x, y) <- getArgs
   ok
     & setJSON (x - y)
@@ -48,7 +48,7 @@ subOp = do
 
 mulOp :: Okapi Response
 mulOp = do
-  pathParam @Text `equals` "mul"
+  pathParam @Text `is` "mul"
   (x, y) <- getArgs
   ok
     & setJSON (x * y)
@@ -62,7 +62,7 @@ data DivResult = DivResult
 
 divOp :: Okapi Response
 divOp = do
-  pathParam @Text `equals` "div"
+  pathParam @Text `is` "div"
   (x, y) <- getArgs
   guardThrow forbidden (y == 0)
   ok

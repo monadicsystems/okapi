@@ -18,7 +18,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
--- | Okapi is the microframework you should use if you get the chance.
+-- | Okapi is a micro web framework.
 module Okapi
   ( -- * Parsing
     -- $parsers
@@ -99,7 +99,7 @@ module Okapi
 
     -- ** Combinators
     -- $combinators
-    equals,
+    is,
     satisfies,
     Okapi.look,
     module Combinators,
@@ -458,31 +458,31 @@ method = do
       pure method'
 
 methodGET :: MonadOkapi m => m ()
-methodGET = equals method $ Just HTTP.methodGet
+methodGET = is method $ Just HTTP.methodGet
 
 methodPOST :: MonadOkapi m => m ()
-methodPOST = equals method $ Just HTTP.methodPost
+methodPOST = is method $ Just HTTP.methodPost
 
 methodHEAD :: MonadOkapi m => m ()
-methodHEAD = equals method $ Just HTTP.methodHead
+methodHEAD = is method $ Just HTTP.methodHead
 
 methodPUT :: MonadOkapi m => m ()
-methodPUT = equals method $ Just HTTP.methodPut
+methodPUT = is method $ Just HTTP.methodPut
 
 methodDELETE :: MonadOkapi m => m ()
-methodDELETE = equals method $ Just HTTP.methodDelete
+methodDELETE = is method $ Just HTTP.methodDelete
 
 methodTRACE :: MonadOkapi m => m ()
-methodTRACE = equals method $ Just HTTP.methodTrace
+methodTRACE = is method $ Just HTTP.methodTrace
 
 methodCONNECT :: MonadOkapi m => m ()
-methodCONNECT = equals method $ Just HTTP.methodConnect
+methodCONNECT = is method $ Just HTTP.methodConnect
 
 methodOPTIONS :: MonadOkapi m => m ()
-methodOPTIONS = equals method $ Just HTTP.methodOptions
+methodOPTIONS = is method $ Just HTTP.methodOptions
 
 methodPATCH :: MonadOkapi m => m ()
-methodPATCH = equals method $ Just HTTP.methodPatch
+methodPATCH = is method $ Just HTTP.methodPatch
 
 methodEnd :: MonadOkapi m => m ()
 methodEnd = do
@@ -692,8 +692,8 @@ vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
 
 -- $combinators
 
-equals :: (Eq a, MonadOkapi m) => m a -> a -> m ()
-equals action desired = satisfies action (desired ==)
+is :: (Eq a, MonadOkapi m) => m a -> a -> m ()
+is action desired = satisfies action (desired ==)
 
 satisfies :: (Eq a, MonadOkapi m) => m a -> (a -> Bool) -> m ()
 satisfies action predicate = do
@@ -1073,13 +1073,13 @@ applyMiddlewares middlewares handler =
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
 scope :: MonadOkapi m => Path -> [Middleware m] -> Middleware m
-scope prefix middlewares handler = path `equals` prefix >> applyMiddlewares middlewares handler
+scope prefix middlewares handler = path `is` prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: MonadOkapi m => Middleware m
 clearHeadersMiddleware handler = setHeaders [] <$> handler
 
 prefixPathMiddleware :: MonadOkapi m => Path -> Middleware m
-prefixPathMiddleware prefix handler = path `equals` prefix >> handler
+prefixPathMiddleware prefix handler = path `is` prefix >> handler
 
 -- $routing
 --
