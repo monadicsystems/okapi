@@ -11,17 +11,18 @@ Here's an example of a simple web server:
 
 ```haskell
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Data.Text
 import Okapi
 
 main :: IO ()
-main = run id 3000 greet
+main = run greet
 
 greet = do
-  pathSeg "greet"
-  name <- pathParam
-  okPlainText [] $ "Hello " <> name <> "! I'm Okapi."
+  pathParam @Text `is` "greet"
+  name <- pathParam @Text
+  return $ setPlaintext ("Hello " <> name <> "! I'm Okapi.") $ ok
 ```
 
 Running this code will start a server on [localhost:3000](http://localhost:3000.org).
