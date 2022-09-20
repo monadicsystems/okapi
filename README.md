@@ -4,7 +4,7 @@ A microframework based on monadic parsing. Official documentation [here](https:/
 
 ## Introduction
 
-**Okapi** is a microframework for building web servers using parsers.
+**Okapi** is a micro web framework for Haskell.
 In contrast to other web frameworks in the Haskell ecosystem, Okapi is primarily concerned with being easy to understand and use, instead of extreme type safety.
 
 Here's an example of a simple web server:
