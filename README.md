@@ -22,7 +22,7 @@ main = run greet
 greet = do
   methodGET
   pathParam @Text `is` "greet"
-  name <- pathParam @Text
+  name <- pathParam
   pathEnd
   return $ setPlaintext ("Hello " <> name <> "! I'm Okapi.") $ ok
 ```
