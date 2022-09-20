@@ -36,7 +36,7 @@ in plain text format.
 
 Okapi provides [monadic parsers](https://www.cs.nott.ac.uk/~pszgmh/monparsing.pdf) for extracting data from HTTP requests.
 Since they are monads, parsers can be used with all `Applicative`, `Alternative`, and `Monad` typeclass methods, plus other Haskell idioms like [parser combinators](https://hackage.haskell.org/package/parser-combinators).
-Because of this, parsers are very modular and can be easily composed with one another to fit your specific your needs.
+Because of this, parsers are very modular and can be easily composed with one another to fit your specific needs.
 
 With Okapi, and the rest of the Haskell ecosystem, you can create anything from simple website servers to complex APIs for web apps.
 All you need to get started is basic knowledge about the structure of HTTP requests and an idea of how monadic parsing works.
