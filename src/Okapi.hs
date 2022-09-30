@@ -69,7 +69,7 @@ module Okapi
     queryValue,
     queryFlag,
     queryParam,
-    queryList,
+    queryParamList,
     queryEnd,
 
     -- *** Body Parsers
@@ -559,8 +559,8 @@ queryFlag queryItemName = do
     QueryFlag -> pure ()
     _ -> next
 
-queryList :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m (NonEmpty.NonEmpty a)
-queryList = Combinators.NonEmpty.some . queryParam
+queryParamList :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m (NonEmpty.NonEmpty a)
+queryParamList = Combinators.NonEmpty.some . queryParam
 
 queryEnd :: MonadOkapi m => m ()
 queryEnd = do
@@ -618,11 +618,48 @@ bodyXML = undefined
 
 -- | Parse a single form parameter
 formParam :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => BS.ByteString -> m a
-formParam = undefined
+formParam paramName = do
+  body' <- body
+  case body' of
+    BodyRaw lbs -> do
+      case Web.urlDecodeParams lbs of
+        Left _ -> next
+        Right params ->
+          case lookup (Text.decodeUtf8 paramName) params of
+            Nothing -> next
+            Just paramValue -> do
+              paramValue' <- maybe next pure (Web.parseQueryParamMaybe paramValue)
+              let newParams = List.delete ((Text.decodeUtf8 paramName), paramValue) params
+              State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyRaw $ Web.urlEncodeParams newParams}})
+              pure paramValue'
+    BodyMultipart (params, files) -> do
+      case lookup paramName params of
+        Nothing -> next
+        Just paramValue -> do
+          paramValue' <- maybe next pure (Web.parseQueryParamMaybe $ Text.decodeUtf8 paramValue)
+          let newParams = List.delete (paramName, paramValue) params
+          State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyMultipart (newParams, files)}})
+          pure paramValue'
+
+formParamList :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => BS.ByteString -> m (NonEmpty.NonEmpty a)
+formParamList = Combinators.NonEmpty.some . formParam
 
 -- | Parse a single form file
-formFile :: MonadOkapi m => BS.ByteString -> m (WAI.FileInfo BS.ByteString)
-formFile = undefined
+formFile :: MonadOkapi m => BS.ByteString -> m (WAI.FileInfo LBS.ByteString)
+formFile fileName = do
+  body' <- body
+  case body' of
+    BodyRaw _ -> next
+    BodyMultipart (params, files) -> do
+      case lookupFile fileName files of
+        Nothing -> next
+        Just fileInfo -> pure fileInfo
+  where
+    lookupFile :: BS.ByteString -> [WAI.File LBS.ByteString] -> Maybe (WAI.FileInfo LBS.ByteString)
+    lookupFile = undefined
+
+    deleteFile :: BS.ByteString -> [WAI.File LBS.ByteString] -> [WAI.File LBS.ByteString]
+    deleteFile = undefined
 
 bodyEnd :: MonadOkapi m => m ()
 bodyEnd = do

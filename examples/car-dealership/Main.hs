@@ -146,7 +146,7 @@ methodAndPathDispatcher database = \case
           |]
     return $ setHTML html $ ok
   QueryCarsRoute -> do
-    maybeMakes <- optional $ queryList @Make "make"
+    maybeMakes <- optional $ queryParamList @Make "make"
     latestYear <- queryParam @Int "year"
     maxMiles <- queryParam @Int "miles"
     maxPrice <- queryParam @Float "price"
