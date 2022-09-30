@@ -122,9 +122,9 @@ body :: MonadOkapi m => m Body
 
 bodyJSON :: MonadOkapi m, FromJSON a => m a
 
-bodyFormURLEncoded :: FromForm a, MonadOkapi m => m a
+bodyURLEncoded :: FromForm a, MonadOkapi m => m a
 
-bodyFormMultipart :: FromForm a, MonadOkapi m => m (a, [File])
+bodyMultipart :: FromForm a, MonadOkapi m => m (a, [File])
 ```
 
 8. Headers Parsers

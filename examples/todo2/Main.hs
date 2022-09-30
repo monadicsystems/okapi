@@ -168,7 +168,7 @@ postRoutes conn = do
   methodPOST
   route path $ \case
     CreateTodo -> do
-      todoForm <- bodyForm
+      todoForm <- bodyURLEncoded
       lift $ insertTodoForm conn todoForm
       respond ok
     _ -> next
@@ -178,7 +178,7 @@ putRoutes conn = do
   methodPUT
   route path $ \case
     PutTodo todoID -> do
-      todoForm <- bodyForm @TodoForm
+      todoForm <- bodyURLEncoded @TodoForm
       lift $ updateTodo conn todoID todoForm
       respond ok
     _ -> next

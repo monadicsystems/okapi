@@ -181,7 +181,7 @@ methodAndPathDispatcher database = \case
 
     return $ setHTML html $ ok
   PostCarsRoute -> do
-    maybeCarForSale <- optional $ bodyForm @Car
+    maybeCarForSale <- optional $ bodyURLEncoded @Car
     case maybeCarForSale of
       Nothing -> return $ redirect 302 $ renderURL PostFailureRoute 
       Just carForSale -> do

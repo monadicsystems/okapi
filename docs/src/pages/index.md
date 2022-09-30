@@ -182,7 +182,7 @@ There is a category of parsers for each component of an HTTP request:
 
    These parsers are for parsing the request body and are prefixed with `body-`.
 
-   Examples: `body`, `bodyJSON`, `bodyForm`
+   Examples: `body`, `bodyJSON`, `bodyURLEncoded`
 
 5. Header parsers
 

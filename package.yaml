@@ -205,6 +205,18 @@ executables:
     dependencies:
     - okapi
     - rel8
+  dotodo-exe:
+    main:                Main.hs
+    source-dirs:         examples/dotodo
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - sqlite-simple
+    - lucid2-htmx
+    - lucid2
 
 tests:
   okapi-test:

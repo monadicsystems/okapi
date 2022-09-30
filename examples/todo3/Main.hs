@@ -157,11 +157,11 @@ main = do
         todos <- lift $ selectAllTodos conn $ Just status
         ok & setJSON todos & respond
       CreateTodo -> do
-        todoForm <- bodyForm
+        todoForm <- bodyURLEncoded
         lift $ insertTodoForm conn todoForm
         respond ok
       PutTodo todoID -> do
-        todoForm <- bodyForm
+        todoForm <- bodyURLEncoded
         lift $ updateTodo conn todoID todoForm
         respond ok
       ForgetTodo todoID -> do

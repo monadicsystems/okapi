@@ -95,21 +95,21 @@ pattern BlogQueryRoute author category <-
 --
 -- >>> parser = testMatcher
 --
--- >>> result1 <- testParserIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog" "")
+-- >>> result1 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog" "")
 -- >>> assertResponse is200 result1
 -- True
--- >>> result2 <- testParserIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog/2" "")
+-- >>> result2 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog/2" "")
 -- >>> assertResponse is200 result2
 -- True
--- >>> result3 <- testParserIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog/7/intro" "")
+-- >>> result3 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog/7/intro" "")
 -- >>> assertResponse is200 result3
 -- True
 --
--- >>> result4 <- testParserIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog?author=Diamond&category=pets" "")
+-- >>> result4 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog?author=Diamond&category=pets" "")
 -- >>> assertResponse is200 result4
 -- True
 --
--- >>> result5 <- testParserIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog?author=Diamond" "")
+-- >>> result5 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog?author=Diamond" "")
 -- >>> assertResponse is200 result5
 -- False
 testMatcher :: MonadOkapi m => m Okapi.Response

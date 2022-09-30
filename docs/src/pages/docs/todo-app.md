@@ -210,7 +210,7 @@ createTodo :: Connection -> Okapi Response
 createTodo conn = do
   methodPOST
   pathParam @Text `is` "todos"
-  todoForm <- bodyForm
+  todoForm <- bodyURLEncoded
   lift $ insertTodoForm conn todoForm
   respond ok
 
@@ -219,7 +219,7 @@ editTodo conn = do
   methodPUT
   is @Text pathParam "todos"
   todoID <- pathParam @Int
-  todoForm <- bodyForm @TodoForm
+  todoForm <- bodyURLEncoded @TodoForm
   lift $ updateTodo conn todoID todoForm
   respond ok
 

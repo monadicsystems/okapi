@@ -86,19 +86,19 @@ pattern BlogRouteIdSection blogID sectionName =
 
 -- | Test example patterns in Okapi.Pattern module
 --
--- >>> result1 <- testParserIO testMatcher (TestRequest "GET" [] "/blog" "")
+-- >>> result1 <- testIO testMatcher (TestRequest "GET" [] "/blog" "")
 -- >>> assertResponse is200 result1
 -- True
--- >>> result2 <- testParserIO testMatcher (TestRequest "GET" [] "/blog/2" "")
+-- >>> result2 <- testIO testMatcher (TestRequest "GET" [] "/blog/2" "")
 -- >>> assertResponse is200 result2
 -- True
--- >>> result3 <- testParserIO testMatcher (TestRequest "GET" [] "/blog/7/intro" "")
+-- >>> result3 <- testIO testMatcher (TestRequest "GET" [] "/blog/7/intro" "")
 -- >>> assertResponse is200 result3
 -- True
--- >>> result4 <- testParserIO testMatcher (TestRequest "GET" [] "/blog?author=Diamond&category=pets" "")
+-- >>> result4 <- testIO testMatcher (TestRequest "GET" [] "/blog?author=Diamond&category=pets" "")
 -- >>> assertResponse is200 result4
 -- True
--- >>> result5 <- testParserIO testMatcher (TestRequest "GET" [] "/blog?author=Johnson" "")
+-- >>> result5 <- testIO testMatcher (TestRequest "GET" [] "/blog?author=Johnson" "")
 -- >>> assertResponse is200 result5
 -- True
 testMatcher :: MonadOkapi m => m Response

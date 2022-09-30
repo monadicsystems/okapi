@@ -12,7 +12,7 @@ import qualified Web.HttpApiData as Web
 -- | Parses and discards a single path segment matching the given @Text@ value
 --
 -- >>> parser = get // "store" // "clothing" >> respond ok
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
 (//) :: forall m a. MonadOkapi m => m a -> Text.Text -> m ()

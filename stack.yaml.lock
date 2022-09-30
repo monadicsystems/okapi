@@ -5,12 +5,54 @@
 
 packages:
 - completed:
-    hackage: lucid-htmx-0.1.0.6@sha256:83d9eed5ff74778a2dfc3f320a66b08592a2880abca28d75747a0513a39bd871,1528
+    hackage: lucid2-0.0.20220526@sha256:b5d346d428a63610d458aba1c4e0fe4924628fec609f028d74777bfaca1d92b5,1877
     pantry-tree:
-      size: 427
-      sha256: e7e0ebb5432ec6dd278e1ac594a94aa3311e378c683275274874dfee2e12dfe3
+      size: 477
+      sha256: 355acf57a4ac40d06c48f903c41eda4136d4a218f38bdbfebee7960d23651421
   original:
-    hackage: lucid-htmx-0.1.0.6@sha256:83d9eed5ff74778a2dfc3f320a66b08592a2880abca28d75747a0513a39bd871,1528
+    hackage: lucid2-0.0.20220526@sha256:b5d346d428a63610d458aba1c4e0fe4924628fec609f028d74777bfaca1d92b5,1877
+- completed:
+    hackage: containers-0.6.6@sha256:008d007dfff018954e05ecdb8d628d8e32531f7dc3c6bb7e9bd55118c1224514,2589
+    pantry-tree:
+      size: 2822
+      sha256: de48bcf6b468c4793bbdd22f969d940bfe74425c74654b0efbf0487792c239b5
+  original:
+    hackage: containers-0.6.6@sha256:008d007dfff018954e05ecdb8d628d8e32531f7dc3c6bb7e9bd55118c1224514,2589
+- completed:
+    hackage: lucid2-htmx-0.1.0.8@sha256:cde494a8e4d199dfcc59331f41c72e1a60c3d2106e1bee56e61d97b09425f850,1541
+    pantry-tree:
+      size: 318
+      sha256: bccf8d27fd23db6daa9b1a7e64d54715537161014db7817dc9905015b1de5214
+  original:
+    hackage: lucid2-htmx-0.1.0.8@sha256:cde494a8e4d199dfcc59331f41c72e1a60c3d2106e1bee56e61d97b09425f850,1541
+- completed:
+    hackage: Cabal-3.6.3.0@sha256:ff97c442b0c679c1c9876acd15f73ac4f602b973c45bde42b43ec28265ee48f4,12459
+    pantry-tree:
+      size: 19757
+      sha256: b250a53bdb56844f047a2927833bb565b936a289abfa85dfc2a63148d776368a
+  original:
+    hackage: Cabal-3.6.3.0@sha256:ff97c442b0c679c1c9876acd15f73ac4f602b973c45bde42b43ec28265ee48f4,12459
+- completed:
+    hackage: binary-0.8.9.1@sha256:81f468c1c75fd6535152ab69b2d32ac6cfcc03e345267b069abe4da56ec95801,6523
+    pantry-tree:
+      size: 1976
+      sha256: 956ecd662408f69615977b87a92e042abcdc447b7824b8aabf5788c4393c10c5
+  original:
+    hackage: binary-0.8.9.1@sha256:81f468c1c75fd6535152ab69b2d32ac6cfcc03e345267b069abe4da56ec95801,6523
+- completed:
+    hackage: parsec-3.1.15.1@sha256:8c7a36aaadff12a38817fc3c4ff6c87e3352cffd1a58df640de7ed7a97ad8fa3,4601
+    pantry-tree:
+      size: 2630
+      sha256: 147ad21b8aa90273721903a6b294cc4ecd660d229d88c4e84c6275bc5d630ae6
+  original:
+    hackage: parsec-3.1.15.1@sha256:8c7a36aaadff12a38817fc3c4ff6c87e3352cffd1a58df640de7ed7a97ad8fa3,4601
+- completed:
+    hackage: text-1.2.5.0@sha256:791f0f6c97ed96113f17ab520cf0efe1a3a4f883a8c85910a5660567c8241c40,7895
+    pantry-tree:
+      size: 7395
+      sha256: f41504ec5c04a3f3358ef104362f02fdef29cbce4e5e4e6dbd6b6db70c40d4bf
+  original:
+    hackage: text-1.2.5.0@sha256:791f0f6c97ed96113f17ab520cf0efe1a3a4f883a8c85910a5660567c8241c40,7895
 snapshots:
 - completed:
     size: 617355

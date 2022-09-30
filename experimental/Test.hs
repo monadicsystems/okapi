@@ -5,8 +5,8 @@
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 module Okapi.Test
-  ( testParser,
-    testParserIO,
+  ( test,
+    testIO,
     assertFailure,
     assertState,
     assertResponse,
@@ -93,20 +93,20 @@ pathToURL :: Path -> URL
 pathToURL [] = ""
 pathToURL (pathSeg : path) = "/" <> URL pathSeg <> pathToURL path
 
-testParser ::
+test ::
   Monad m =>
   OkapiT m Response ->
   Request ->
   (Either Failure Response, State)
-testParser hoister okapiT request =
+test hoister okapiT request =
   (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT)
     (requestToState request)
 
-testParserIO ::
+testIO ::
   OkapiT IO Response ->
   Request ->
   IO (Either Failure Response, State)
-testParserIO = testParser id
+testIO = test id
 
 requestToState :: Request -> State
 requestToState stateRequest =

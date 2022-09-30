@@ -76,7 +76,7 @@ module Okapi
     -- $bodyParsers
     body,
     bodyJSON,
-    bodyForm,
+    bodyURLEncoded,
     bodyEnd,
 
     -- *** Header Parsers
@@ -175,9 +175,9 @@ module Okapi
 
     -- * Testing
     -- $testing
-    testParser,
-    testParserPure,
-    testParserIO,
+    test,
+    testPure,
+    testIO,
     assert,
     assert200,
     assert404,
@@ -264,12 +264,13 @@ import qualified Network.HTTP.Types as HTTP
 import qualified Network.Socket as Socket
 import qualified Network.Wai as WAI
 import qualified Network.Wai.EventSource as WAI
-import qualified Network.Wai.Handler.Warp as WAI
+import qualified Network.Wai.Handler.Warp as WAI hiding (FileInfo(..))
 import qualified Network.Wai.Handler.WarpTLS as WAI
 import qualified Network.Wai.Handler.WebSockets as WAI
 import qualified Network.Wai.Handler.WebSockets as WebSockets
 import qualified Network.Wai.Internal as WAI
 import qualified Network.Wai.Middleware.Gzip as WAI
+import qualified Network.Wai.Parse as WAI
 import qualified Network.Wai.Test as WAI
 import qualified Network.WebSockets as WebSockets
 import qualified Web.Cookie as Web
@@ -416,7 +417,9 @@ type QueryItem = (Text.Text, QueryValue)
 
 data QueryValue = QueryParam Text.Text | QueryFlag deriving (Eq, Show) -- QueryList [Text]
 
-type Body = LBS.ByteString
+data Body = BodyRaw LBS.ByteString
+  | BodyMultipart ([WAI.Param], [WAI.File LBS.ByteString])
+  deriving (Eq, Show)
 
 type Headers = [Header]
 
@@ -568,40 +571,66 @@ queryEnd = do
 
 -- $bodyParsers
 
+-- | For getting the raw body of the request.
 body :: MonadOkapi m => m Body
 body = do
   currentBody <- State.gets (requestBody . stateRequest)
-  if LBS.null currentBody
-    then next
-    else do
-      State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = ""}})
+  case currentBody of
+    BodyRaw (LBS.null -> True) -> next
+    BodyMultipart ([], []) -> next
+    BodyRaw _ -> do
+      State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyRaw ""}})
+      pure currentBody
+    BodyMultipart _ -> do
+      State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyMultipart ([], [])}})
       pure currentBody
 
--- TODO: Parse body in chunks abstraction?
-
+-- | Parse request body as JSON
 bodyJSON :: (Aeson.FromJSON a, MonadOkapi m) => m a
 bodyJSON = do
-  lbs <- body
-  maybe next pure (Aeson.decode lbs)
+  body' <- body
+  case body' of
+    BodyRaw lbs -> maybe next pure (Aeson.decode lbs)
+    BodyMultipart _ -> next
 
-bodyForm :: (Web.FromForm a, MonadOkapi m) => m a
-bodyForm = do
-  lbs <- body
-  maybe next pure (eitherToMaybe $ Web.urlDecodeAsForm lbs)
+-- | Parse URLEncoded form parameters from request body
+bodyURLEncoded :: (Web.FromForm a, MonadOkapi m) => m a
+bodyURLEncoded = do
+  body' <- body
+  case body' of
+    BodyRaw lbs -> maybe next pure (eitherToMaybe $ Web.urlDecodeAsForm lbs)
+    BodyMultipart _ -> next
   where
     eitherToMaybe :: Either l r -> Maybe r
     eitherToMaybe either = case either of
       Left _ -> Nothing
       Right value -> Just value
 
--- TODO: Add abstraction for multipart forms
+-- | Parse multipart form data from request body
+bodyMultipart :: MonadOkapi m => m ([WAI.Param], [WAI.File LBS.ByteString])
+bodyMultipart = do
+  body' <- body
+  case body' of
+    BodyRaw _ -> next
+    BodyMultipart formData -> pure formData
+
+bodyXML = undefined
+
+-- | Parse a single form parameter
+formParam :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => BS.ByteString -> m a
+formParam = undefined
+
+-- | Parse a single form file
+formFile :: MonadOkapi m => BS.ByteString -> m (WAI.FileInfo BS.ByteString)
+formFile = undefined
 
 bodyEnd :: MonadOkapi m => m ()
 bodyEnd = do
-  currentBody <- body
-  if LBS.null currentBody
-    then pure ()
-    else next
+  currentBody <- State.gets (requestBody . stateRequest)
+  case currentBody of
+    BodyRaw (LBS.null -> True) -> pure ()
+    BodyMultipart ([], []) -> pure ()
+    _ -> next
 
 -- $headerParsers
 --
@@ -1027,14 +1056,15 @@ app defaultResponse hoister okapiT waiRequest respond = do
 
     waiRequestToState :: WAI.Request -> IO State
     waiRequestToState waiRequest = do
-      requestBody <- WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
+      requestBody <- case lookup "Content-Type" $ WAI.requestHeaders waiRequest of
+          Just "multipart/form-data" -> BodyMultipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
+          _ -> BodyRaw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
       let requestMethod = Just $ WAI.requestMethod waiRequest
           requestPath = WAI.pathInfo waiRequest
           requestQuery = map (\case (name, Nothing) -> (name, QueryFlag); (name, Just txt) -> (name, QueryParam txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
           requestHeaders = WAI.requestHeaders waiRequest
           stateRequest = Request {..}
           stateVault = WAI.vault waiRequest
-
       pure State {..}
 
 -- | Turns a parsers into a WAI application with WebSocket functionality
@@ -1099,18 +1129,6 @@ route parser dispatcher = parser >>= dispatcher
 
 -- $patterns
 
-pattern PathParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
-pattern PathParam param <-
-  (Web.parseUrlPiece -> Right param)
-  where
-    PathParam param = Web.toUrlPiece param
-
-pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> QueryValue
-pattern IsQueryParam param <-
-  QueryParam (Web.parseUrlPiece -> Right param)
-  where
-    IsQueryParam param = QueryParam $ Web.toUrlPiece param
-
 pattern GET :: Method
 pattern GET = Just "GET"
 
@@ -1126,8 +1144,17 @@ pattern DELETE = Just "DELETE"
 pattern PUT :: Method
 pattern PUT = Just "PUT"
 
--- pattern IsQueryParam :: Web.FromHttpApiData a => a -> Maybe QueryValue
--- pattern IsQueryParam value <- Just (QueryParam (Web.parseQueryParam -> Right value))
+pattern PathParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
+pattern PathParam param <-
+  (Web.parseUrlPiece -> Right param)
+  where
+    PathParam param = Web.toUrlPiece param
+
+pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> QueryValue
+pattern IsQueryParam param <-
+  QueryParam (Web.parseUrlPiece -> Right param)
+  where
+    IsQueryParam param = QueryParam $ Web.toUrlPiece param
 
 pattern HasQueryFlag :: Maybe QueryValue
 pattern HasQueryFlag <- Just QueryFlag
@@ -1203,29 +1230,29 @@ parseRelURL possibleRelURL = Either.eitherToMaybe $
 --
 -- There are two ways to test in Okapi.
 
-testParser ::
+test ::
   Monad m =>
   OkapiT m Response ->
   Request ->
   m (Either Failure Response, State)
-testParser okapiT request =
+test okapiT request =
   (State.runStateT . Except.runExceptT . unOkapiT $ okapiT)
     (requestToState request)
   where
     requestToState :: Request -> State
     requestToState stateRequest = let stateVault = mempty in State {..}
 
-testParserPure ::
+testPure ::
   OkapiT Identity.Identity Response ->
   Request ->
   Identity.Identity (Either Failure Response, State)
-testParserPure = testParser
+testPure = test
 
-testParserIO ::
+testIO ::
   OkapiT IO Response ->
   Request ->
   IO (Either Failure Response, State)
-testParserIO = testParser
+testIO = test
 
 -- TODO: Add common assertion helpers. Use Predicate for Contravariant interface??
 
@@ -1274,7 +1301,10 @@ testRequest = WAI.srequest . requestToSRequest
     requestToSRequest :: Request -> WAI.SRequest
     requestToSRequest request@(Request mbMethod path query body headers) =
       let requestMethod = Maybe.fromMaybe HTTP.methodGet mbMethod
-          sRequestBody = body
+          sRequestBody =
+            case body of
+              BodyRaw lbs -> lbs
+              BodyMultipart _ -> error "Must use BodyRaw for testRequest"
           rawPath = RelURL path query Function.& \relURL -> Text.encodeUtf8 $ renderRelURL relURL
           sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = requestMethod, WAI.requestHeaders = headers}) rawPath
        in WAI.SRequest sRequestRequest sRequestBody
@@ -1292,12 +1322,12 @@ session :: (MonadOkapi m, HasSession m) => m Session
 session = do
   cachedSession <- getSession
   maybe sessionInCookie pure cachedSession
-
-sessionInCookie :: (MonadOkapi m, HasSession m) => m Session
-sessionInCookie = do
-  encodedSession <- cookieCrumb "session"
-  secret <- sessionSecret
-  pure $ decodeSession secret encodedSession
+  where
+    sessionInCookie :: (MonadOkapi m, HasSession m) => m Session
+    sessionInCookie = do
+      encodedSession <- cookieCrumb "session"
+      secret <- sessionSecret
+      pure $ decodeSession secret encodedSession
 
 sessionLookup :: HasSession m => MonadOkapi m => BS.ByteString -> m BS.ByteString
 sessionLookup key = do

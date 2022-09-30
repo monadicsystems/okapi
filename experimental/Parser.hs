@@ -48,7 +48,7 @@ module Okapi.Parser
 
     -- | Parsers for extracting data from the body of a request
     bodyJSON,
-    bodyForm,
+    bodyURLEncoded,
     bodyRaw,
 
     -- * Response Helpers
@@ -125,7 +125,7 @@ import Prelude hiding (head)
 
 -- |
 -- >>> let parser = get >> respond ok
--- >>> result <- testParserIO parser $ request GET "" "" []
+-- >>> result <- testIO parser $ request GET "" "" []
 -- >>> assertResponse is200 result
 -- True
 get :: forall m. MonadOkapi m => m ()
@@ -133,7 +133,7 @@ get = method HTTP.methodGet
 
 -- |
 -- >>> let parser = post >> respond ok
--- >>> result <- testParserIO parser (TestRequest "POST" [] "" "")
+-- >>> result <- testIO parser (TestRequest "POST" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 post :: forall m. MonadOkapi m => m ()
@@ -141,7 +141,7 @@ post = method HTTP.methodPost
 
 -- |
 -- >>> let parser = Okapi.Parser.head >> respond ok
--- >>> result <- testParserIO parser (TestRequest "HEAD" [] "" "")
+-- >>> result <- testIO parser (TestRequest "HEAD" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 head :: forall m. MonadOkapi m => m ()
@@ -149,7 +149,7 @@ head = method HTTP.methodHead
 
 -- |
 -- >>> let parser = put >> respond ok
--- >>> result <- testParserIO parser (TestRequest "PUT" [] "" "")
+-- >>> result <- testIO parser (TestRequest "PUT" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 put :: forall m. MonadOkapi m => m ()
@@ -157,7 +157,7 @@ put = method HTTP.methodPut
 
 -- |
 -- >>> let parser = delete >> respond ok
--- >>> result <- testParserIO parser (TestRequest "DELETE" [] "" "")
+-- >>> result <- testIO parser (TestRequest "DELETE" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 delete :: forall m. MonadOkapi m => m ()
@@ -165,7 +165,7 @@ delete = method HTTP.methodDelete
 
 -- |
 -- >>> let parser = trace >> respond ok
--- >>> result <- testParserIO parser (TestRequest "TRACE" [] "" "")
+-- >>> result <- testIO parser (TestRequest "TRACE" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 trace :: forall m. MonadOkapi m => m ()
@@ -173,7 +173,7 @@ trace = method HTTP.methodTrace
 
 -- |
 -- >>> let parser = connect >> respond ok
--- >>> result <- testParserIO parser (TestRequest "CONNECT" [] "" "")
+-- >>> result <- testIO parser (TestRequest "CONNECT" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 connect :: forall m. MonadOkapi m => m ()
@@ -181,7 +181,7 @@ connect = method HTTP.methodConnect
 
 -- |
 -- >>> let parser = options >> respond ok
--- >>> result <- testParserIO parser (TestRequest "OPTIONS" [] "" "")
+-- >>> result <- testIO parser (TestRequest "OPTIONS" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 options :: forall m. MonadOkapi m => m ()
@@ -189,7 +189,7 @@ options = method HTTP.methodOptions
 
 -- |
 -- >>> let parser = patch >> respond ok
--- >>> result <- testParserIO parser (TestRequest "PATCH" [] "" "")
+-- >>> result <- testIO parser (TestRequest "PATCH" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 patch :: forall m. MonadOkapi m => m ()
@@ -197,7 +197,7 @@ patch = method HTTP.methodPatch
 
 -- |
 -- >>> let parser = anyMethod >> respond ok
--- >>> result <- testParserIO parser (TestRequest "FOOBLAH" [] "" "")
+-- >>> result <- testIO parser (TestRequest "FOOBLAH" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 anyMethod :: forall m. MonadOkapi m => m ()
@@ -205,7 +205,7 @@ anyMethod = parseMethod >> pure ()
 
 -- |
 -- >>> let parser = method "CUSTOM" >> respond ok
--- >>> result <- testParserIO parser (TestRequest "CUSTOM" [] "" "")
+-- >>> result <- testIO parser (TestRequest "CUSTOM" [] "" "")
 -- >>> assertResponse is200 result
 -- True
 method :: forall m. MonadOkapi m => HTTP.Method -> m ()
@@ -225,7 +225,7 @@ method method = do
 --   respond ok;
 -- :}
 --
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
 pathSeg :: forall m. MonadOkapi m => Text.Text -> m ()
@@ -240,7 +240,7 @@ pathSeg goal = pathSegWith (goal ==)
 --   respond ok
 -- :}
 --
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/store/clothing" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
 path :: forall m. MonadOkapi m => [Text.Text] -> m ()
@@ -257,7 +257,7 @@ path = mapM_ pathSeg
 --   respond $ json productID $ ok;
 -- :}
 --
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result
 -- True
 pathParam :: forall a m. (MonadOkapi m, Web.FromHttpApiData a) => m a
@@ -276,7 +276,7 @@ pathParam = do
 --   respond $ json productID $ ok
 -- :}
 --
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result
 -- True
 pathParamRaw :: forall m. MonadOkapi m => m Text.Text
@@ -294,10 +294,10 @@ pathParamRaw = parsePathSeg
 --   respond ok
 -- :}
 --
--- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/product/242301" "")
+-- >>> result1 <- testIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result1
 -- True
--- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/product/5641" "")
+-- >>> result2 <- testIO parser (TestRequest "GET" [] "/product/5641" "")
 -- >>> assertFailure isSkip result2
 -- True
 pathSegWith :: forall m. MonadOkapi m => (Text.Text -> Bool) -> m ()
@@ -331,7 +331,7 @@ pathWildcard = do
 --   respond $ setBodyRaw (showLBS $ minQty + 3) $ ok
 -- :}
 --
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/product?min_qty=2" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/product?min_qty=2" "")
 -- >>> assertResponse is200 result
 -- True
 -- >>> assertResponse (hasBodyRaw "5") result
@@ -366,7 +366,7 @@ queryParam queryItemName = do
 --     Nothing   -> throw _500
 -- :}
 --
--- >>> result <- testParserIO parser (TestRequest "GET" [] "/flip/my/bit?value=b0" "")
+-- >>> result <- testIO parser (TestRequest "GET" [] "/flip/my/bit?value=b0" "")
 -- >>> assertResponse (hasBodyRaw "1") result
 -- True
 queryParamRaw :: forall m. MonadOkapi m => Text.Text -> m Text.Text
@@ -389,13 +389,13 @@ queryParamRaw queryItemName = do
 --       else json ["Derek", "Alice", "Bob", "Casey", "Alex", "Larry"] $ ok
 -- :}
 --
--- >>> result1 <- testParserIO parser (TestRequest "GET" [] "/users?admin" "")
+-- >>> result1 <- testIO parser (TestRequest "GET" [] "/users?admin" "")
 -- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result1
 -- True
--- >>> result2 <- testParserIO parser (TestRequest "GET" [] "/users?admin=foobarbaz" "")
+-- >>> result2 <- testIO parser (TestRequest "GET" [] "/users?admin=foobarbaz" "")
 -- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\"]") result2
 -- True
--- >>> result3 <- testParserIO parser (TestRequest "GET" [] "/users" "")
+-- >>> result3 <- testIO parser (TestRequest "GET" [] "/users" "")
 -- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\",\"Bob\",\"Casey\",\"Alex\",\"Larry\"]") result3
 -- True
 queryFlag :: forall a m. MonadOkapi m => Text.Text -> m Bool
@@ -448,8 +448,8 @@ bodyJSON = do
   body <- bodyRaw
   maybe next pure (Aeson.decode body)
 
-bodyForm :: forall a m. (MonadOkapi m, Web.FromForm a) => m a
-bodyForm = do
+bodyURLEncoded :: forall a m. (MonadOkapi m, Web.FromForm a) => m a
+bodyURLEncoded = do
   body <- bodyRaw
   maybe next pure (eitherToMaybe $ Web.urlDecodeAsForm body)
   where

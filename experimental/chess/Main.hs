@@ -269,7 +269,7 @@ register :: Okapi Result
 register = do
   Okapi.post
   Okapi.seg "register"
-  Player {..} <- bodyForm
+  Player {..} <- bodyURLEncoded
   envRef <- ask
   liftIO $ atomically $ addPlayerToWaitPool envRef playerName
   okLucid [] $ JoinedPool playerName
