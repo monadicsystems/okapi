@@ -77,7 +77,11 @@ module Okapi
     body,
     bodyJSON,
     bodyURLEncoded,
+    bodyMultipart,
     bodyEnd,
+    formParam,
+    formParamList,
+    formFile,
 
     -- *** Header Parsers
     -- $headerParsers
@@ -646,20 +650,24 @@ formParamList = Combinators.NonEmpty.some . formParam
 
 -- | Parse a single form file
 formFile :: MonadOkapi m => BS.ByteString -> m (WAI.FileInfo LBS.ByteString)
-formFile fileName = do
+formFile paramName = do
   body' <- body
   case body' of
     BodyRaw _ -> next
     BodyMultipart (params, files) -> do
-      case lookupFile fileName files of
+      case lookup paramName files of
         Nothing -> next
-        Just fileInfo -> pure fileInfo
+        Just fileInfo -> do
+          let newFiles = deleteFile paramName files
+          State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyMultipart (params, newFiles)}})
+          pure fileInfo
   where
-    lookupFile :: BS.ByteString -> [WAI.File LBS.ByteString] -> Maybe (WAI.FileInfo LBS.ByteString)
-    lookupFile = undefined
-
     deleteFile :: BS.ByteString -> [WAI.File LBS.ByteString] -> [WAI.File LBS.ByteString]
-    deleteFile = undefined
+    deleteFile paramName [] = []
+    deleteFile paramName (f@(paramName', fileInfo):fs) =
+      if paramName == paramName'
+        then fs
+        else f : (deleteFile paramName fs)
 
 bodyEnd :: MonadOkapi m => m ()
 bodyEnd = do
