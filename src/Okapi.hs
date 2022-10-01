@@ -421,7 +421,8 @@ type QueryItem = (Text.Text, QueryValue)
 
 data QueryValue = QueryParam Text.Text | QueryFlag deriving (Eq, Show) -- QueryList [Text]
 
-data Body = BodyRaw LBS.ByteString
+data Body =
+  BodyRaw LBS.ByteString
   | BodyMultipart ([WAI.Param], [WAI.File LBS.ByteString])
   deriving (Eq, Show)
 
@@ -769,7 +770,7 @@ vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
 is :: (Eq a, MonadOkapi m) => m a -> a -> m ()
 is action desired = satisfies action (desired ==)
 
-satisfies :: (Eq a, MonadOkapi m) => m a -> (a -> Bool) -> m ()
+satisfies :: MonadOkapi m => m a -> (a -> Bool) -> m ()
 satisfies action predicate = do
   value <- action
   if predicate value
