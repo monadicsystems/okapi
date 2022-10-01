@@ -49,9 +49,9 @@ library:
   source-dirs: src
 
 executables:
-  # realworld-exe:
+  # realworld-json-exe:
   #   main:                Main.hs
-  #   source-dirs:         examples/realworld
+  #   source-dirs:         examples/realworld-json
   #   ghc-options:
   #   - -threaded
   #   - -rtsopts
@@ -66,6 +66,18 @@ executables:
   #   - time
   #   - vector
   #   - profunctors
+  realworld-htmx-exe:
+    main:                Main.hs
+    source-dirs:         examples/realworld-htmx
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - okapi
+    - rel8
+    - lucid2-htmx
+    - lucid2
   calculator-exe:
     main:                Main.hs
     source-dirs:         examples/calculator
