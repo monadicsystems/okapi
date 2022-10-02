@@ -24,7 +24,7 @@ users
 
 This whole module is an example HSP.
 -}
--- /store/category:Category
+-- /store/category::Category
 methodGET
 
 mbColor <- optional $ queryParam @Color "color"
