@@ -46,7 +46,7 @@ case category of
   Dresses -> <h2>Beautiful DRESSES For SALE! Red Dresses 25% OFF!</h2>
   Pants   -> </>
 
-forM products \Product{..} ->
+for_ products \Product{..} ->
     <h1>Forever51 Clothing Store</h1>
     <p><%= productName %></p>
     
