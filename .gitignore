@@ -4,4 +4,4 @@ dist-newstyle
 docs/syntax.zip
 experimental/stack.yaml
 experimental/stack.yaml.lock
-
+secret.txt

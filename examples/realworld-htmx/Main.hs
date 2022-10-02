@@ -132,7 +132,7 @@ wrapHtml innerHtml =
         link_ [rel_ "stylesheet", href_ "//demo.productionready.io/main.css"]
         script_ [src_ "https://unpkg.com/htmx.org@1.8.0"] emptyHtml
       body_ do
-
+        -- Navbar
         nav_ [ id_ "navbar", class_ "navbar navbar-light"] do
           div_ [class_ "container"] do
             -- TODO: Does it make sense to use hxGet_ and href_ for boost?
@@ -145,8 +145,10 @@ wrapHtml innerHtml =
               li_ [class_ "nav-item"] do
                 a_ [class_ "nav-link"] "Sign up"
 
+        -- Content
         div_ [id_ "content-slot"] innerHtml
 
+        -- Footer
         footer_ do
           div_ [class_ "container"] do
             a_ [href_ "/", class_ "logo-font"] "conduit"
@@ -154,7 +156,6 @@ wrapHtml innerHtml =
               "          An interactive learning project from "
               a_ [href_ "https://thinkster.io"] "Thinkster"
               ". Code & design licensed under MIT.        "
-          
 
 -- Signup Form
 
