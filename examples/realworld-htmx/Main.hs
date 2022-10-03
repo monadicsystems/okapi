@@ -220,7 +220,7 @@ wrapHtml innerHtml =
 
 -- Signup Form
 
-signupForm :: (Okapi.MonadOkapi m) => m Okapi.Response
+signupForm :: Okapi.MonadOkapi m => m Okapi.Response
 signupForm = signupFormRoute >>= signupFormHandler
 
 signupFormRoute :: Okapi.MonadOkapi m => m ()
@@ -231,7 +231,7 @@ signupFormHandler = undefined
 
 -- Submit Signup Form
 
-submitSignupForm :: (Okapi.MonadOkapi m) => m Okapi.Response
+submitSignupForm :: Okapi.MonadOkapi m => m Okapi.Response
 submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
 
 submitSignupFormRoute :: Okapi.MonadOkapi m => m ()
