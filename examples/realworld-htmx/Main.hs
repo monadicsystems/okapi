@@ -121,7 +121,7 @@ main = do
     secret <- BS.readFile "secret.txt"
     let
       dbSettings = Hasql.settings "localhost" 5432 "realworld" secret "realworld"
-      redisSettings = undefined
+      redisSettings = Redis.defaultConnectInfo
     Right dbConn <- Hasql.acquire dbSettings
     redisConn <- Redis.connect redisSettings 
 
