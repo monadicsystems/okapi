@@ -181,6 +181,7 @@ module Okapi
 
     -- * Testing
     -- $testing
+    {-
     test,
     testPure,
     testIO,
@@ -188,6 +189,7 @@ module Okapi
     assert200,
     assert404,
     assert500,
+    -}
 
     -- * WAI
     -- $wai
@@ -198,10 +200,12 @@ module Okapi
     serveWebsocketsTLS,
     app,
     websocketsApp,
+    {-
     testRunSession,
     testWithSession,
     testRequest,
-
+    -}
+    
     -- * Utilities
 
     -- ** Server Sent Events
@@ -404,7 +408,8 @@ instance Morph.MFunctor OkapiT where
 -- | Represents the state of a parser. Set on every request to the Okapi server.
 data State = State
   { stateRequest :: Request,
-    stateVault :: Vault.Vault
+    stateVault :: Vault.Vault,
+    stateResponse :: Response
   }
 
 -- | Represents the HTTP request being parsed.
@@ -816,7 +821,7 @@ guardThrow response False = throw response
 -- $response
 
 -- | Represents monadic actions that return a @Response@, for some @m@.
-type Handler m = m Response
+type Handler m = m ()
 
 -- | Represents HTTP responses that can be returned by a parser.
 data Response = Response
@@ -870,15 +875,19 @@ internalServerError =
 
 -- RESPONSE SETTERS
 
-setStatus :: Status -> Response -> Response
-setStatus status response = response {responseStatus = status}
+setResponse :: MonadOkapi m => Response -> m ()
+setResponse response = State.modify (\state -> state {stateResponse = response})
 
-setHeaders :: Headers -> Response -> Response
-setHeaders headers response = response {responseHeaders = headers}
+setStatus :: MonadOkapi m => Status -> m ()
+setStatus status = State.modify (\state -> state {stateResponse = (stateResponse state) {responseStatus = status}})
 
-setHeader :: Header -> Response -> Response
-setHeader header response@Response {..} =
-  response {responseHeaders = update header responseHeaders}
+setHeaders :: MonadOkapi m => Headers -> m ()
+setHeaders headers = State.modify (\state -> state {stateResponse = (stateResponse state) {responseHeaders = headers}})
+
+setHeader :: MonadOkapi m => Header -> m ()
+setHeader header = do
+  headers' <- State.gets (responseHeaders . stateResponse)
+  State.modify (\state -> state {stateResponse = (stateResponse state) {responseHeaders = update header headers'}})
   where
     update :: forall a b. Eq a => (a, b) -> [(a, b)] -> [(a, b)]
     update pair [] = [pair]
@@ -887,11 +896,40 @@ setHeader header response@Response {..} =
         then pair : ps
         else pair' : update pair ps
 
-addHeader :: Header -> Response -> Response
-addHeader header response = response {responseHeaders = header : responseHeaders response}
+setBody :: MonadOkapi m => ResponseBody -> m ()
+setBody body = State.modify (\state -> state {stateResponse = (stateResponse state) {responseBody = body}})
 
-addSetCookie :: (BS.ByteString, BS.ByteString) -> Response -> Response
-addSetCookie (key, value) response =
+setBodyRaw :: MonadOkapi m => LBS.ByteString -> m ()
+setBodyRaw bodyRaw = setBody (ResponseBodyRaw bodyRaw)
+
+setBodyFile :: MonadOkapi m => FilePath -> m ()
+setBodyFile path = setBody (ResponseBodyFile path) -- TODO: setHeader???
+
+setBodyEventSource :: MonadOkapi m => EventSource -> m ()
+setBodyEventSource source = setBody (ResponseBodyEventSource source)
+
+setPlaintext :: MonadOkapi m => Text.Text -> m ()
+setPlaintext text = do
+  setHeader ("Content-Type", "text/plain")
+  setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
+
+setHTML :: MonadOkapi m => LBS.ByteString -> m ()
+setHTML html = do
+  setHeader ("Content-Type", "text/html")
+  setBody (ResponseBodyRaw html)
+
+setJSON :: (Aeson.ToJSON a, MonadOkapi m) => a -> m ()
+setJSON value = do
+  setHeader ("Content-Type", "application/json")
+  setBodyRaw (Aeson.encode value)
+
+addHeader :: MonadOkapi m => Header -> m ()
+addHeader header = do
+  headers <- State.gets (responseHeaders . stateResponse)
+  State.modify (\state -> state {stateResponse = (stateResponse state) {responseHeaders = header : headers}})
+
+addSetCookie :: MonadOkapi m => (BS.ByteString, BS.ByteString) -> m ()
+addSetCookie (key, value) = do
   let setCookieValue =
         LBS.toStrict $
           Builder.toLazyByteString $
@@ -901,45 +939,25 @@ addSetCookie (key, value) response =
                   Web.setCookieValue = value,
                   Web.setCookiePath = Just "/"
                 }
-   in addHeader ("Set-Cookie", setCookieValue) response
+  addHeader ("Set-Cookie", setCookieValue)
 
-setBody :: ResponseBody -> Response -> Response
-setBody body response = response {responseBody = body}
+class Writeable a where
+  serialize :: a -> LBS.ByteString
 
-setBodyRaw :: LBS.ByteString -> Response -> Response
-setBodyRaw bodyRaw = setBody (ResponseBodyRaw bodyRaw)
+write :: (Writeable a, MonadOkapi m) => a -> m ()
+write value = do
+  let suffix = serialize value
+  body <- State.gets (responseBody . stateResponse)
+  setBodyRaw $ case body of
+    ResponseBodyRaw raw -> raw <> suffix
+    ResponseBodyFile _ -> suffix
+    ResponseBodyEventSource _ -> suffix
 
-setBodyFile :: FilePath -> Response -> Response
-setBodyFile path = setBody (ResponseBodyFile path) -- TODO: setHeader???
-
-setBodyEventSource :: EventSource -> Response -> Response
-setBodyEventSource source response =
-  response
-    Function.& setBody (ResponseBodyEventSource source)
-
-setPlaintext :: Text.Text -> Response -> Response
-setPlaintext text response =
-  response
-    Function.& setHeader ("Content-Type", "text/plain")
-    Function.& setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
-
-setHTML :: LBS.ByteString -> Response -> Response
-setHTML htmlRaw response =
-  response
-    Function.& setBody (ResponseBodyRaw htmlRaw)
-    Function.& setHeader ("Content-Type", "text/html")
-
-setJSON :: Aeson.ToJSON a => a -> Response -> Response
-setJSON value response =
-  response
-    Function.& setHeader ("Content-Type", "application/json")
-    Function.& setBodyRaw (Aeson.encode value)
-
-static :: MonadOkapi m => Handler m
+static :: MonadOkapi m => m () -- TODO: Check file extension to set correct content type
 static = do
   filePathText <- Text.intercalate "/" <$> path
   let filePath = Text.unpack filePathText
-  ok Function.& setBodyFile filePath Function.& pure
+  setBodyFile filePath
 
 -- $serverSentEvents
 
@@ -1031,7 +1049,7 @@ eventToServerEvent CloseEvent = WAI.CloseEvent
 --
 -- These functions are for interfacing with WAI (Web Application Interface).
 
-run :: Monad m => (forall a. m a -> IO a) -> OkapiT m Response -> IO ()
+run :: Monad m => (forall a. m a -> IO a) -> OkapiT m () -> IO ()
 run = serve 3000 notFound
 
 serve ::
@@ -1043,7 +1061,7 @@ serve ::
   -- | Monad unlift function
   (forall a. m a -> IO a) ->
   -- | Parser
-  OkapiT m Response ->
+  OkapiT m () ->
   IO ()
 serve port defaultResponse hoister okapiT = WAI.run port $ app defaultResponse hoister okapiT
 
@@ -1053,7 +1071,7 @@ serveTLS ::
   WAI.Settings ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  OkapiT m () ->
   IO ()
 serveTLS tlsSettings settings defaultResponse hoister okapiT = WAI.runTLS tlsSettings settings $ app defaultResponse hoister okapiT
 
@@ -1064,7 +1082,7 @@ serveWebsockets ::
   Int ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  OkapiT m () ->
   IO ()
 serveWebsockets connSettings serverApp port defaultResponse hoister okapiT = WAI.run port $ websocketsApp connSettings serverApp defaultResponse hoister okapiT
 
@@ -1076,7 +1094,7 @@ serveWebsocketsTLS ::
   WebSockets.ServerApp ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  OkapiT m () ->
   IO ()
 serveWebsocketsTLS tlsSettings settings connSettings serverApp defaultResponse hoister okapiT = WAI.runTLS tlsSettings settings $ websocketsApp connSettings serverApp defaultResponse hoister okapiT
 
@@ -1088,16 +1106,16 @@ app ::
   -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
   (forall a. m a -> IO a) ->
   -- | The parser used to equals the request
-  OkapiT m Response ->
+  OkapiT m () ->
   WAI.Application
 app defaultResponse hoister okapiT waiRequest respond = do
-  state <- waiRequestToState waiRequest
-  (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) state
+  initialState <- waiRequestToState waiRequest
+  (eitherFailureOrResponse, state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) initialState
   let response =
         case eitherFailureOrResponse of
-          Left Skip -> defaultResponse
+          Left Skip                  -> defaultResponse
           Left (Error errorResponse) -> errorResponse
-          Right succesfulResponse -> succesfulResponse
+          Right _                    -> stateResponse state
   responseToWaiApp response waiRequest respond
   where
     responseToWaiApp :: Response -> WAI.Application
@@ -1117,6 +1135,7 @@ app defaultResponse hoister okapiT waiRequest respond = do
           requestHeaders = WAI.requestHeaders waiRequest
           stateRequest = Request {..}
           stateVault = WAI.vault waiRequest
+          stateResponse = ok
       pure State {..}
 
 -- | Turns a parsers into a WAI application with WebSocket functionality
@@ -1129,7 +1148,7 @@ websocketsApp ::
   WebSockets.ServerApp ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  OkapiT m () ->
   WAI.Application
 websocketsApp connSettings serverApp defaultResponse hoister okapiT =
   let backupApp = app defaultResponse hoister okapiT
@@ -1158,7 +1177,9 @@ scope :: MonadOkapi m => Path -> [Middleware m] -> Middleware m
 scope prefix middlewares handler = path `is` prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: MonadOkapi m => Middleware m
-clearHeadersMiddleware handler = setHeaders [] <$> handler
+clearHeadersMiddleware handler = do
+  setHeaders []
+  handler
 
 prefixPathMiddleware :: MonadOkapi m => Path -> Middleware m
 prefixPathMiddleware prefix handler = path `is` prefix >> handler
@@ -1282,6 +1303,7 @@ parseRelURL possibleRelURL = Either.eitherToMaybe $
 --
 -- There are two ways to test in Okapi.
 
+{-
 test ::
   Monad m =>
   OkapiT m Response ->
@@ -1360,7 +1382,7 @@ testRequest = WAI.srequest . requestToSRequest
           rawPath = RelURL path query Function.& \relURL -> Text.encodeUtf8 $ renderRelURL relURL
           sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = requestMethod, WAI.requestHeaders = headers}) rawPath
        in WAI.SRequest sRequestRequest sRequestBody
-
+-}
 -- $MonadSession
 
 newtype SessionID = SessionID { unSessionID :: BS.ByteString }
@@ -1427,15 +1449,11 @@ withSession handler = do
   case mbSessionID of
     Nothing -> do
       sessionID <- generateSessionID
-      response <- handler
-      response
-        Function.& addSetCookie ("session_id", encodeSessionID secret sessionID)
-        Function.& pure
+      handler
+      addSetCookie ("session_id", encodeSessionID secret sessionID)
     Just sessionID -> do
-      response <- handler
-      response
-        Function.& addSetCookie ("session_id", encodeSessionID secret sessionID)
-        Function.& pure
+      handler
+      addSetCookie ("session_id", encodeSessionID secret sessionID)
 
 -- $csrfProtection
 
