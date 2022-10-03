@@ -233,6 +233,7 @@ executable realworld-htmx-exe
     , cryptonite
     , extra
     , hasql
+    , hedis
     , http-api-data
     , http-types
     , lucid2
@@ -243,6 +244,7 @@ executable realworld-htmx-exe
     , network
     , okapi
     , parser-combinators
+    , random
     , rel8
     , text
     , transformers

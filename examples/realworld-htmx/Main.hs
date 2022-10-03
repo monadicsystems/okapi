@@ -1,24 +1,35 @@
-{-# language BlockArguments #-}
-{-# language ConstraintKinds #-}
-{-# language DeriveAnyClass #-}
-{-# language DeriveGeneric #-}
-{-# language DerivingStrategies #-}
-{-# language DerivingVia #-}
-{-# language DuplicateRecordFields #-}
-{-# language FlexibleContexts #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language OverloadedStrings #-}
-{-# language StandaloneDeriving #-}
-{-# language TypeApplications #-}
-{-# language TypeFamilies #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main where
 
+import qualified Control.Monad as Monad
 import qualified Control.Monad.Reader as Reader
 import qualified Control.Monad.IO.Class as IO
 import qualified Control.Monad.Combinators as Combinators
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import Data.Function ((&))
+import qualified Data.Text as Text
+import qualified Data.Word as Word
+import qualified Database.Redis as Redis
+import qualified GHC.Generics as Generics
 import qualified Hasql.Connection as Hasql
 import qualified Lucid
 import Lucid
@@ -49,31 +60,81 @@ import Lucid
 import qualified Lucid.Htmx as Htmx
 import qualified Okapi
 import qualified Rel8
+import qualified System.Random as Random
 
 newtype App a = App
-    { unApp :: Reader.ReaderT Hasql.Connection IO a
+    { unApp :: Reader.ReaderT AppEnv IO a
     }
-    deriving newtype (Functor, Applicative, Monad, IO.MonadIO, Reader.MonadReader Hasql.Connection)
+    deriving newtype (Functor, Applicative, Monad, IO.MonadIO, Reader.MonadReader AppEnv)
 
-type HasDBConnection m = Reader.MonadReader Hasql.Connection m
+data AppEnv = AppEnv
+  { appEnvDBConnection :: Hasql.Connection
+  , appEnvRedisConnection :: Redis.Connection
+  }
+
+class Has field env where
+    obtain :: env -> field
+
+instance Has Hasql.Connection AppEnv where
+    obtain = appEnvDBConnection
+
+instance Has Redis.Connection AppEnv where
+    obtain = appEnvRedisConnection
+
+grab :: forall field env m. (Reader.MonadReader env m, Has field env) => m field
+grab = Reader.asks $ obtain @field
+
+data Session = Session
+  { sessionUsername :: Text.Text
+  , sessionEmail :: Text.Text
+  } deriving (Eq, Show, Generics.Generic, Aeson.ToJSON, Aeson.FromJSON)
+
+instance Okapi.MonadSession App Session where
+  sessionSecret = IO.liftIO $ BS.readFile "secret.txt"
+  generateSessionID = IO.liftIO $ do
+    words :: [Word.Word8] <- Monad.replicateM 20 Random.randomIO
+    pure $ Okapi.SessionID $ BS.pack words
+  getSession (Okapi.SessionID sessionID) = do
+    redisConnection <- grab @Redis.Connection
+    redisResult <- IO.liftIO $ Redis.runRedis redisConnection do
+      eitherMbValueBS <- Redis.get sessionID
+      pure $ case eitherMbValueBS of
+        Left _ -> Nothing
+        Right mbValueBS -> case mbValueBS of
+          Nothing -> Nothing
+          Just valueBS -> Aeson.decodeStrict valueBS
+    IO.liftIO $ Redis.disconnect redisConnection
+    pure redisResult
+  putSession (Okapi.SessionID sessionID) session = do
+    redisConnection <- grab @Redis.Connection
+    _ <- IO.liftIO $ Redis.runRedis redisConnection $
+      Redis.set sessionID (LBS.toStrict $ Aeson.encode session)
+    IO.liftIO $ Redis.disconnect redisConnection
+  clearSession (Okapi.SessionID sessionID) = do
+    redisConnection <- grab @Redis.Connection
+    _ <- IO.liftIO $ Redis.runRedis redisConnection $ Redis.del [sessionID]
+    IO.liftIO $ Redis.disconnect redisConnection
 
 main :: IO ()
 main = do
     -- Get database connection
     secret <- BS.readFile "secret.txt"
-    let settings = Hasql.settings "localhost" 5432 "realworld" secret "realworld"
-    Right connection <- Hasql.acquire settings
+    let
+      dbSettings = Hasql.settings "localhost" 5432 "realworld" secret "realworld"
+      redisSettings = undefined
+    Right dbConn <- Hasql.acquire dbSettings
+    redisConn <- Redis.connect redisSettings 
 
     -- Run server
-    Okapi.run (executeApp connection) server
+    Okapi.run (executeApp $ AppEnv dbConn redisConn) $ Okapi.withSession server
 
-executeApp :: Hasql.Connection -> App a -> IO a
-executeApp connection (App app) = Reader.runReaderT app connection
+executeApp :: AppEnv -> App a -> IO a
+executeApp appEnv (App app) = Reader.runReaderT app appEnv
 
 setLucid :: Lucid.Html () -> Okapi.Response -> Okapi.Response
 setLucid = Okapi.setHTML . Lucid.renderBS
 
-server :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+server :: (Okapi.MonadOkapi m, Has Hasql.Connection AppEnv, Has Redis.Connection AppEnv) => m Okapi.Response
 server = Combinators.choice
     [ home
     , signupForm
@@ -87,7 +148,7 @@ server = Combinators.choice
 
 -- Home
 
-home :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+home :: Okapi.MonadOkapi m => m Okapi.Response
 home = homeRoute >> homeHandler
 
 homeRoute :: Okapi.MonadOkapi m => m ()
@@ -95,7 +156,7 @@ homeRoute = do
   Okapi.methodGET
   Okapi.pathEnd
 
-homeHandler :: HasDBConnection m => m Okapi.Response
+homeHandler :: Monad m => m Okapi.Response
 homeHandler =
     Okapi.ok
     & setLucid do
@@ -159,77 +220,77 @@ wrapHtml innerHtml =
 
 -- Signup Form
 
-signupForm :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+signupForm :: (Okapi.MonadOkapi m) => m Okapi.Response
 signupForm = signupFormRoute >>= signupFormHandler
 
 signupFormRoute :: Okapi.MonadOkapi m => m ()
 signupFormRoute = undefined
 
-signupFormHandler :: HasDBConnection m => () -> m Okapi.Response
+signupFormHandler :: () -> m Okapi.Response
 signupFormHandler = undefined
 
 -- Submit Signup Form
 
-submitSignupForm :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+submitSignupForm :: (Okapi.MonadOkapi m) => m Okapi.Response
 submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
 
 submitSignupFormRoute :: Okapi.MonadOkapi m => m ()
 submitSignupFormRoute = undefined
 
-submitSignupFormHandler :: HasDBConnection m => () -> m Okapi.Response
+submitSignupFormHandler :: () -> m Okapi.Response
 submitSignupFormHandler = undefined
 
 -- Login Form
 
-loginForm :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+loginForm :: Okapi.MonadOkapi m => m Okapi.Response
 loginForm = loginFormRoute >>= loginFormHandler
 
 loginFormRoute :: Okapi.MonadOkapi m => m ()
 loginFormRoute = undefined
 
-loginFormHandler :: HasDBConnection m => () -> m Okapi.Response
+loginFormHandler :: () -> m Okapi.Response
 loginFormHandler = undefined
 
 -- Submit Login Form
 
-submitLoginForm :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+submitLoginForm :: Okapi.MonadOkapi m => m Okapi.Response
 submitLoginForm = submitLoginFormRoute >>= submitLoginFormHandler
 
 submitLoginFormRoute :: Okapi.MonadOkapi m => m ()
 submitLoginFormRoute = undefined
 
-submitLoginFormHandler :: HasDBConnection m => () -> m Okapi.Response
+submitLoginFormHandler :: () -> m Okapi.Response
 submitLoginFormHandler = undefined
 
 -- Logout
 
-logout :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+logout :: Okapi.MonadOkapi m => m Okapi.Response
 logout = logoutRoute >>= logoutHandler
 
 logoutRoute :: Okapi.MonadOkapi m => m ()
 logoutRoute = undefined
 
-logoutHandler :: HasDBConnection m => () -> m Okapi.Response
+logoutHandler :: () -> m Okapi.Response
 logoutHandler = undefined
 
 -- Follow
 
-follow :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+follow :: Okapi.MonadOkapi m => m Okapi.Response
 follow = followRoute >>= followHandler
 
 followRoute :: Okapi.MonadOkapi m => m ()
 followRoute = undefined
 
-followHandler :: HasDBConnection m => () -> m Okapi.Response
+followHandler :: () -> m Okapi.Response
 followHandler = undefined
 
 -- Unfollow
 
-unfollow :: (Okapi.MonadOkapi m, HasDBConnection m) => m Okapi.Response
+unfollow :: Okapi.MonadOkapi m => m Okapi.Response
 unfollow = unfollowRoute >>= unfollowHandler
 
 unfollowRoute :: Okapi.MonadOkapi m => m ()
 unfollowRoute = undefined
 
-unfollowHandler :: HasDBConnection m => () -> m Okapi.Response
+unfollowHandler :: () -> m Okapi.Response
 unfollowHandler = undefined

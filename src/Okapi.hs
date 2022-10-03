@@ -1,9 +1,11 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
@@ -212,13 +214,10 @@ module Okapi
     sendEvent,
 
     -- ** Sessions
-    Session (..),
-    HasSession (..),
+    SessionID (..),
+    MonadSession (..),
+    sessionID,
     session,
-    sessionLookup,
-    sessionInsert,
-    sessionDelete,
-    sessionClear,
     withSession,
   )
 where
@@ -383,7 +382,14 @@ instance Reader.MonadReader r m => Reader.MonadReader r (OkapiT m) where
   reader = Morph.lift . Reader.reader
 
 instance IO.MonadIO m => IO.MonadIO (OkapiT m) where
-  liftIO = Morph.lift . IO.liftIO 
+  liftIO = Morph.lift . IO.liftIO
+
+instance MonadSession m s => MonadSession (OkapiT m) s where
+  sessionSecret = Morph.lift sessionSecret
+  generateSessionID = Morph.lift generateSessionID
+  getSession = Morph.lift . getSession
+  putSession sessionID = Morph.lift . putSession sessionID
+  clearSession = Morph.lift . clearSession
 
 instance Morph.MonadTrans OkapiT where
   lift :: Monad m => m a -> OkapiT m a
@@ -1355,68 +1361,80 @@ testRequest = WAI.srequest . requestToSRequest
           sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = requestMethod, WAI.requestHeaders = headers}) rawPath
        in WAI.SRequest sRequestRequest sRequestBody
 
--- $HasSession
+-- $MonadSession
 
-type Session = Map.Map BS.ByteString BS.ByteString
+newtype SessionID = SessionID { unSessionID :: BS.ByteString }
+  deriving (Eq, Show)
 
-class Monad m => HasSession m where
+class Monad m => MonadSession m s | m -> s where
+  -- | A secret used for encrypting and decrypting
+  -- the session id. This function should return the same value each time it's called.
   sessionSecret :: m BS.ByteString
-  getSession :: m (Maybe Session)
-  putSession :: Session -> m ()
+  -- | A function for generating a random session ID.
+  -- This function should return a different value each time it's called.
+  generateSessionID :: m SessionID
+  getSession :: SessionID -> m (Maybe s)
+  putSession :: SessionID -> s -> m ()
+  clearSession :: SessionID -> m ()
+  modifySession :: SessionID -> (s -> s) -> m ()
+  default modifySession :: SessionID -> (s -> s) -> m ()
+  modifySession sessionID modifier = do
+    maybeSession <- getSession sessionID
+    case maybeSession of
+      Nothing -> pure ()
+      Just session -> do
+        let newSession = modifier session
+        putSession sessionID newSession
 
-session :: (MonadOkapi m, HasSession m) => m Session
+sessionID :: (MonadOkapi m, MonadSession m s) => m SessionID
+sessionID = do
+  encodedSessionID <- cookieCrumb "session_id"
+  secret <- sessionSecret
+  case decodeSessionID secret encodedSessionID of
+    Nothing -> next
+    Just sessionID -> pure sessionID
+
+session :: (MonadOkapi m, MonadSession m s) => m s
 session = do
-  cachedSession <- getSession
-  maybe sessionInCookie pure cachedSession
-  where
-    sessionInCookie :: (MonadOkapi m, HasSession m) => m Session
-    sessionInCookie = do
-      encodedSession <- cookieCrumb "session"
-      secret <- sessionSecret
-      pure $ decodeSession secret encodedSession
+    sessionID' <- sessionID
+    maybeSession <- getSession sessionID'
+    case maybeSession of
+      Nothing -> next
+      Just session -> pure session
 
-sessionLookup :: HasSession m => MonadOkapi m => BS.ByteString -> m BS.ByteString
-sessionLookup key = do
-  mbValue <- Map.lookup key <$> session
-  maybe next pure mbValue
+decodeSessionID :: BS.ByteString -> BS.ByteString -> Maybe SessionID
+decodeSessionID secret encodedSessionID =
+  let (b64, serial) = BS.splitAt 44 encodedSessionID
+      mbDigest :: Maybe (Crypto.Digest Crypto.SHA256) = Crypto.digestFromByteString $ Either.fromRight BS.empty $ BS.decodeBase64 b64
+   in case mbDigest of
+        Nothing -> Nothing
+        Just digest ->
+          if HMAC.hmacGetDigest (HMAC.hmac secret serial :: HMAC.HMAC Crypto.SHA256) == digest
+            then Just $ SessionID serial
+            else Nothing
 
-sessionInsert :: HasSession m => MonadOkapi m => BS.ByteString -> BS.ByteString -> m ()
-sessionInsert key value = session >>= \sesh -> putSession (Map.insert key value sesh)
-
-sessionDelete :: HasSession m => MonadOkapi m => BS.ByteString -> m ()
-sessionDelete key = session >>= \sesh -> putSession (Map.delete key sesh)
-
-sessionClear :: HasSession m => m ()
-sessionClear = putSession Map.empty
-
-encodeSession :: BS.ByteString -> Session -> BS.ByteString
-encodeSession secret session =
-  let serial = HTTP.renderSimpleQuery False $ Map.toList session
+encodeSessionID :: BS.ByteString -> SessionID -> BS.ByteString
+encodeSessionID secret (SessionID sessionID) =
+  let serial = sessionID
       digest = HMAC.hmacGetDigest $ HMAC.hmac secret serial :: Crypto.Digest Crypto.SHA256
       b64 = BS.encodeBase64' $ Memory.convert digest
    in b64 <> serial
 
-decodeSession :: BS.ByteString -> BS.ByteString -> Session
-decodeSession secret encodedSession =
-  let (b64, serial) = BS.splitAt 44 encodedSession
-      mbDigest :: Maybe (Crypto.Digest Crypto.SHA256) = Crypto.digestFromByteString $ Either.fromRight BS.empty $ BS.decodeBase64 b64
-   in case mbDigest of
-        Nothing -> Map.empty
-        Just digest ->
-          if HMAC.hmacGetDigest (HMAC.hmac secret serial :: HMAC.HMAC Crypto.SHA256) == digest
-            then Map.fromList $ HTTP.parseSimpleQuery serial
-            else Map.empty
-
-withSession :: (MonadOkapi m, HasSession m) => Middleware m
+withSession :: (MonadOkapi m, MonadSession m s) => Middleware m
 withSession handler = do
-  mbSession <- getSession
-  case mbSession of
-    Nothing -> handler
-    Just session -> do
-      secret <- sessionSecret
+  mbSessionID <- look $ Combinators.optional $ sessionID
+  secret <- sessionSecret
+  case mbSessionID of
+    Nothing -> do
+      sessionID <- generateSessionID
       response <- handler
       response
-        Function.& addSetCookie ("session", encodeSession secret session)
+        Function.& addSetCookie ("session_id", encodeSessionID secret sessionID)
+        Function.& pure
+    Just sessionID -> do
+      response <- handler
+      response
+        Function.& addSetCookie ("session_id", encodeSessionID secret sessionID)
         Function.& pure
 
 -- $csrfProtection
