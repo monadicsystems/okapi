@@ -41,7 +41,9 @@ library
     , containers
     , cookie
     , cryptonite
+    , directory
     , extra
+    , filepath
     , http-api-data
     , http-types
     , memory
@@ -49,6 +51,7 @@ library
     , mtl
     , network
     , parser-combinators
+    , template-haskell
     , text
     , transformers
     , unagi-chan
