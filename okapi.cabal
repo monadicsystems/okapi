@@ -44,6 +44,8 @@ library
     , directory
     , extra
     , filepath
+    , haskell-src-exts
+    , haskell-src-meta
     , http-api-data
     , http-types
     , memory

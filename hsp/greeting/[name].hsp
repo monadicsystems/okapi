@@ -1,0 +1,81 @@
+{-
+Haskell Server Pages are a nice way to create server responses.
+
+You call them from your parsers like so:
+
+hsp
+  :: FilePath
+  -> m Response
+hsp rootDir = undefined
+
+main :: IO
+main = run id (hsp "/")
+
+Will look for `.hsp` files in the root directory and serve them according to their path relative to the root directory.
+
+home.hsp              -> /home
+users.hsp             -> /users
+users
+  |- userID::Int.hsp  -> /user/userID::Int
+  |- userID::Int
+       |- posts.hsp   -> /user/userID::Int/posts
+       |- follows.hsp -> /user/userID::Int/follows
+
+This whole module is an example HSP.
+-}
+-- greeting.hsp for endpoints /greeting/{name:Text}?age={age:Maybe Int}
+
+methodGET               -- Check that request uses GET HTTP method
+name <- pathParam @Text -- Bind path parameter after /greeting/ path segment
+maybeAge <- optional $ queryParam @Int "age"
+
+setResponseStatus 200                        -- Set response status to 200
+setResponseHeader "Content-Type" "text/html" -- Set response header "Content-Type" to "text/html"
+
+-- A header with "Hello, world!"
+write "<h1>"
+write "Hello, world!"
+write "</h1>"
+
+-- Write an unordered list from 1 to 5
+write "<ul>"
+for_ [1..5] \num -> do
+  write "<li>"
+  write $ toText num
+  write "</li>"
+write "</ul>"
+
+let writeCongrats = do
+      write "<h2>"
+      write "Congratulations for having your name!"
+      write "</h2>"
+
+case name of
+  "James" -> writeCongrats 
+  "Janet" -> writeCongrats
+  "Alice" -> writeCongrats
+  "Larry" -> writeCongrats
+  _ -> pure ()
+
+-- Use Lucid too!
+writeLucid do
+  h1_ [] "You can also write blocks of Lucid to generate HTML!"
+  div_ [class_ "info"] do
+    p_ [] "Lucid is very useful"
+    a_ [href_ "https://lucid-info.com"] "Learn more about Lucid here"
+
+case maybeAge of
+  Nothing  -> do
+    write "<h3>"
+    write "Don't be shy. Tell me your age, please."
+    write "</h3>"
+  Just age ->
+    if age >= 18
+    then do
+      write "<b>"
+      write "Congrats! Your an adult!"
+      write "</b>"
+    else do
+      write "<i>"
+      write "You have a long life ahead. Enjoy!"
+      write "</i>"
