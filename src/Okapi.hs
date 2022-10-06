@@ -223,6 +223,9 @@ module Okapi
     sessionID,
     session,
     withSession,
+
+    write,
+    setResponse
   )
 where
 
@@ -941,17 +944,16 @@ addSetCookie (key, value) = do
                 }
   addHeader ("Set-Cookie", setCookieValue)
 
-class Writeable a where
-  serialize :: a -> LBS.ByteString
+-- class Writeable a where
+--   serialize :: a -> LBS.ByteString
 
-write :: (Writeable a, MonadOkapi m) => a -> m ()
+write :: MonadOkapi m => LBS.ByteString -> m ()
 write value = do
-  let suffix = serialize value
   body <- State.gets (responseBody . stateResponse)
   setBodyRaw $ case body of
-    ResponseBodyRaw raw -> raw <> suffix
-    ResponseBodyFile _ -> suffix
-    ResponseBodyEventSource _ -> suffix
+    ResponseBodyRaw raw -> raw <> value
+    ResponseBodyFile _ -> value
+    ResponseBodyEventSource _ -> value
 
 static :: MonadOkapi m => m () -- TODO: Check file extension to set correct content type
 static = do

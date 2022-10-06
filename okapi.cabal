@@ -220,6 +220,51 @@ executable dotodo-exe
     , websockets
   default-language: Haskell2010
 
+executable hsp-test-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_okapi
+  hs-source-dirs:
+      examples/hsp-test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.4.7
+    , attoparsec
+    , base >=4.7 && <5
+    , base64
+    , bytestring
+    , containers
+    , cookie
+    , cryptonite
+    , extra
+    , http-api-data
+    , http-types
+    , lucid2
+    , lucid2-htmx
+    , memory
+    , mmorph
+    , mtl
+    , network
+    , okapi
+    , parser-combinators
+    , sqlite-simple
+    , text
+    , transformers
+    , unagi-chan
+    , vault
+    , wai
+    , wai-extra
+    , wai-websockets
+    , warp
+    , warp-tls
+    , websockets
+    , haskell-src-exts
+    , haskell-src-meta
+    , template-haskell
+    , filepath
+    , directory
+  default-language: Haskell2010
+
 executable realworld-htmx-exe
   main-is: Main.hs
   other-modules:

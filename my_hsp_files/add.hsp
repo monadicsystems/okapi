@@ -1,0 +1,4 @@
+methodGET
+x <- queryParam @Int "x"
+y <- queryParam @Int "y"
+write $ toLBS $ x + y

@@ -1,0 +1,2 @@
+methodGET
+write "I can't greet you if I don't know your name"

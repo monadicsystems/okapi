@@ -1,0 +1,3 @@
+methodGET
+write "Hello, there "
+write $ toLBS (name :: Text.Text)
