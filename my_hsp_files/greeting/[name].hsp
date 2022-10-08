@@ -1,3 +1,2 @@
 methodGET
-write "Hello, there "
-write $ toLBS (name :: Text.Text)
+write $ "Hello, there " <> toLBS (name :: Text.Text)

@@ -1,6 +1,0 @@
-methodGET
-if (age :: Int) >= 21
-then do
-  write "You're old enough to drink"
-else do
-  write "You're not old enough to drink"

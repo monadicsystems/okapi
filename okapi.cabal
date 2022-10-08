@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Okapi
+      Okapi.HSP
   other-modules:
       Paths_okapi
   hs-source-dirs:

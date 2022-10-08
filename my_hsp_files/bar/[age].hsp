@@ -1,0 +1,10 @@
+methodGET
+setHeader ("Content-Type", "text/html")
+if (age :: Int) >= 21
+then do
+  write $ renderBS do
+    h1_ [] "Welcome to the bar!"
+    b_ [] "You're old enough to drink"
+else do
+  write $ renderBS do
+    h1_ [] "You're not old enough to drink"

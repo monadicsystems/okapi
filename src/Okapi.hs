@@ -224,6 +224,8 @@ module Okapi
     session,
     withSession,
 
+    -- Functions for HSPs
+    overwrite,
     write,
     setResponse
   )
@@ -944,14 +946,14 @@ addSetCookie (key, value) = do
                 }
   addHeader ("Set-Cookie", setCookieValue)
 
--- class Writeable a where
---   serialize :: a -> LBS.ByteString
+overwrite :: MonadOkapi m => LBS.ByteString -> m ()
+overwrite = setBodyRaw
 
 write :: MonadOkapi m => LBS.ByteString -> m ()
 write value = do
   body <- State.gets (responseBody . stateResponse)
   setBodyRaw $ case body of
-    ResponseBodyRaw raw -> raw <> value
+    ResponseBodyRaw raw -> raw <> "\n" <> value
     ResponseBodyFile _ -> value
     ResponseBodyEventSource _ -> value
 

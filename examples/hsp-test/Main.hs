@@ -19,7 +19,7 @@ import Data.Text.Encoding as Text
 import Data.ByteString.Lazy as LBS
 
 toLBS :: Show a => a -> LBS.ByteString
-toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . show
+toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . Prelude.takeWhile ('"' /=) . Prelude.dropWhile ('"' ==) . show
 
 main :: IO ()
 main = Okapi.run id [hsp|my_hsp_files|]

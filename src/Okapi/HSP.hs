@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Okapi.HSP (hsp) where
@@ -30,7 +31,7 @@ Must use trailing slash!
 hsp :: TH.QuasiQuoter
 hsp =
   TH.QuasiQuoter
-    { TH.quoteExp  = (\fp -> buildDirTree' fp >>= buildExpr) ,
+    { TH.quoteExp  = (\fp -> (normalizeDirTree "" <$> buildDirTree' fp) >>= buildExpr) ,
       TH.quotePat  = undefined,
       TH.quoteType = undefined,
       TH.quoteDec  = undefined
@@ -90,6 +91,17 @@ buildExpr (Dir name dirTrees) = do
       pure $ TH.NoBindS $ TH.AppE (TH.AppE isParser (TH.ParensE (TH.AppTypeE pathParamParser textType))) nameStringLit
   pure $ TH.DoE [headStmt, TH.NoBindS choiceExp]
 
+normalizeDirTree :: Text.Text -> DirTree -> DirTree
+normalizeDirTree "" (Dir dirName dirTrees) =
+  Dir dirName $ map (normalizeDirTree dirName) dirTrees
+normalizeDirTree parentName (Dir dirName dirTrees) =
+  Dir (fixName dirName parentName) $ map (normalizeDirTree dirName) dirTrees
+normalizeDirTree _ file = file
+
+fixName :: Text.Text -> Text.Text -> Text.Text
+fixName longerName shorterName =
+  Text.pack $ FilePath.joinPath $ (FilePath.splitDirectories $ Text.unpack longerName) List.\\ (FilePath.splitDirectories $ Text.unpack shorterName)
+
 -- TODO: REAL This is the main function HERE!
 buildDirTree' root = do
   executableDir <- IO.liftIO Directory.getCurrentDirectory
@@ -98,15 +110,14 @@ buildDirTree' root = do
   pure dirTree
 
 buildDirTree :: IO.MonadIO m => FilePath -> m DirTree
-buildDirTree root = do
-  rootContents <- IO.liftIO $ Directory.listDirectory root
-  dirTrees <- Monad.forM rootContents $ \content -> do
+buildDirTree rootDir = do
+  rootDirList <- IO.liftIO $ Directory.listDirectory rootDir
+  dirTrees <- Monad.forM rootDirList $ \content -> do
+    IO.liftIO $ putStrLn content
     case FilePath.takeExtension content of
-      ""  -> do
-        IO.liftIO $ Directory.setCurrentDirectory root
-        buildDirTree content
+      "" -> buildDirTree (rootDir FilePath.</> content)
       ext -> pure $ File (Text.pack $ FilePath.dropExtension content) (Text.pack ext)
-  pure $ Dir (Text.pack root) dirTrees
+  pure $ Dir (Text.pack rootDir) dirTrees
 
 isPathParam :: FilePath -> Bool
 isPathParam (h:t) =

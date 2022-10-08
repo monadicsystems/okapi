@@ -1,0 +1,2 @@
+methodGET
+write $ toLBS ((x :: Int) + (y :: Int))
