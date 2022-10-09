@@ -131,10 +131,10 @@ main = do
 executeApp :: AppEnv -> App a -> IO a
 executeApp appEnv (App app) = Reader.runReaderT app appEnv
 
-setLucid :: Lucid.Html () -> Okapi.Response -> Okapi.Response
-setLucid = Okapi.setHTML . Lucid.renderBS
+writeLucid :: Okapi.MonadOkapi m => Lucid.Html () -> m ()
+writeLucid = Okapi.write . Lucid.renderBS
 
-server :: (Okapi.MonadOkapi m, Has Hasql.Connection AppEnv, Has Redis.Connection AppEnv) => m Okapi.Response
+server :: (Okapi.MonadOkapi m, Has Hasql.Connection AppEnv, Has Redis.Connection AppEnv, Okapi.MonadSession m Session) => m ()
 server = Combinators.choice
     [ home
     , signupForm
@@ -148,7 +148,7 @@ server = Combinators.choice
 
 -- Home
 
-home :: Okapi.MonadOkapi m => m Okapi.Response
+home :: (Okapi.MonadOkapi m, Okapi.MonadSession m Session) => m ()
 home = homeRoute >> homeHandler
 
 homeRoute :: Okapi.MonadOkapi m => m ()
@@ -156,28 +156,27 @@ homeRoute = do
   Okapi.methodGET
   Okapi.pathEnd
 
-homeHandler :: Monad m => m Okapi.Response
-homeHandler =
-    Okapi.ok
-    & setLucid do
-        wrapHtml do -- TODO: Only wrap if not htmx request
-          div_ [class_ "home-page"] do
-            div_ [class_ "banner"] do
-              div_ [class_ "container"] do
-                h1_ [class_ "logo-font"] "conduit"
-                p_ "A place to share your knowledge."
-            div_ [class_ "container page"] do
-              div_ [class_ "row"] do
-                -- FEED
-                div_ [id_ "feeds", class_ "col-md-9"] do
-                    h1_ [] "Empty Feed"
-                -- TAGS
-                div_ [id_ "tags", class_ "col-md-3"] do
-                  div_ [class_ "sidebar"] $ do
-                    p_ "Popular Tags"
-                    div_ [class_ "tag-list"] do
-                      a_ [href_ "#", class_ "tag-pill tag-default"] "fake-tag"
-    & return
+homeHandler :: (Okapi.MonadOkapi m, Okapi.MonadSession m Session) => m ()
+homeHandler = do
+  Okapi.setHeader ("Content-Type", "text/html")
+  writeLucid do
+    wrapHtml do -- TODO: Only wrap if not htmx request
+      div_ [class_ "home-page"] do
+        div_ [class_ "banner"] do
+          div_ [class_ "container"] do
+            h1_ [class_ "logo-font"] "conduit"
+            p_ "A place to share your knowledge."
+        div_ [class_ "container page"] do
+          div_ [class_ "row"] do
+            -- FEED
+            div_ [id_ "feeds", class_ "col-md-9"] do
+                h1_ [] "Empty Feed"
+            -- TAGS
+            div_ [id_ "tags", class_ "col-md-3"] do
+              div_ [class_ "sidebar"] $ do
+                p_ "Popular Tags"
+                div_ [class_ "tag-list"] do
+                  a_ [href_ "#", class_ "tag-pill tag-default"] "fake-tag"
 
 emptyHtml :: Lucid.Html ()
 emptyHtml = ""
@@ -220,77 +219,77 @@ wrapHtml innerHtml =
 
 -- Signup Form
 
-signupForm :: Okapi.MonadOkapi m => m Okapi.Response
+signupForm :: Okapi.MonadOkapi m => m ()
 signupForm = signupFormRoute >>= signupFormHandler
 
 signupFormRoute :: Okapi.MonadOkapi m => m ()
 signupFormRoute = undefined
 
-signupFormHandler :: () -> m Okapi.Response
+signupFormHandler :: () -> m ()
 signupFormHandler = undefined
 
 -- Submit Signup Form
 
-submitSignupForm :: Okapi.MonadOkapi m => m Okapi.Response
+submitSignupForm :: Okapi.MonadOkapi m => m ()
 submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
 
 submitSignupFormRoute :: Okapi.MonadOkapi m => m ()
 submitSignupFormRoute = undefined
 
-submitSignupFormHandler :: () -> m Okapi.Response
+submitSignupFormHandler :: () -> m ()
 submitSignupFormHandler = undefined
 
 -- Login Form
 
-loginForm :: Okapi.MonadOkapi m => m Okapi.Response
+loginForm :: Okapi.MonadOkapi m => m ()
 loginForm = loginFormRoute >>= loginFormHandler
 
 loginFormRoute :: Okapi.MonadOkapi m => m ()
 loginFormRoute = undefined
 
-loginFormHandler :: () -> m Okapi.Response
+loginFormHandler :: () -> m ()
 loginFormHandler = undefined
 
 -- Submit Login Form
 
-submitLoginForm :: Okapi.MonadOkapi m => m Okapi.Response
+submitLoginForm :: Okapi.MonadOkapi m => m ()
 submitLoginForm = submitLoginFormRoute >>= submitLoginFormHandler
 
 submitLoginFormRoute :: Okapi.MonadOkapi m => m ()
 submitLoginFormRoute = undefined
 
-submitLoginFormHandler :: () -> m Okapi.Response
+submitLoginFormHandler :: () -> m ()
 submitLoginFormHandler = undefined
 
 -- Logout
 
-logout :: Okapi.MonadOkapi m => m Okapi.Response
+logout :: Okapi.MonadOkapi m => m ()
 logout = logoutRoute >>= logoutHandler
 
 logoutRoute :: Okapi.MonadOkapi m => m ()
 logoutRoute = undefined
 
-logoutHandler :: () -> m Okapi.Response
+logoutHandler :: () -> m ()
 logoutHandler = undefined
 
 -- Follow
 
-follow :: Okapi.MonadOkapi m => m Okapi.Response
+follow :: Okapi.MonadOkapi m => m ()
 follow = followRoute >>= followHandler
 
 followRoute :: Okapi.MonadOkapi m => m ()
 followRoute = undefined
 
-followHandler :: () -> m Okapi.Response
+followHandler :: () -> m ()
 followHandler = undefined
 
 -- Unfollow
 
-unfollow :: Okapi.MonadOkapi m => m Okapi.Response
+unfollow :: Okapi.MonadOkapi m => m ()
 unfollow = unfollowRoute >>= unfollowHandler
 
 unfollowRoute :: Okapi.MonadOkapi m => m ()
 unfollowRoute = undefined
 
-unfollowHandler :: () -> m Okapi.Response
+unfollowHandler :: () -> m ()
 unfollowHandler = undefined

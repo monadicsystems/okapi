@@ -227,7 +227,8 @@ module Okapi
     -- Functions for HSPs
     overwrite,
     write,
-    setResponse
+    setResponse,
+    toLBS
   )
 where
 
@@ -847,7 +848,7 @@ ok :: Response
 ok =
   let responseStatus = 200
       responseHeaders = []
-      responseBody = ResponseBodyRaw "OK"
+      responseBody = ResponseBodyRaw ""
    in Response {..}
 
 notFound :: Response
@@ -1458,6 +1459,9 @@ withSession handler = do
     Just sessionID -> do
       handler
       addSetCookie ("session_id", encodeSessionID secret sessionID)
+
+toLBS :: Show a => a -> LBS.ByteString
+toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . Prelude.takeWhile ('"' /=) . Prelude.dropWhile ('"' ==) . show
 
 -- $csrfProtection
 

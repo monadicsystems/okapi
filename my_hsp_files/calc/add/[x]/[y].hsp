@@ -1,2 +1,2 @@
 methodGET
-write $ toLBS ((x :: Int) + (y :: Int))
+write $ toLBS $ x + (y :: Int)
