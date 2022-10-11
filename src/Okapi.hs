@@ -954,7 +954,7 @@ write :: MonadOkapi m => LBS.ByteString -> m ()
 write value = do
   body <- State.gets (responseBody . stateResponse)
   setBodyRaw $ case body of
-    ResponseBodyRaw raw -> raw <> "\n" <> value
+    ResponseBodyRaw raw -> raw <> value <> "\n"
     ResponseBodyFile _ -> value
     ResponseBodyEventSource _ -> value
 
