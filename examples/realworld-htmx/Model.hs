@@ -1,5 +1,3 @@
-module Model where
-
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -7,19 +5,17 @@ module Model where
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Conduit.Model where
+module Model where
 
-import qualified Data.Aeson as Aeson
 import Data.Int (Int32)
 import Data.Text
 import Data.Time
 import GHC.Generics
-import Servant.API (FromHttpApiData, FormUrlEncoded, ToHttpApiData)
-import Servant.Auth.JWT (FromJWT, ToJWT)
+import Web.HttpApiData
 import Web.FormUrlEncoded (FromForm)
 
 newtype ID a = ID {unID :: Int32}
-  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+  deriving (Eq, Show, Generic)
   deriving newtype (ToHttpApiData, FromHttpApiData)
 
 -- CORE MODELS START --
@@ -31,7 +27,7 @@ data User = User
     userImageUrl :: Text,
     userUsername :: Text
   }
-  deriving (Eq, Show, Generic, FromJSON, FromJWT, ToJSON, ToJWT)
+  deriving (Eq, Show, Generic)
 
 data Article = Article
   { articleAuthorID :: ID User,
@@ -70,27 +66,12 @@ data LoginForm = LoginForm
   }
   deriving (FromForm, Generic, Show)
 
-instance ToJSON LoginForm where
-  toJSON (LoginForm email password) =
-    object
-      [ "email" .= email,
-        "password" .= password
-      ]
-
 data RegisterForm = RegisterForm
   { registerFormEmail :: Text,
     registerFormPassword :: Text,
     registerFormUsername :: Text
   }
   deriving (FromForm, Generic, Show)
-
-instance ToJSON RegisterForm where
-  toJSON (RegisterForm email password username) =
-    object
-      [ "email" .= email,
-        "password" .= password,
-        "username" .= username
-      ]
 
 data SettingsForm = SettingsForm
   { settingsFormBio :: Text,
@@ -100,7 +81,7 @@ data SettingsForm = SettingsForm
     settingsFormUserID :: ID User,
     settingsFormUsername :: Text
   }
-  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+  deriving (Eq, Show, Generic)
 
 data PublishForm = PublishForm
   { publishFormBody :: Text,
@@ -110,15 +91,6 @@ data PublishForm = PublishForm
   }
   deriving (Generic, Eq, Show, FromForm)
 
-instance ToJSON PublishForm where
-  toJSON PublishForm{..} =
-    object
-      [ "body" .= publishFormBody,
-        "description" .= publishFormDescription,
-        "tags" .= publishFormTags,
-        "title" .= publishFormTitle
-      ]
-
 data EditArticleForm = EditArticleForm
   { editArticleFormArticleID :: ID Article,
     editArticleFormBody :: Text,
@@ -127,16 +99,6 @@ data EditArticleForm = EditArticleForm
     editArticleFormTitle :: Text
   }
   deriving (Generic, FromForm, Eq, Show)
-
-instance ToJSON EditArticleForm where
-  toJSON EditArticleForm{..} =
-    object
-      [ "articleID" .= editArticleFormArticleID,
-        "body" .= editArticleFormBody,
-        "description" .= editArticleFormDescription,
-        "tags" .= editArticleFormTags,
-        "title" .= editArticleFormTitle
-      ]
 
 data CommentForm = CommentForm
   { commentFormArticleID :: ID Article,

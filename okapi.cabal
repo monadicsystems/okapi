@@ -269,7 +269,9 @@ executable hsp-test-exe
 executable realworld-htmx-exe
   main-is: Main.hs
   other-modules:
-      Paths_okapi
+      Controller
+    , Model
+    , View
   hs-source-dirs:
       examples/realworld-htmx
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -298,6 +300,7 @@ executable realworld-htmx-exe
     , random
     , rel8
     , text
+    , time
     , transformers
     , unagi-chan
     , vault

@@ -1,0 +1,2 @@
+module Model.ArticleTag where
+
