@@ -19,10 +19,10 @@ import Data.Text
 import Data.Time
 import GHC.Generics
 import Hasql.Session (QueryError)
-import Okapi (OkapiT (..), Result)
+import Okapi (ServerT (..), Result)
 import qualified Okapi
 
-type Okapi a = OkapiT Handler a
+type Okapi a = ServerT Handler a
 
 conduit :: Okapi Okapi.Result
 conduit = do

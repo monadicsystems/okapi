@@ -77,40 +77,40 @@ There are 5 types of parsers for each of the 5 parts of a HTTP request.
 1. Method Parsers
 
 ```haskell
-method :: MonadOkapi m => m Method
+method :: MonadServer m => m Method
 
-matchMethod :: MonadOkapi m => Method -> m ()
+matchMethod :: MonadServer m => Method -> m ()
 
-get :: MonadOkapi m => m ()
+get :: MonadServer m => m ()
 get = matchMethod "GET"
 ```
 
 2. Path Parsers
 
 ```haskell
-path :: MonadOkapi m => m Path -- Parses entire remaining path
+path :: MonadServer m => m Path -- Parses entire remaining path
 path = many seg
 
-seg :: MonadOkapi m => m Text
+seg :: MonadServer m => m Text
 
-matchPath :: MonadOkapi m => Path -> m ()
+matchPath :: MonadServer m => Path -> m ()
 matchPath desiredPath = mapM_ matchSeg desiredPath
 
-matchSeg :: MonadOkapi m => Text -> m ()
+matchSeg :: MonadServer m => Text -> m ()
 
-pathParam :: MonadOkapi m => FromHttpApiData a => m a
+pathParam :: MonadServer m => FromHttpApiData a => m a
 
-pathEnd :: MonadOkapi m => m ()
+pathEnd :: MonadServer m => m ()
 ```
 
 4. Query Parsers
 
 ```haskell
-query :: MonadOkapi m => m Query -- parses entire query
+query :: MonadServer m => m Query -- parses entire query
 
-queryParam :: MonadOkapi m => FromHttpApiData a => Text -> m a
+queryParam :: MonadServer m => FromHttpApiData a => Text -> m a
 
-queryFlag :: MonadOkapi m => Text -> m ()
+queryFlag :: MonadServer m => Text -> m ()
 
 queryParamRaw :: Text -> m Text
 ```
@@ -118,25 +118,25 @@ queryParamRaw :: Text -> m Text
 6. Body Parsers
 
 ```haskell
-body :: MonadOkapi m => m Body
+body :: MonadServer m => m Body
 
-bodyJSON :: MonadOkapi m, FromJSON a => m a
+bodyJSON :: MonadServer m, FromJSON a => m a
 
-bodyURLEncoded :: FromForm a, MonadOkapi m => m a
+bodyURLEncoded :: FromForm a, MonadServer m => m a
 
-bodyMultipart :: FromForm a, MonadOkapi m => m (a, [File])
+bodyMultipart :: FromForm a, MonadServer m => m (a, [File])
 ```
 
 8. Headers Parsers
 
 ```haskell
-headers :: MonadOkapi m => m Headers
+headers :: MonadServer m => m Headers
 
-header :: MonadOkapi m => HeaderName -> m Header
+header :: MonadServer m => HeaderName -> m Header
 
-cookie :: MonadOkapi m => m Cookie
+cookie :: MonadServer m => m Cookie
 
-crumb :: MonadOkapi m => Text -> m Crumb
+crumb :: MonadServer m => Text -> m Crumb
 ```
 
 We can use these to create increasingly complex parsers. For example, let's say we wanted to implement a HTTP parser that matches the request `GET /blog`. That would look like this:
@@ -196,12 +196,12 @@ pattern BlogCategoryRoute category = ["blog", PathParam category]
 uses these bidrectional patterns with the `route` parser, like so:
 
 ```haskell
-route :: MonadOkapi m => (Path -> m Response) -> m Response
+route :: MonadServer m => (Path -> m Response) -> m Response
 route matcher = do
   path <- parsePath
   matcher path
   
-myAPI :: MonadOkapi m => m Response
+myAPI :: MonadServer m => m Response
 myAPI = route $ \case
   BlogRoute uuid -> do
     get
@@ -222,7 +222,7 @@ myAPI = route $ \case
 Since both routes are `GET` requests, let's factor out the `get` parser:
 
 ```haskell
-myAPI :: MonadOkapi m => m Response
+myAPI :: MonadServer m => m Response
 myAPI = do
   get
   route $ \case

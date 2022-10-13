@@ -95,7 +95,7 @@ pathToURL (pathSeg : path) = "/" <> URL pathSeg <> pathToURL path
 
 test ::
   Monad m =>
-  OkapiT m Response ->
+  ServerT m Response ->
   Request ->
   (Either Failure Response, State)
 test hoister okapiT request =
@@ -103,7 +103,7 @@ test hoister okapiT request =
     (requestToState request)
 
 testIO ::
-  OkapiT IO Response ->
+  ServerT IO Response ->
   Request ->
   IO (Either Failure Response, State)
 testIO = test id
@@ -164,7 +164,7 @@ runSession ::
   Monad m =>
   Wai.Test.Session a ->
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  ServerT m Response ->
   IO a
 runSession session hoister okapiT = do
   let waiApp = app hoister notFound okapiT
@@ -173,7 +173,7 @@ runSession session hoister okapiT = do
 withSession ::
   Monad m =>
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  ServerT m Response ->
   Wai.Test.Session a ->
   IO a
 withSession hoister okapiT session = runSession session hoister okapiT

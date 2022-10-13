@@ -77,20 +77,20 @@ given request is decided by *extracting data from* or *verifying properties of* 
 
 ### Types
 
-The core type of the Okapi library is `OkapiT m a`.
+The core type of the Okapi library is `ServerT m a`.
 
 ```haskell
-newtype OkapiT m a = OkapiT {unOkapiT :: Except.ExceptT Failure (State.StateT State m) a}
+newtype ServerT m a = ServerT {unOkapiT :: Except.ExceptT Failure (State.StateT State m) a}
   deriving newtype
     ( Except.MonadError Failure,
       State.MonadState State
     )
 ```
 
-Okapi also exports the type constraint `MonadOkapi m`, which is the abstract interface of `OkapiT m`.
+Okapi also exports the type constraint `MonadServer m`, which is the abstract interface of `ServerT m`.
 
 ```haskell
-type MonadOkapi m =
+type MonadServer m =
   ( Functor m,
     Applicative m,
     Applicative.Alternative m,
@@ -104,10 +104,10 @@ type MonadOkapi m =
 We recommend using the type constraint instead of the concrete type to annotate your parsers.
 
 ```haskell
-myParser :: OkapiT (ReaderT AppConfig IO) (Int, Char)
+myParser :: ServerT (ReaderT AppConfig IO) (Int, Char)
 myParser = ... -- Concrete not good. Lot's of boilerplate code for unwrapping and wrapping values. 
 
-myParser' :: (MonadOkapi m, MonadIO m, MonadReader AppConfig m) => m (Int, Char)
+myParser' :: (MonadServer m, MonadIO m, MonadReader AppConfig m) => m (Int, Char)
 myParser' = do
   ... -- Abstract good. Less boilerplate. Can reuse and test easily.
 ```
@@ -119,7 +119,7 @@ module Main where
 
 import Okapi
 
-type Server = OkapiT IO -- Can parse HTTP requests + perform I/O
+type Server = ServerT IO -- Can parse HTTP requests + perform I/O
 
 main :: IO ()
 main =
@@ -132,12 +132,12 @@ main =
 myServer :: Server Response
 myServer = myParser1 <|> myParser2
 
-myParser1 :: (MonadOkapi m, MonadIO m) => m Response
+myParser1 :: (MonadServer m, MonadIO m) => m Response
 myParser1 = do
   logIO "Using handler 1"
   ...
 
-myParser2 :: MonadOkapi m => m Response
+myParser2 :: MonadServer m => m Response
 myParser2 = ...
 
 logIO :: MonadIO m => String -> m ()
@@ -150,7 +150,7 @@ this library.
 ### Parsers
 
 Okapi provides **parsers** to extract data from or verify properties of HTTP requests. They all have a
-return type of `MonadOkapi m => m a`, where `a` is some value.
+return type of `MonadServer m => m a`, where `a` is some value.
 
 Parsers can either **succeed** or **fail**.
 

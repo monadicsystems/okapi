@@ -9,7 +9,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
@@ -24,8 +23,8 @@
 module Okapi
   ( -- * Parsing
     -- $parsers
-    MonadOkapi,
-    OkapiT (..),
+    MonadServer,
+    ServerT (..),
     Failure (..),
     State (..),
     Request,
@@ -205,7 +204,7 @@ module Okapi
     testWithSession,
     testRequest,
     -}
-    
+
     -- * Utilities
 
     -- ** Server Sent Events
@@ -223,12 +222,11 @@ module Okapi
     sessionID,
     session,
     withSession,
-
     -- Functions for HSPs
     overwrite,
     write,
     setResponse,
-    toLBS
+    toLBS,
   )
 where
 
@@ -277,7 +275,7 @@ import qualified Network.HTTP.Types as HTTP
 import qualified Network.Socket as Socket
 import qualified Network.Wai as WAI
 import qualified Network.Wai.EventSource as WAI
-import qualified Network.Wai.Handler.Warp as WAI hiding (FileInfo(..))
+import qualified Network.Wai.Handler.Warp as WAI hiding (FileInfo (..))
 import qualified Network.Wai.Handler.WarpTLS as WAI
 import qualified Network.Wai.Handler.WebSockets as WAI
 import qualified Network.Wai.Handler.WebSockets as WebSockets
@@ -295,7 +293,7 @@ import qualified Web.HttpApiData as Web
 -- The types are as follows
 
 -- | A type constraint representing monads that have the ability to parse an HTTP request.
-type MonadOkapi m =
+type MonadServer m =
   ( Functor m,
     Applicative m,
     Applicative.Alternative m,
@@ -305,26 +303,25 @@ type MonadOkapi m =
     State.MonadState State m
   )
 
--- | A concrete implementation of the @MonadOkapi@ type constraint.
-newtype OkapiT m a = OkapiT {unOkapiT :: Except.ExceptT Failure (State.StateT State m) a}
+-- | A concrete implementation of the @MonadServer@ type constraint.
+newtype ServerT m a = ServerT {unOkapiT :: Except.ExceptT Failure (State.StateT State m) a}
   deriving newtype
     ( Except.MonadError Failure,
       State.MonadState State
     )
 
-instance Functor m => Functor (OkapiT m) where
-  fmap :: (a -> b) -> OkapiT m a -> OkapiT m b
+instance Functor m => Functor (ServerT m) where
+  fmap :: (a -> b) -> ServerT m a -> ServerT m b
   fmap f okapiT =
-    OkapiT . Except.ExceptT . State.StateT $
-      ( fmap (\ ~(a, s') -> (f <$> a, s'))
-          . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
-      )
+    ServerT . Except.ExceptT . State.StateT $
+      fmap (\ ~(a, s') -> (f <$> a, s'))
+        . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
   {-# INLINE fmap #-}
 
-instance Monad m => Applicative (OkapiT m) where
-  pure x = OkapiT . Except.ExceptT . State.StateT $ \s -> pure (Right x, s)
+instance Monad m => Applicative (ServerT m) where
+  pure x = ServerT . Except.ExceptT . State.StateT $ \s -> pure (Right x, s)
   {-# INLINEABLE pure #-}
-  (OkapiT (Except.ExceptT (State.StateT mf))) <*> (OkapiT (Except.ExceptT (State.StateT mx))) = OkapiT . Except.ExceptT . State.StateT $ \s -> do
+  (ServerT (Except.ExceptT (State.StateT mf))) <*> (ServerT (Except.ExceptT (State.StateT mx))) = ServerT . Except.ExceptT . State.StateT $ \s -> do
     ~(eitherF, s') <- mf s
     case eitherF of
       Left error -> pure (Left error, s)
@@ -337,10 +334,10 @@ instance Monad m => Applicative (OkapiT m) where
   m *> k = m >> k
   {-# INLINE (*>) #-}
 
-instance Monad m => Applicative.Alternative (OkapiT m) where
-  empty = OkapiT . Except.ExceptT . State.StateT $ \s -> pure (Left Skip, s)
+instance Monad m => Applicative.Alternative (ServerT m) where
+  empty = ServerT . Except.ExceptT . State.StateT $ \s -> pure (Left Skip, s)
   {-# INLINE empty #-}
-  (OkapiT (Except.ExceptT (State.StateT mx))) <|> (OkapiT (Except.ExceptT (State.StateT my))) = OkapiT . Except.ExceptT . State.StateT $ \s -> do
+  (ServerT (Except.ExceptT (State.StateT mx))) <|> (ServerT (Except.ExceptT (State.StateT my))) = ServerT . Except.ExceptT . State.StateT $ \s -> do
     (eitherX, stateX) <- mx s
     case eitherX of
       Left Skip -> do
@@ -353,10 +350,10 @@ instance Monad m => Applicative.Alternative (OkapiT m) where
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE (<|>) #-}
 
-instance Monad m => Monad (OkapiT m) where
+instance Monad m => Monad (ServerT m) where
   return = pure
   {-# INLINEABLE return #-}
-  (OkapiT (Except.ExceptT (State.StateT mx))) >>= f = OkapiT . Except.ExceptT . State.StateT $ \s -> do
+  (ServerT (Except.ExceptT (State.StateT mx))) >>= f = ServerT . Except.ExceptT . State.StateT $ \s -> do
     ~(eitherX, s') <- mx s
     case eitherX of
       Left error -> pure (Left error, s)
@@ -367,10 +364,10 @@ instance Monad m => Monad (OkapiT m) where
           Right res -> pure (Right res, s'')
   {-# INLINEABLE (>>=) #-}
 
-instance Monad m => Monad.MonadPlus (OkapiT m) where
-  mzero = OkapiT . Except.ExceptT . State.StateT $ \s -> pure (Left Skip, s)
+instance Monad m => Monad.MonadPlus (ServerT m) where
+  mzero = ServerT . Except.ExceptT . State.StateT $ \s -> pure (Left Skip, s)
   {-# INLINE mzero #-}
-  (OkapiT (Except.ExceptT (State.StateT mx))) `mplus` (OkapiT (Except.ExceptT (State.StateT my))) = OkapiT . Except.ExceptT . State.StateT $ \s -> do
+  (ServerT (Except.ExceptT (State.StateT mx))) `mplus` (ServerT (Except.ExceptT (State.StateT my))) = ServerT . Except.ExceptT . State.StateT $ \s -> do
     (eitherX, stateX) <- mx s
     case eitherX of
       Left Skip -> do
@@ -383,33 +380,33 @@ instance Monad m => Monad.MonadPlus (OkapiT m) where
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE mplus #-}
 
-instance Reader.MonadReader r m => Reader.MonadReader r (OkapiT m) where
+instance Reader.MonadReader r m => Reader.MonadReader r (ServerT m) where
   ask = Morph.lift Reader.ask
   local = mapOkapiT . Reader.local
     where
-      mapOkapiT :: (m (Either Failure a, State) -> n (Either Failure b, State)) -> OkapiT m a -> OkapiT n b
-      mapOkapiT f okapiT = OkapiT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
+      mapOkapiT :: (m (Either Failure a, State) -> n (Either Failure b, State)) -> ServerT m a -> ServerT n b
+      mapOkapiT f okapiT = ServerT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
   reader = Morph.lift . Reader.reader
 
-instance IO.MonadIO m => IO.MonadIO (OkapiT m) where
+instance IO.MonadIO m => IO.MonadIO (ServerT m) where
   liftIO = Morph.lift . IO.liftIO
 
-instance MonadSession m s => MonadSession (OkapiT m) s where
+instance MonadSession m s => MonadSession (ServerT m) s where
   sessionSecret = Morph.lift sessionSecret
   generateSessionID = Morph.lift generateSessionID
   getSession = Morph.lift . getSession
   putSession sessionID = Morph.lift . putSession sessionID
   clearSession = Morph.lift . clearSession
 
-instance Morph.MonadTrans OkapiT where
-  lift :: Monad m => m a -> OkapiT m a
-  lift action = OkapiT . Except.ExceptT . State.StateT $ \s -> do
+instance Morph.MonadTrans ServerT where
+  lift :: Monad m => m a -> ServerT m a
+  lift action = ServerT . Except.ExceptT . State.StateT $ \s -> do
     result <- action
     pure (Right result, s)
 
-instance Morph.MFunctor OkapiT where
-  hoist :: Monad m => (forall a. m a -> n a) -> OkapiT m b -> OkapiT n b
-  hoist nat okapiT = OkapiT . Except.ExceptT . State.StateT $ (nat . State.runStateT (Except.runExceptT $ unOkapiT okapiT))
+instance Morph.MFunctor ServerT where
+  hoist :: Monad m => (forall a. m a -> n a) -> ServerT m b -> ServerT n b
+  hoist nat okapiT = ServerT . Except.ExceptT . State.StateT $ nat . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
 
 -- | Represents the state of a parser. Set on every request to the Okapi server.
 data State = State
@@ -438,8 +435,8 @@ type QueryItem = (Text.Text, QueryValue)
 
 data QueryValue = QueryParam Text.Text | QueryFlag deriving (Eq, Show) -- QueryList [Text]
 
-data Body =
-  BodyRaw LBS.ByteString
+data Body
+  = BodyRaw LBS.ByteString
   | BodyMultipart ([WAI.Param], [WAI.File LBS.ByteString])
   deriving (Eq, Show)
 
@@ -458,10 +455,10 @@ type Crumb = (BS.ByteString, BS.ByteString)
 -- These are the parsers that you'll use to build you own app.
 
 -- | Parses the entire request.
-request :: MonadOkapi m => m Request
+request :: MonadServer m => m Request
 request = Request <$> method <*> path <*> query <*> body <*> headers
 
-requestEnd :: MonadOkapi m => m ()
+requestEnd :: MonadServer m => m ()
 requestEnd = do
   methodEnd
   pathEnd
@@ -473,7 +470,7 @@ requestEnd = do
 --
 -- These are parsers for parsing the HTTP request method.
 
-method :: MonadOkapi m => m Method
+method :: MonadServer m => m Method
 method = do
   maybeMethod <- State.gets (requestMethod . stateRequest)
   case maybeMethod of
@@ -482,34 +479,34 @@ method = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestMethod = Nothing}})
       pure method'
 
-methodGET :: MonadOkapi m => m ()
+methodGET :: MonadServer m => m ()
 methodGET = is method $ Just HTTP.methodGet
 
-methodPOST :: MonadOkapi m => m ()
+methodPOST :: MonadServer m => m ()
 methodPOST = is method $ Just HTTP.methodPost
 
-methodHEAD :: MonadOkapi m => m ()
+methodHEAD :: MonadServer m => m ()
 methodHEAD = is method $ Just HTTP.methodHead
 
-methodPUT :: MonadOkapi m => m ()
+methodPUT :: MonadServer m => m ()
 methodPUT = is method $ Just HTTP.methodPut
 
-methodDELETE :: MonadOkapi m => m ()
+methodDELETE :: MonadServer m => m ()
 methodDELETE = is method $ Just HTTP.methodDelete
 
-methodTRACE :: MonadOkapi m => m ()
+methodTRACE :: MonadServer m => m ()
 methodTRACE = is method $ Just HTTP.methodTrace
 
-methodCONNECT :: MonadOkapi m => m ()
+methodCONNECT :: MonadServer m => m ()
 methodCONNECT = is method $ Just HTTP.methodConnect
 
-methodOPTIONS :: MonadOkapi m => m ()
+methodOPTIONS :: MonadServer m => m ()
 methodOPTIONS = is method $ Just HTTP.methodOptions
 
-methodPATCH :: MonadOkapi m => m ()
+methodPATCH :: MonadServer m => m ()
 methodPATCH = is method $ Just HTTP.methodPatch
 
-methodEnd :: MonadOkapi m => m ()
+methodEnd :: MonadServer m => m ()
 methodEnd = do
   maybeMethod <- Combinators.optional method
   case maybeMethod of
@@ -521,11 +518,11 @@ methodEnd = do
 -- These are the path parsers.
 
 -- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
-path :: MonadOkapi m => m [Text.Text]
+path :: MonadServer m => m [Text.Text]
 path = Combinators.many pathParam
 
 -- | Parses and discards a single path segment matching the given @Text@ value
-pathParam :: (Web.FromHttpApiData a, MonadOkapi m) => m a
+pathParam :: (Web.FromHttpApiData a, MonadServer m) => m a
 pathParam = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
   case maybePathSeg of
@@ -539,7 +536,7 @@ pathParam = do
     safeHead (x : _) = Just x
 
 -- | Similar to `end` function in <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
-pathEnd :: MonadOkapi m => m ()
+pathEnd :: MonadServer m => m ()
 pathEnd = do
   currentPath <- path
   if List.null currentPath
@@ -550,13 +547,13 @@ pathEnd = do
 --
 -- These are the query parsers.
 
-query :: MonadOkapi m => m Query
+query :: MonadServer m => m Query
 query = do
   query <- State.gets (requestQuery . stateRequest)
   State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
   pure query
 
-queryValue :: MonadOkapi m => Text.Text -> m QueryValue
+queryValue :: MonadServer m => Text.Text -> m QueryValue
 queryValue queryItemName = do
   maybeQueryItem <- State.gets (Foldable.find (\(queryItemName', _) -> queryItemName == queryItemName') . requestQuery . stateRequest)
   case maybeQueryItem of
@@ -566,7 +563,7 @@ queryValue queryItemName = do
       pure queryValue
 
 -- | Parses the value of a query parameter with the given type and name
-queryParam :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m a
+queryParam :: (Web.FromHttpApiData a, MonadServer m) => Text.Text -> m a
 queryParam queryItemName = do
   queryItemValue <- queryValue queryItemName
   case queryItemValue of
@@ -574,17 +571,17 @@ queryParam queryItemName = do
     QueryParam valueText -> maybe next pure (Web.parseQueryParamMaybe valueText)
 
 -- | Test for the existance of a query flag
-queryFlag :: MonadOkapi m => Text.Text -> m ()
+queryFlag :: MonadServer m => Text.Text -> m ()
 queryFlag queryItemName = do
   queryItemValue <- queryValue queryItemName
   case queryItemValue of
     QueryFlag -> pure ()
     _ -> next
 
-queryParamList :: (Web.FromHttpApiData a, MonadOkapi m) => Text.Text -> m (NonEmpty.NonEmpty a)
+queryParamList :: (Web.FromHttpApiData a, MonadServer m) => Text.Text -> m (NonEmpty.NonEmpty a)
 queryParamList = Combinators.NonEmpty.some . queryParam
 
-queryEnd :: MonadOkapi m => m ()
+queryEnd :: MonadServer m => m ()
 queryEnd = do
   currentQuery <- query
   if List.null currentQuery
@@ -594,7 +591,7 @@ queryEnd = do
 -- $bodyParsers
 
 -- | For getting the raw body of the request.
-body :: MonadOkapi m => m Body
+body :: MonadServer m => m Body
 body = do
   currentBody <- State.gets (requestBody . stateRequest)
   case currentBody of
@@ -608,7 +605,7 @@ body = do
       pure currentBody
 
 -- | Parse request body as JSON
-bodyJSON :: (Aeson.FromJSON a, MonadOkapi m) => m a
+bodyJSON :: (Aeson.FromJSON a, MonadServer m) => m a
 bodyJSON = do
   body' <- body
   case body' of
@@ -616,7 +613,7 @@ bodyJSON = do
     BodyMultipart _ -> next
 
 -- | Parse URLEncoded form parameters from request body
-bodyURLEncoded :: (Web.FromForm a, MonadOkapi m) => m a
+bodyURLEncoded :: (Web.FromForm a, MonadServer m) => m a
 bodyURLEncoded = do
   body' <- body
   case body' of
@@ -629,7 +626,7 @@ bodyURLEncoded = do
       Right value -> Just value
 
 -- | Parse multipart form data from request body
-bodyMultipart :: MonadOkapi m => m ([WAI.Param], [WAI.File LBS.ByteString])
+bodyMultipart :: MonadServer m => m ([WAI.Param], [WAI.File LBS.ByteString])
 bodyMultipart = do
   body' <- body
   case body' of
@@ -639,7 +636,7 @@ bodyMultipart = do
 bodyXML = undefined
 
 -- | Parse a single form parameter
-formParam :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => BS.ByteString -> m a
+formParam :: forall a m. (Web.FromHttpApiData a, MonadServer m) => BS.ByteString -> m a
 formParam paramName = do
   body' <- body
   case body' of
@@ -651,7 +648,7 @@ formParam paramName = do
             Nothing -> next
             Just paramValue -> do
               paramValue' <- maybe next pure (Web.parseQueryParamMaybe paramValue)
-              let newParams = List.delete ((Text.decodeUtf8 paramName), paramValue) params
+              let newParams = List.delete (Text.decodeUtf8 paramName, paramValue) params
               State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyRaw $ Web.urlEncodeParams newParams}})
               pure paramValue'
     BodyMultipart (params, files) -> do
@@ -663,11 +660,11 @@ formParam paramName = do
           State.modify (\state -> state {stateRequest = (stateRequest state) {requestBody = BodyMultipart (newParams, files)}})
           pure paramValue'
 
-formParamList :: forall a m. (Web.FromHttpApiData a, MonadOkapi m) => BS.ByteString -> m (NonEmpty.NonEmpty a)
+formParamList :: forall a m. (Web.FromHttpApiData a, MonadServer m) => BS.ByteString -> m (NonEmpty.NonEmpty a)
 formParamList = Combinators.NonEmpty.some . formParam
 
 -- | Parse a single form file
-formFile :: MonadOkapi m => BS.ByteString -> m (WAI.FileInfo LBS.ByteString)
+formFile :: MonadServer m => BS.ByteString -> m (WAI.FileInfo LBS.ByteString)
 formFile paramName = do
   body' <- body
   case body' of
@@ -682,12 +679,12 @@ formFile paramName = do
   where
     deleteFile :: BS.ByteString -> [WAI.File LBS.ByteString] -> [WAI.File LBS.ByteString]
     deleteFile paramName [] = []
-    deleteFile paramName (f@(paramName', fileInfo):fs) =
+    deleteFile paramName (f@(paramName', fileInfo) : fs) =
       if paramName == paramName'
         then fs
-        else f : (deleteFile paramName fs)
+        else f : deleteFile paramName fs
 
-bodyEnd :: MonadOkapi m => m ()
+bodyEnd :: MonadServer m => m ()
 bodyEnd = do
   currentBody <- State.gets (requestBody . stateRequest)
   case currentBody of
@@ -699,13 +696,13 @@ bodyEnd = do
 --
 -- These are header parsers.
 
-headers :: MonadOkapi m => m Headers
+headers :: MonadServer m => m Headers
 headers = do
   headers <- State.gets (requestHeaders . stateRequest)
   State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = []}})
   pure headers
 
-header :: MonadOkapi m => HTTP.HeaderName -> m Char8.ByteString
+header :: MonadServer m => HTTP.HeaderName -> m Char8.ByteString
 header headerName = do
   maybeHeader <- State.gets (Foldable.find (\(headerName', _) -> headerName == headerName') . requestHeaders . stateRequest)
   case maybeHeader of
@@ -714,19 +711,19 @@ header headerName = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = List.delete header $ requestHeaders $ stateRequest state}})
       pure headerValue
 
-headersEnd :: MonadOkapi m => m ()
+headersEnd :: MonadServer m => m ()
 headersEnd = do
   currentHeaders <- headers
   if List.null currentHeaders
     then pure ()
     else next
 
-cookie :: MonadOkapi m => m Cookie
+cookie :: MonadServer m => m Cookie
 cookie = do
   cookieValue <- header "Cookie"
   pure $ Web.parseCookies cookieValue
 
-cookieCrumb :: MonadOkapi m => BS.ByteString -> m BS.ByteString
+cookieCrumb :: MonadServer m => BS.ByteString -> m BS.ByteString
 cookieCrumb name = do
   cookieValue <- cookie
   case List.lookup name cookieValue of
@@ -737,14 +734,14 @@ cookieCrumb name = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete crumb cookieValue) : requestHeaders (stateRequest state)}})
       pure crumbValue
 
-cookieEnd :: MonadOkapi m => m ()
+cookieEnd :: MonadServer m => m ()
 cookieEnd = do
   currentCookie <- cookie
   if List.null currentCookie
     then pure ()
     else next
 
-basicAuth :: MonadOkapi m => m (Text.Text, Text.Text)
+basicAuth :: MonadServer m => m (Text.Text, Text.Text)
 basicAuth = do
   authValue <- header "Authorization"
   case Text.words $ Text.decodeUtf8 authValue of
@@ -759,35 +756,35 @@ basicAuth = do
 
 -- $vaultParsers
 
-vaultLookup :: MonadOkapi m => Vault.Key a -> m a
+vaultLookup :: MonadServer m => Vault.Key a -> m a
 vaultLookup key = do
   vault <- State.gets stateVault
   maybe next pure (Vault.lookup key vault)
 
-vaultInsert :: MonadOkapi m => Vault.Key a -> a -> m ()
+vaultInsert :: MonadServer m => Vault.Key a -> a -> m ()
 vaultInsert key value = do
   vault <- State.gets stateVault
   State.modify (\state -> state {stateVault = Vault.insert key value vault})
 
-vaultDelete :: MonadOkapi m => Vault.Key a -> m ()
+vaultDelete :: MonadServer m => Vault.Key a -> m ()
 vaultDelete key = do
   vault <- State.gets stateVault
   State.modify (\state -> state {stateVault = Vault.delete key vault})
 
-vaultAdjust :: MonadOkapi m => (a -> a) -> Vault.Key a -> m ()
+vaultAdjust :: MonadServer m => (a -> a) -> Vault.Key a -> m ()
 vaultAdjust adjuster key = do
   vault <- State.gets stateVault
   State.modify (\state -> state {stateVault = Vault.adjust adjuster key vault})
 
-vaultWipe :: MonadOkapi m => m ()
+vaultWipe :: MonadServer m => m ()
 vaultWipe = State.modify (\state -> state {stateVault = Vault.empty})
 
 -- $combinators
 
-is :: (Eq a, MonadOkapi m) => m a -> a -> m ()
+is :: (Eq a, MonadServer m) => m a -> a -> m ()
 is action desired = satisfies action (desired ==)
 
-satisfies :: MonadOkapi m => m a -> (a -> Bool) -> m ()
+satisfies :: MonadServer m => m a -> (a -> Bool) -> m ()
 satisfies action predicate = do
   value <- action
   if predicate value
@@ -795,7 +792,7 @@ satisfies action predicate = do
     else next
 
 -- | Parses without modifying the state, even if it succeeds.
-look :: MonadOkapi m => m a -> m a
+look :: MonadServer m => m a -> m a
 look parser = do
   state <- State.get
   result <- parser
@@ -811,16 +808,16 @@ instance Show Failure where
   show Skip = "Skipped"
   show (Error _) = "Error returned"
 
-next :: MonadOkapi m => m a
+next :: MonadServer m => m a
 next = Except.throwError Skip
 
-throw :: MonadOkapi m => Response -> m a
+throw :: MonadServer m => Response -> m a
 throw = Except.throwError . Error
 
-(<!>) :: MonadOkapi m => m a -> m a -> m a
+(<!>) :: MonadServer m => m a -> m a -> m a
 parser1 <!> parser2 = Except.catchError parser1 (const parser2)
 
-guardThrow :: MonadOkapi m => Response -> Bool -> m ()
+guardThrow :: MonadServer m => Response -> Bool -> m ()
 guardThrow _ True = pure ()
 guardThrow response False = throw response
 
@@ -881,16 +878,16 @@ internalServerError =
 
 -- RESPONSE SETTERS
 
-setResponse :: MonadOkapi m => Response -> m ()
+setResponse :: MonadServer m => Response -> m ()
 setResponse response = State.modify (\state -> state {stateResponse = response})
 
-setStatus :: MonadOkapi m => Status -> m ()
+setStatus :: MonadServer m => Status -> m ()
 setStatus status = State.modify (\state -> state {stateResponse = (stateResponse state) {responseStatus = status}})
 
-setHeaders :: MonadOkapi m => Headers -> m ()
+setHeaders :: MonadServer m => Headers -> m ()
 setHeaders headers = State.modify (\state -> state {stateResponse = (stateResponse state) {responseHeaders = headers}})
 
-setHeader :: MonadOkapi m => Header -> m ()
+setHeader :: MonadServer m => Header -> m ()
 setHeader header = do
   headers' <- State.gets (responseHeaders . stateResponse)
   State.modify (\state -> state {stateResponse = (stateResponse state) {responseHeaders = update header headers'}})
@@ -902,39 +899,39 @@ setHeader header = do
         then pair : ps
         else pair' : update pair ps
 
-setBody :: MonadOkapi m => ResponseBody -> m ()
+setBody :: MonadServer m => ResponseBody -> m ()
 setBody body = State.modify (\state -> state {stateResponse = (stateResponse state) {responseBody = body}})
 
-setBodyRaw :: MonadOkapi m => LBS.ByteString -> m ()
+setBodyRaw :: MonadServer m => LBS.ByteString -> m ()
 setBodyRaw bodyRaw = setBody (ResponseBodyRaw bodyRaw)
 
-setBodyFile :: MonadOkapi m => FilePath -> m ()
+setBodyFile :: MonadServer m => FilePath -> m ()
 setBodyFile path = setBody (ResponseBodyFile path) -- TODO: setHeader???
 
-setBodyEventSource :: MonadOkapi m => EventSource -> m ()
+setBodyEventSource :: MonadServer m => EventSource -> m ()
 setBodyEventSource source = setBody (ResponseBodyEventSource source)
 
-setPlaintext :: MonadOkapi m => Text.Text -> m ()
+setPlaintext :: MonadServer m => Text.Text -> m ()
 setPlaintext text = do
   setHeader ("Content-Type", "text/plain")
   setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
 
-setHTML :: MonadOkapi m => LBS.ByteString -> m ()
+setHTML :: MonadServer m => LBS.ByteString -> m ()
 setHTML html = do
   setHeader ("Content-Type", "text/html")
   setBody (ResponseBodyRaw html)
 
-setJSON :: (Aeson.ToJSON a, MonadOkapi m) => a -> m ()
+setJSON :: (Aeson.ToJSON a, MonadServer m) => a -> m ()
 setJSON value = do
   setHeader ("Content-Type", "application/json")
   setBodyRaw (Aeson.encode value)
 
-addHeader :: MonadOkapi m => Header -> m ()
+addHeader :: MonadServer m => Header -> m ()
 addHeader header = do
   headers <- State.gets (responseHeaders . stateResponse)
   State.modify (\state -> state {stateResponse = (stateResponse state) {responseHeaders = header : headers}})
 
-addSetCookie :: MonadOkapi m => (BS.ByteString, BS.ByteString) -> m ()
+addSetCookie :: MonadServer m => (BS.ByteString, BS.ByteString) -> m ()
 addSetCookie (key, value) = do
   let setCookieValue =
         LBS.toStrict $
@@ -947,10 +944,10 @@ addSetCookie (key, value) = do
                 }
   addHeader ("Set-Cookie", setCookieValue)
 
-overwrite :: MonadOkapi m => LBS.ByteString -> m ()
+overwrite :: MonadServer m => LBS.ByteString -> m ()
 overwrite = setBodyRaw
 
-write :: MonadOkapi m => LBS.ByteString -> m ()
+write :: MonadServer m => LBS.ByteString -> m ()
 write value = do
   body <- State.gets (responseBody . stateResponse)
   setBodyRaw $ case body of
@@ -958,7 +955,7 @@ write value = do
     ResponseBodyFile _ -> value
     ResponseBodyEventSource _ -> value
 
-static :: MonadOkapi m => m () -- TODO: Check file extension to set correct content type
+static :: MonadServer m => m () -- TODO: Check file extension to set correct content type
 static = do
   filePathText <- Text.intercalate "/" <$> path
   let filePath = Text.unpack filePathText
@@ -1054,7 +1051,7 @@ eventToServerEvent CloseEvent = WAI.CloseEvent
 --
 -- These functions are for interfacing with WAI (Web Application Interface).
 
-run :: Monad m => (forall a. m a -> IO a) -> OkapiT m () -> IO ()
+run :: Monad m => (forall a. m a -> IO a) -> ServerT m () -> IO ()
 run = serve 3000 notFound
 
 serve ::
@@ -1066,7 +1063,7 @@ serve ::
   -- | Monad unlift function
   (forall a. m a -> IO a) ->
   -- | Parser
-  OkapiT m () ->
+  ServerT m () ->
   IO ()
 serve port defaultResponse hoister okapiT = WAI.run port $ app defaultResponse hoister okapiT
 
@@ -1076,7 +1073,7 @@ serveTLS ::
   WAI.Settings ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m () ->
+  ServerT m () ->
   IO ()
 serveTLS tlsSettings settings defaultResponse hoister okapiT = WAI.runTLS tlsSettings settings $ app defaultResponse hoister okapiT
 
@@ -1087,7 +1084,7 @@ serveWebsockets ::
   Int ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m () ->
+  ServerT m () ->
   IO ()
 serveWebsockets connSettings serverApp port defaultResponse hoister okapiT = WAI.run port $ websocketsApp connSettings serverApp defaultResponse hoister okapiT
 
@@ -1099,7 +1096,7 @@ serveWebsocketsTLS ::
   WebSockets.ServerApp ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m () ->
+  ServerT m () ->
   IO ()
 serveWebsocketsTLS tlsSettings settings connSettings serverApp defaultResponse hoister okapiT = WAI.runTLS tlsSettings settings $ websocketsApp connSettings serverApp defaultResponse hoister okapiT
 
@@ -1108,23 +1105,23 @@ app ::
   Monad m =>
   -- | The default response to pure if parser fails
   Response ->
-  -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
+  -- | Function for "unlifting" monad inside @ServerT@ to @IO@ monad
   (forall a. m a -> IO a) ->
   -- | The parser used to equals the request
-  OkapiT m () ->
+  ServerT m () ->
   WAI.Application
 app defaultResponse hoister okapiT waiRequest respond = do
   initialState <- waiRequestToState waiRequest
   (eitherFailureOrResponse, state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) initialState
   let response =
         case eitherFailureOrResponse of
-          Left Skip                  -> defaultResponse
+          Left Skip -> defaultResponse
           Left (Error errorResponse) -> errorResponse
-          Right _                    -> stateResponse state
+          Right _ -> stateResponse state
   responseToWaiApp response waiRequest respond
   where
     responseToWaiApp :: Response -> WAI.Application
-    responseToWaiApp (Response {..}) waiRequest respond = case responseBody of
+    responseToWaiApp Response {..} waiRequest respond = case responseBody of
       ResponseBodyRaw body -> respond $ WAI.responseLBS (toEnum $ fromEnum responseStatus) responseHeaders body
       ResponseBodyFile filePath -> respond $ WAI.responseFile (toEnum $ fromEnum responseStatus) responseHeaders filePath Nothing
       ResponseBodyEventSource eventSource -> (WAI.gzip WAI.def $ eventSourceAppUnagiChan eventSource) waiRequest respond
@@ -1132,8 +1129,8 @@ app defaultResponse hoister okapiT waiRequest respond = do
     waiRequestToState :: WAI.Request -> IO State
     waiRequestToState waiRequest = do
       requestBody <- case lookup "Content-Type" $ WAI.requestHeaders waiRequest of
-          Just "multipart/form-data" -> BodyMultipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
-          _ -> BodyRaw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
+        Just "multipart/form-data" -> BodyMultipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
+        _ -> BodyRaw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
       let requestMethod = Just $ WAI.requestMethod waiRequest
           requestPath = WAI.pathInfo waiRequest
           requestQuery = map (\case (name, Nothing) -> (name, QueryFlag); (name, Just txt) -> (name, QueryParam txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
@@ -1153,7 +1150,7 @@ websocketsApp ::
   WebSockets.ServerApp ->
   Response ->
   (forall a. m a -> IO a) ->
-  OkapiT m () ->
+  ServerT m () ->
   WAI.Application
 websocketsApp connSettings serverApp defaultResponse hoister okapiT =
   let backupApp = app defaultResponse hoister okapiT
@@ -1172,21 +1169,21 @@ websocketsApp connSettings serverApp defaultResponse hoister okapiT =
 -- | A middleware takes an action that returns a @Response@ and can modify the action in various ways
 type Middleware m = Handler m -> Handler m
 
-applyMiddlewares :: MonadOkapi m => [Middleware m] -> Middleware m
+applyMiddlewares :: MonadServer m => [Middleware m] -> Middleware m
 applyMiddlewares middlewares handler =
   List.foldl (\handler middleware -> middleware handler) handler middlewares
 
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
-scope :: MonadOkapi m => Path -> [Middleware m] -> Middleware m
+scope :: MonadServer m => Path -> [Middleware m] -> Middleware m
 scope prefix middlewares handler = path `is` prefix >> applyMiddlewares middlewares handler
 
-clearHeadersMiddleware :: MonadOkapi m => Middleware m
+clearHeadersMiddleware :: MonadServer m => Middleware m
 clearHeadersMiddleware handler = do
   setHeaders []
   handler
 
-prefixPathMiddleware :: MonadOkapi m => Path -> Middleware m
+prefixPathMiddleware :: MonadServer m => Path -> Middleware m
 prefixPathMiddleware prefix handler = path `is` prefix >> handler
 
 -- $routing
@@ -1202,7 +1199,7 @@ type Router m a =
   (a -> Handler m) ->
   Handler m
 
-route :: MonadOkapi m => Router m a
+route :: MonadServer m => Router m a
 route parser dispatcher = parser >>= dispatcher
 
 -- $patterns
@@ -1311,7 +1308,7 @@ parseRelURL possibleRelURL = Either.eitherToMaybe $
 {-
 test ::
   Monad m =>
-  OkapiT m Response ->
+  ServerT m Response ->
   Request ->
   m (Either Failure Response, State)
 test okapiT request =
@@ -1322,13 +1319,13 @@ test okapiT request =
     requestToState stateRequest = let stateVault = mempty in State {..}
 
 testPure ::
-  OkapiT Identity.Identity Response ->
+  ServerT Identity.Identity Response ->
   Request ->
   Identity.Identity (Either Failure Response, State)
 testPure = test
 
 testIO ::
-  OkapiT IO Response ->
+  ServerT IO Response ->
   Request ->
   IO (Either Failure Response, State)
 testIO = test
@@ -1360,7 +1357,7 @@ testRunSession ::
   Monad m =>
   WAI.Session a ->
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  ServerT m Response ->
   IO a
 testRunSession session hoister okapiT = do
   let waiApp = app notFound hoister okapiT
@@ -1369,7 +1366,7 @@ testRunSession session hoister okapiT = do
 testWithSession ::
   Monad m =>
   (forall a. m a -> IO a) ->
-  OkapiT m Response ->
+  ServerT m Response ->
   WAI.Session a ->
   IO a
 testWithSession hoister okapiT session = testRunSession session hoister okapiT
@@ -1388,18 +1385,21 @@ testRequest = WAI.srequest . requestToSRequest
           sRequestRequest = WAI.setPath (WAI.defaultRequest {WAI.requestMethod = requestMethod, WAI.requestHeaders = headers}) rawPath
        in WAI.SRequest sRequestRequest sRequestBody
 -}
+
 -- $MonadSession
 
-newtype SessionID = SessionID { unSessionID :: BS.ByteString }
+newtype SessionID = SessionID {unSessionID :: BS.ByteString}
   deriving (Eq, Show)
 
 class Monad m => MonadSession m s | m -> s where
   -- | A secret used for encrypting and decrypting
   -- the session id. This function should return the same value each time it's called.
   sessionSecret :: m BS.ByteString
+
   -- | A function for generating a random session ID.
   -- This function should return a different value each time it's called.
   generateSessionID :: m SessionID
+
   getSession :: SessionID -> m (Maybe s)
   putSession :: SessionID -> s -> m ()
   clearSession :: SessionID -> m ()
@@ -1413,21 +1413,17 @@ class Monad m => MonadSession m s | m -> s where
         let newSession = modifier session
         putSession sessionID newSession
 
-sessionID :: (MonadOkapi m, MonadSession m s) => m SessionID
+sessionID :: (MonadServer m, MonadSession m s) => m SessionID
 sessionID = do
   encodedSessionID <- cookieCrumb "session_id"
   secret <- sessionSecret
-  case decodeSessionID secret encodedSessionID of
-    Nothing -> next
-    Just sessionID -> pure sessionID
+  maybe next pure (decodeSessionID secret encodedSessionID)
 
-session :: (MonadOkapi m, MonadSession m s) => m s
+session :: (MonadServer m, MonadSession m s) => m s
 session = do
-    sessionID' <- sessionID
-    maybeSession <- getSession sessionID'
-    case maybeSession of
-      Nothing -> next
-      Just session -> pure session
+  sessionID' <- sessionID
+  maybeSession <- getSession sessionID'
+  maybe next pure maybeSession
 
 decodeSessionID :: BS.ByteString -> BS.ByteString -> Maybe SessionID
 decodeSessionID secret encodedSessionID =
@@ -1447,9 +1443,9 @@ encodeSessionID secret (SessionID sessionID) =
       b64 = BS.encodeBase64' $ Memory.convert digest
    in b64 <> serial
 
-withSession :: (MonadOkapi m, MonadSession m s) => Middleware m
+withSession :: (MonadServer m, MonadSession m s) => Middleware m
 withSession handler = do
-  mbSessionID <- look $ Combinators.optional $ sessionID
+  mbSessionID <- look $ Combinators.optional sessionID
   secret <- sessionSecret
   case mbSessionID of
     Nothing -> do

@@ -23,7 +23,7 @@ you can embed your Okapi application into Servant easily. Here's how.
     okapiApp :: Application
     okapiApp = makeOkapiApp id okapiAPI
 
-    okapiAPI :: OkapiT IO Response
+    okapiAPI :: ServerT IO Response
     okapiAPI = do
       ...
     ```
@@ -90,7 +90,7 @@ taggedOkapiApp = Tagged okapiApp
 okapiApp :: Application
 okapiApp = makeOkapiApp id okapiAPI
 
-okapiAPI :: OkapiT IO Response
+okapiAPI :: ServerT IO Response
 okapiAPI = do
   ...
 ```

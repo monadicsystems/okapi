@@ -14,7 +14,7 @@ import Template
 okapiApplication :: Application
 okapiApplication = app id okapiAPI
 
-type Okapi a = OkapiT IO a
+type Okapi a = ServerT IO a
 
 okapiAPI :: Okapi Response
 okapiAPI = do

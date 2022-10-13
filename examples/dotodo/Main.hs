@@ -99,7 +99,7 @@ instance FromField TodoStatus where
       SQLText "complete" -> pure Complete
       _ -> returnError ConversionFailed field "Couldn't get TodoStatus value from field"
 
-type Okapi = OkapiT IO
+type Okapi = ServerT IO
 
 -- MAIN --
 
@@ -112,7 +112,7 @@ main = do
 
 -- SERVER FUNCTIONS
 
-todoAPI :: (MonadIO m, MonadOkapi m) => Connection -> m Response
+todoAPI :: (MonadIO m, MonadServer m) => Connection -> m Response
 todoAPI conn =
   home conn
     <|> getAllTodos conn
@@ -122,7 +122,7 @@ todoAPI conn =
     <|> forgetTodo conn
     <|> counter
 
-home :: (MonadOkapi m, MonadIO m) => Connection -> m Response
+home :: (MonadServer m, MonadIO m) => Connection -> m Response
 home conn = do
   methodGET
   pathEnd
@@ -142,7 +142,7 @@ home conn = do
                     counterHtml 0
   ok |> setLucid html |> return
 
-counter :: MonadOkapi m => m Response
+counter :: MonadServer m => m Response
 counter = do
   methodGET
   pathParam @Text `is` "counter"
@@ -155,7 +155,7 @@ counterHtml :: Int -> Html ()
 counterHtml count = do
   div_ [hxGet_ $ "/counter/" <> tShow count, hxTrigger_ "every 1s", hxSwap_ "outerHTML"] $ (toHtml $ tShow count)
 
-getAllTodos :: (MonadOkapi m, MonadIO m) => Connection -> m Response
+getAllTodos :: (MonadServer m, MonadIO m) => Connection -> m Response
 getAllTodos conn = do
   methodGET
   pathParam @Text `is` "todos"
@@ -169,7 +169,7 @@ getAllTodos conn = do
         createTodoButton
   ok |> setLucid html |> return
 
-createTodoForm :: MonadOkapi m => m Response
+createTodoForm :: MonadServer m => m Response
 createTodoForm = do
     methodGET
     pathParam @Text `is` "todos"
@@ -187,7 +187,7 @@ createTodoForm = do
 
     ok |> setLucid html |> return
 
-createTodo :: (MonadOkapi m, MonadIO m) => Connection -> m Response
+createTodo :: (MonadServer m, MonadIO m) => Connection -> m Response
 createTodo conn = do
   methodPOST
   pathParam @Text `is` "todos"
@@ -204,7 +204,7 @@ createTodo conn = do
         createTodoButton
   ok |> setLucid html |> return
 
-editTodoStatus :: (MonadOkapi m, MonadIO m) => Connection -> m Response
+editTodoStatus :: (MonadServer m, MonadIO m) => Connection -> m Response
 editTodoStatus conn = do
   methodPUT
   pathParam @Text `is` "todos" -- /todos
@@ -219,7 +219,7 @@ editTodoStatus conn = do
   liftIO $ updateTodoStatus conn todoID newStatus
   ok |> setLucid (flipTodoStatusButton todoID newStatus) |> return
 
-forgetTodo :: (MonadOkapi m, MonadIO m) => Connection -> m Response
+forgetTodo :: (MonadServer m, MonadIO m) => Connection -> m Response
 forgetTodo conn = do
   methodDELETE
   pathParam @Text `is` "todos"

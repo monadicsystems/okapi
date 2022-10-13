@@ -15,7 +15,7 @@ import Okapi
 main :: IO ()
 main = run id calc
 
-type Okapi a = OkapiT IO a
+type Okapi a = ServerT IO a
 
 calc :: Okapi Response
 calc = do

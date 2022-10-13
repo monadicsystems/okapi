@@ -25,12 +25,12 @@ import Okapi.Types
 -- | Turns a parser into a WAI application
 app ::
   Monad m =>
-  -- | Function for "unlifting" monad inside @OkapiT@ to @IO@ monad
+  -- | Function for "unlifting" monad inside @ServerT@ to @IO@ monad
   (forall a. m a -> IO a) ->
   -- | The default response to return if parser fails
   Response ->
   -- | The parser used to match the request
-  OkapiT m Response ->
+  ServerT m Response ->
   Wai.Application
 app hoister defaultResponse okapiT waiRequest respond = do
   state <- waiRequestToState waiRequest
@@ -69,7 +69,7 @@ websocketsApp ::
   Monad m =>
   (forall a. m a -> IO a) ->
   Response ->
-  OkapiT m Response ->
+  ServerT m Response ->
   -- | Connection options configuration for the WebSocket server
   WS.ConnectionOptions ->
   -- | The server to use for handling WebSocket connections

@@ -111,7 +111,7 @@ instance FromField TodoStatus where
       SQLText "complete" -> pure Complete
       _ -> returnError ConversionFailed field "Couldn't methodGET TodoStatus value from field"
 
-type Okapi = OkapiT IO
+type Okapi = ServerT IO
 
 type RequestParts = (Method, Path, Okapi.Query)
 
@@ -178,7 +178,7 @@ respond response = do
   pathEnd
   return response
 
-requestParts :: MonadOkapi m => m RequestParts
+requestParts :: MonadServer m => m RequestParts
 requestParts = do
   m <- method
   p <- path

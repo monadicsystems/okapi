@@ -154,7 +154,7 @@ instance FromField TodoStatus where
       SQLText "complete" -> pure Complete
       _ -> returnError ConversionFailed field "Couldn't methodGET TodoStatus value from field"
 
-type Okapi = OkapiT IO
+type Okapi = ServerT IO
 
 -- MAIN --
 

@@ -78,13 +78,13 @@ renderFormAttrs (m, p) = renderAction p <> " " <> renderMethod m
       POST -> "method=\"" <> "post" <> "\""
       _    -> "method=\"" <> "get" <> "\"" -- ^ method="get" is the default method for forms
 
-methodAndPathParser :: MonadOkapi m => m (Method, Path)
+methodAndPathParser :: MonadServer m => m (Method, Path)
 methodAndPathParser = do
   m <- method
   p <- path
   return (m, p)
 
-methodAndPathDispatcher :: (MonadOkapi m, MonadIO m) => IORef [Car] -> (Method, Path) -> m Response
+methodAndPathDispatcher :: (MonadServer m, MonadIO m) => IORef [Car] -> (Method, Path) -> m Response
 methodAndPathDispatcher database = \case
   HomeRoute -> do
     let html =

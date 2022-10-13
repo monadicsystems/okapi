@@ -32,7 +32,7 @@ import Okapi.Types
 import System.Random
 
 data Route m i o = Route
-  { parser :: OkapiT m o,
+  { parser :: ServerT m o,
     url :: i -> URL
   }
 

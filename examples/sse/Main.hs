@@ -23,7 +23,7 @@ main = do
   run id (api eventSource)
   killThread threadID
 
-type Okapi a = OkapiT IO a
+type Okapi a = ServerT IO a
 
 api :: EventSource -> Okapi Response
 api eventSource = do

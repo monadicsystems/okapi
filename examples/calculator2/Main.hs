@@ -15,7 +15,7 @@ import qualified GHC.Generics as Generics
 import qualified Okapi
 import qualified Web.HttpApiData as Web
 
-type Okapi a = Okapi.OkapiT IO a
+type Okapi a = Okapi.ServerT IO a
 
 data DivResult = DivResult
   { answer :: Int,

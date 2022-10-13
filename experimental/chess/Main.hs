@@ -43,7 +43,7 @@ import Text.InterpolatedString.Perl6
 import Web.FormUrlEncoded
 import Control.Monad.Combinators
 
-type Okapi a = OkapiT App a
+type Okapi a = ServerT App a
 
 newtype App a = App {runApp :: ReaderT (TVar Env) IO a}
   deriving newtype
@@ -301,7 +301,7 @@ select = do
   piece <- queryParam "piece"
   possibleMovesResult (Board mempty) position piece
   where
-    possibleMovesResult :: MonadOkapi m => Board -> Position -> Piece -> m Result
+    possibleMovesResult :: MonadServer m => Board -> Position -> Piece -> m Result
     possibleMovesResult board startPosition piece = do
       let possibleMoves = calculatePossibleMoves board startPosition piece
       case possibleMoves of
