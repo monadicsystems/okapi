@@ -132,7 +132,7 @@ executeApp appEnv (App app) = Reader.runReaderT app appEnv
 writeLucid :: Okapi.MonadServer m => Lucid.Html () -> m ()
 writeLucid = Okapi.write . Lucid.renderBS
 
-server :: (Okapi.MonadServer m, Has Hasql.Connection AppEnv, Has Redis.Connection AppEnv, Okapi.MonadSession m Session) => m ()
+server :: (Okapi.MonadServer m, Okapi.MonadSession m Session, Has Hasql.Connection AppEnv, Has Redis.Connection AppEnv) => m ()
 server =
   Combinators.choice
     [ home,

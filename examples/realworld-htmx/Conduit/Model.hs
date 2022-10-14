@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Model where
+module Conduit.Model where
 
 import Data.Int (Int32)
 import Data.Text

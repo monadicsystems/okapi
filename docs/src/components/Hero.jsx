@@ -18,13 +18,13 @@ import Okapi
 main :: IO ()
 main = run id $ do
   methodGET
-  pathParam \`is\` "greet"
+  pathParam @Text \`is\` "greet"
   maybeName <- optional $ pathParam <|> queryParam "name"
   pathEnd
-  let greeting = case maybeName of
-        Nothing   -> "Hello there."
-        Just name -> "Hello, " <> name <> "."
-  return $ setJSON greeting $ ok`
+  let greeting = case maybeName :: Maybe Text of
+        Nothing   -> write "Hello there."
+        Just name -> write "Hello, " <> name <> "."
+`
 
 const tabs = [
   { name: 'Main.hs', isActive: true },

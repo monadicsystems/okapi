@@ -1,2 +1,0 @@
-module Model.User where
-
