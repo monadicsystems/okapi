@@ -1,2 +1,2 @@
 methodGET
-write "I can't greet you if I don't know your name"
+write ("I can't greet you if I don't know your name" :: Text.Text)

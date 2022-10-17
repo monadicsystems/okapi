@@ -223,10 +223,11 @@ module Okapi
     session,
     withSession,
     -- Functions for HSPs
+    Writeable (..),
     overwrite,
     write,
     setResponse,
-    toLBS,
+    -- popResponseBodyRaw,
   )
 where
 
@@ -876,6 +877,18 @@ internalServerError =
       responseBody = ResponseBodyRaw "Internal Server Error"
    in Response {..}
 
+-- RESPONSE GETTERS
+{-
+popResponseBodyRaw :: MonadServer m => m LBS.ByteString
+popResponseBodyRaw = do
+  responseBodyValue <- State.gets (responseBody . stateResponse)
+  case responseBodyValue of
+    ResponseBodyRaw lbs -> do
+      State.modify (\state -> state {stateResponse = (stateResponse state) {responseBody = ResponseBodyRaw ""}})
+      pure lbs
+    _ -> next
+-}
+
 -- RESPONSE SETTERS
 
 setResponse :: MonadServer m => Response -> m ()
@@ -947,13 +960,26 @@ addSetCookie (key, value) = do
 overwrite :: MonadServer m => LBS.ByteString -> m ()
 overwrite = setBodyRaw
 
-write :: MonadServer m => LBS.ByteString -> m ()
+write :: (MonadServer m, Writeable a) => a -> m ()
 write value = do
   body <- State.gets (responseBody . stateResponse)
   setBodyRaw $ case body of
-    ResponseBodyRaw raw -> raw <> value <> "\n"
-    ResponseBodyFile _ -> value
-    ResponseBodyEventSource _ -> value
+    ResponseBodyRaw raw -> raw <> toLBS value <> "\n"
+    ResponseBodyFile _ -> toLBS value
+    ResponseBodyEventSource _ -> toLBS value
+
+class Writeable a where
+  toLBS :: a -> LBS.ByteString
+  default toLBS :: Show a => a -> LBS.ByteString
+  toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . Prelude.takeWhile ('"' /=) . Prelude.dropWhile ('"' ==) . show
+
+instance Writeable Text.Text where
+
+instance Writeable LBS.ByteString where
+  toLBS :: LBS.ByteString -> LBS.ByteString
+  toLBS = id
+
+instance Writeable Int where
 
 static :: MonadServer m => m () -- TODO: Check file extension to set correct content type
 static = do
@@ -1455,9 +1481,6 @@ withSession handler = do
     Just sessionID -> do
       handler
       addSetCookie ("session_id", encodeSessionID secret sessionID)
-
-toLBS :: Show a => a -> LBS.ByteString
-toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . Prelude.takeWhile ('"' /=) . Prelude.dropWhile ('"' ==) . show
 
 -- $csrfProtection
 

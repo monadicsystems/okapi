@@ -1,2 +1,2 @@
 methodGET
-write "To get in the bar you must tell me your age."
+write ("To get in the bar you must tell me your age." :: Text.Text)

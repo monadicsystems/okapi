@@ -269,9 +269,17 @@ executable hsp-test-exe
 executable realworld-htmx-exe
   main-is: Main.hs
   other-modules:
-      Controller
-    , Model
-    , View
+      Conduit.App
+    , Conduit.Database
+    , Conduit.Database.Article
+    , Conduit.Database.ArticleTag
+    , Conduit.Database.Comment
+    , Conduit.Database.Favorite
+    , Conduit.Database.Follow
+    , Conduit.Database.Tag
+    , Conduit.Database.User
+    , Conduit.UI
+    , Conduit.UI.Home
   hs-source-dirs:
       examples/realworld-htmx
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -310,7 +318,24 @@ executable realworld-htmx-exe
     , warp
     , warp-tls
     , websockets
+    , word8
   default-language: Haskell2010
+  default-extensions:
+      BlockArguments
+    , ConstraintKinds
+    , DeriveAnyClass
+    , DeriveGeneric
+    , DerivingVia
+    , DuplicateRecordFields
+    , FlexibleContexts
+    , FlexibleInstances
+    , GeneralizedNewtypeDeriving
+    , MultiParamTypeClasses
+    , OverloadedStrings
+    , RankNTypes
+    , ScopedTypeVariables
+    , TypeApplications
+    , TypeFamilies
 
 executable sse-exe
   main-is: Main.hs
