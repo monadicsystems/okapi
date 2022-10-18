@@ -4,4 +4,4 @@ import qualified Data.Text as Text
 import Lucid
 
 newtype FormError = FormError Text.Text
-  deriving newtype (ToHtml)
+  deriving newtype (Eq, Show, Semigroup, Monoid, ToHtml)

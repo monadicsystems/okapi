@@ -1,9 +1,13 @@
 module Main where
 
 import qualified Conduit.App as App
+import qualified Conduit.Model.FormError as Model
+import qualified Conduit.Model.SigninForm as Model
+import qualified Conduit.Model.SignupForm as Model
 import qualified Conduit.UI as UI
 import qualified Conduit.UI.SigninForm as UI
 import qualified Conduit.UI.SignupForm as UI
+import qualified Conduit.Validate as Validate
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Combinators as Combinators
 import qualified Control.Monad.IO.Class as IO
@@ -49,6 +53,8 @@ import qualified Okapi
 import qualified Rel8
 import qualified System.Random as Random
 import qualified Text.InterpolatedString.Perl6 as Perl6
+import qualified Web.Forma as Forma
+import qualified Data.Map as Map
 
 main :: IO ()
 main = do
@@ -115,7 +121,21 @@ submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
       Okapi.pathEnd
 
     submitSignupFormHandler :: Okapi.MonadServer m => () -> m ()
-    submitSignupFormHandler _ = Okapi.redirect 301 "/"
+    submitSignupFormHandler _ = do
+      signupForm <- Okapi.bodyURLEncoded @Model.SignupForm
+      let formResult = Validate.signupForm signupForm
+      case formResult of
+        Forma.ParsingFailed _ formParserError -> do
+          UI.writeLucid $ UI.SignupForm (Just signupForm) [Model.FormError formParserError]
+        Forma.ValidationFailed formErrorMap -> do
+          let formErrors =
+                Prelude.map (\(field, f) -> Model.FormError $ f $ Forma.showFieldName field)
+                $ Map.toList
+                $ formErrorMap
+          UI.writeLucid $ UI.SignupForm (Just signupForm) formErrors
+        Forma.Succeeded validatedSignupForm -> do
+          -- TODO: Write result to DB and store session
+          Okapi.redirect 301 "/"
 
 -- Signin Form
 
@@ -144,7 +164,21 @@ submitSigninForm = submitSigninFormRoute >>= submitSigninFormHandler
       Okapi.pathEnd
 
     submitSigninFormHandler :: Okapi.MonadServer m => () -> m ()
-    submitSigninFormHandler _ = Okapi.redirect 301 "/"
+    submitSigninFormHandler _ = do
+      signinForm <- Okapi.bodyURLEncoded @Model.SigninForm
+      let formResult = Validate.signinForm signinForm
+      case formResult of
+        Forma.ParsingFailed _ formParserError -> do
+          UI.writeLucid $ UI.SigninForm (Just signinForm) [Model.FormError formParserError]
+        Forma.ValidationFailed formErrorMap -> do
+          let formErrors =
+                Prelude.map (\(field, f) -> Model.FormError $ f $ Forma.showFieldName field)
+                $ Map.toList
+                $ formErrorMap
+          UI.writeLucid $ UI.SigninForm (Just signinForm) formErrors
+        Forma.Succeeded validatedSignupForm -> do
+          -- TODO: Write result to DB and store session
+          Okapi.redirect 301 "/"
 
 -- Logout
 

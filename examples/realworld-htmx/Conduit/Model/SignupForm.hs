@@ -1,5 +1,6 @@
 module Conduit.Model.SignupForm where
 
+import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
 import qualified GHC.Generics as Generics
 import qualified Web.FormUrlEncoded as Web
@@ -10,4 +11,4 @@ data SignupForm = SignupForm
     password :: Text.Text,
     username :: Text.Text
   }
-  deriving (Generics.Generic, Show, Web.FromForm)
+  deriving (Generics.Generic, Show, Web.FromForm, Aeson.ToJSON)

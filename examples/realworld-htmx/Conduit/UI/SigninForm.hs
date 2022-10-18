@@ -38,7 +38,7 @@ instance Lucid.ToHtml SigninForm where
           case formErrors of
             [] -> ""
             formErrors' -> ul_ [class_ "error-messages"] $ mapM_ (li_ [] . Lucid.toHtml) formErrors'
-          form_ [Htmx.hxPost_ "/login", Htmx.hxTarget_ "#content-slot"] do
+          form_ [Htmx.hxPost_ "/signin", Htmx.hxTarget_ "#content-slot"] do
             fieldset_ [class_ "form-group"] do
               input_
                 [ class_ "form-control form-control-lg",
