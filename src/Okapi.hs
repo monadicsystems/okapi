@@ -856,12 +856,12 @@ notFound =
       responseBody = ResponseBodyRaw "Not Found"
    in Response {..}
 
-redirect :: Status -> Text.Text -> Response
+redirect :: MonadServer m => Status -> Text.Text -> m ()
 redirect status url =
   let responseStatus = status
       responseHeaders = [("Location", Text.encodeUtf8 url)]
       responseBody = ResponseBodyRaw ""
-   in Response {..}
+   in State.modify (\state -> state {stateResponse = Response {..}})
 
 forbidden :: Response
 forbidden =
@@ -973,13 +973,13 @@ class Writeable a where
   default toLBS :: Show a => a -> LBS.ByteString
   toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . Prelude.takeWhile ('"' /=) . Prelude.dropWhile ('"' ==) . show
 
-instance Writeable Text.Text where
+instance Writeable Text.Text
 
 instance Writeable LBS.ByteString where
   toLBS :: LBS.ByteString -> LBS.ByteString
   toLBS = id
 
-instance Writeable Int where
+instance Writeable Int
 
 static :: MonadServer m => m () -- TODO: Check file extension to set correct content type
 static = do

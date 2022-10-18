@@ -2,6 +2,8 @@ module Main where
 
 import qualified Conduit.App as App
 import qualified Conduit.UI as UI
+import qualified Conduit.UI.SigninForm as UI
+import qualified Conduit.UI.SignupForm as UI
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Combinators as Combinators
 import qualified Control.Monad.IO.Class as IO
@@ -66,11 +68,11 @@ conduitServer =
     [ home,
       signupForm,
       submitSignupForm,
-      loginForm,
-      submitLoginForm,
-      logout,
-      follow,
-      unfollow
+      signinForm,
+      submitSigninForm
+      -- logout,
+      -- follow,
+      -- unfollow
     ]
 
 -- Home
@@ -84,79 +86,59 @@ home = do
 -- Signup Form
 
 signupForm :: Okapi.MonadServer m => m ()
-signupForm = signupFormRoute >>= signupFormHandler
-
-signupFormRoute :: Okapi.MonadServer m => m ()
-signupFormRoute = undefined
-
-signupFormHandler :: () -> m ()
-signupFormHandler = undefined
+signupForm = do
+  Okapi.methodGET
+  Okapi.pathParam @Text.Text `Okapi.is` "form"
+  Okapi.pathParam @Text.Text `Okapi.is` "signup"
+  Okapi.pathEnd
+  UI.writeLucid $ UI.SignupForm Nothing []
 
 -- Submit Signup Form
 
 submitSignupForm :: Okapi.MonadServer m => m ()
-submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
-
-submitSignupFormRoute :: Okapi.MonadServer m => m ()
-submitSignupFormRoute = undefined
-
-submitSignupFormHandler :: () -> m ()
-submitSignupFormHandler = undefined
+submitSignupForm = do
+  Okapi.methodPOST
+  Okapi.pathParam @Text.Text `Okapi.is` "signup"
+  Okapi.pathEnd
+  Okapi.redirect 301 "/"
 
 -- Login Form
 
-loginForm :: Okapi.MonadServer m => m ()
-loginForm = loginFormRoute >>= loginFormHandler
+signinForm :: Okapi.MonadServer m => m ()
+signinForm = do
+  Okapi.methodGET
+  Okapi.pathParam @Text.Text `Okapi.is` "form"
+  Okapi.pathParam @Text.Text `Okapi.is` "signin"
+  Okapi.pathEnd
+  UI.writeLucid $ UI.SigninForm Nothing []
 
-loginFormRoute :: Okapi.MonadServer m => m ()
-loginFormRoute = undefined
+-- Submit Signin Form
 
-loginFormHandler :: () -> m ()
-loginFormHandler = undefined
-
--- Submit Login Form
-
-submitLoginForm :: Okapi.MonadServer m => m ()
-submitLoginForm = submitLoginFormRoute >>= submitLoginFormHandler
-
-submitLoginFormRoute :: Okapi.MonadServer m => m ()
-submitLoginFormRoute = undefined
-
-submitLoginFormHandler :: () -> m ()
-submitLoginFormHandler = undefined
+submitSigninForm :: Okapi.MonadServer m => m ()
+submitSigninForm = do
+  Okapi.methodPOST
+  Okapi.pathParam @Text.Text `Okapi.is` "signin"
+  Okapi.pathEnd
+  Okapi.redirect 301 "/"
 
 -- Logout
 
 logout :: Okapi.MonadServer m => m ()
-logout = logoutRoute >>= logoutHandler
-
-logoutRoute :: Okapi.MonadServer m => m ()
-logoutRoute = undefined
-
-logoutHandler :: () -> m ()
-logoutHandler = undefined
+logout = do
+  Okapi.methodPOST
+  Okapi.pathParam @Text.Text `Okapi.is` "logout"
+  Okapi.pathEnd
+  Okapi.redirect 301 "/"
 
 -- Follow
 
 follow :: Okapi.MonadServer m => m ()
-follow = followRoute >>= followHandler
-
-followRoute :: Okapi.MonadServer m => m ()
-followRoute = undefined
-
-followHandler :: () -> m ()
-followHandler = undefined
+follow = undefined
 
 -- Unfollow
 
 unfollow :: Okapi.MonadServer m => m ()
-unfollow = unfollowRoute >>= unfollowHandler
-
-unfollowRoute :: Okapi.MonadServer m => m ()
-unfollowRoute = undefined
-
-unfollowHandler :: () -> m ()
-unfollowHandler = undefined
+unfollow = undefined
 
 conduitMiddleware ::
   ( Okapi.MonadServer m,
@@ -176,7 +158,8 @@ wrapIfNotHtmxRequest handler = do
       Okapi.write bottom
   where
     top :: LBS.ByteString
-    top = [Perl6.q|
+    top =
+      [Perl6.q|
     <!DOCTYPE html>
     <html>
 
@@ -192,12 +175,12 @@ wrapIfNotHtmxRequest handler = do
     </head>
 
     <body>
-        <nav id="navbar" class="navbar navbar-light">
-            <div class="container"><a class="navbar-brand">conduit</a>
+        <nav id="navbar" class="navbar navbar-light" hx-boost="true" hx-target="#content-slot" hx-push-url="true">
+            <div class="container"><a class="navbar-brand" hx-get="/" href="/">conduit</a>
                 <ul class="nav navbar-nav pull-xs-right">
-                    <li class="nav-item"><a class="nav-link">Home</a></li>
-                    <li class="nav-item"><a class="nav-link">Sign in</a></li>
-                    <li class="nav-item"><a class="nav-link">Sign up</a></li>
+                    <li class="nav-item"><a class="nav-link" hx-get="/" href="/">Home</a></li>
+                    <li class="nav-item"><a class="nav-link" hx-get="/form/signin" href="/form/sigin">Sign in</a></li>
+                    <li class="nav-item"><a class="nav-link" hx-get="/form/signup" href="/form/signup">Sign up</a></li>
                 </ul>
             </div>
         </nav>
@@ -205,10 +188,11 @@ wrapIfNotHtmxRequest handler = do
     |]
 
     bottom :: LBS.ByteString
-    bottom = [Perl6.q|
+    bottom =
+      [Perl6.q|
         </div>
         <footer>
-            <div class="container"><a href="/" class="logo-font">conduit</a><span class="attribution"> An interactive
+            <div hx-boost="true" hx-push-url="true" hx-target="#content-slot" class="container"><a hx-get="/" href="/" class="logo-font">conduit</a><span class="attribution"> An interactive
                     learning project from <a href="https://thinkster.io">Thinkster</a>. Code &amp; design licensed under
                     MIT. </span></div>
         </footer>

@@ -280,6 +280,11 @@ executable realworld-htmx-exe
     , Conduit.Database.User
     , Conduit.UI
     , Conduit.UI.Home
+    , Conduit.UI.SignupForm
+    , Conduit.UI.SigninForm
+    , Conduit.Model.FormError
+    , Conduit.Model.SignupForm
+    , Conduit.Model.SigninForm
   hs-source-dirs:
       examples/realworld-htmx
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
