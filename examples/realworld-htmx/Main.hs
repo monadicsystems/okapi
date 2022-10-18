@@ -46,6 +46,7 @@ import Network.Wai (Middleware)
 import qualified Okapi
 import qualified Rel8
 import qualified System.Random as Random
+import qualified Text.InterpolatedString.Perl6 as Perl6
 
 main :: IO ()
 main = do
@@ -57,12 +58,10 @@ main = do
   redisConn <- Redis.connect redisSettings
 
   -- Run server
-  Okapi.run (App.execute $ App.AppEnv dbConn redisConn) conduitServer
+  Okapi.run (App.execute $ App.AppEnv dbConn redisConn) $ conduitMiddleware conduitServer
 
 conduitServer :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session, App.Has Hasql.Connection App.AppEnv, App.Has Redis.Connection App.AppEnv) => m ()
-conduitServer = home
-
-{-
+conduitServer =
   Combinators.choice
     [ home,
       signupForm,
@@ -73,7 +72,6 @@ conduitServer = home
       follow,
       unfollow
     ]
--}
 
 -- Home
 
@@ -81,7 +79,7 @@ home :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session) => m ()
 home = do
   Okapi.methodGET
   Okapi.pathEnd
-  UI.writeLucid $ UI.Wrapper UI.Home
+  UI.writeLucid UI.Home
 
 -- Signup Form
 
@@ -172,4 +170,49 @@ wrapIfNotHtmxRequest handler = do
   hxRequestHeaderValue <- Combinators.optional $ Okapi.header "HX-Request"
   case hxRequestHeaderValue of
     Just "true" -> handler
-    _ -> handler
+    _ -> do
+      Okapi.write top
+      handler
+      Okapi.write bottom
+  where
+    top :: LBS.ByteString
+    top = [Perl6.q|
+    <!DOCTYPE html>
+    <html>
+
+    <head>
+        <meta charset="utf-8">
+        <title>Conduit</title>
+        <link href="//code.ionicframework.com/ionicons/2.0.1/css/ionicons.min.css" rel="stylesheet" type="text/css">
+        <link
+            href="//fonts.googleapis.com/css?family=Titillium+Web:700|Source+Serif+Pro:400,700|Merriweather+Sans:400,700|Source+Sans+Pro:400,300,600,700,300italic,400italic,600italic,700italic"
+            rel="stylesheet" type="text/css">
+        <link rel="stylesheet" href="//demo.productionready.io/main.css">
+        <script src="https://unpkg.com/htmx.org@1.8.0"></script>
+    </head>
+
+    <body>
+        <nav id="navbar" class="navbar navbar-light">
+            <div class="container"><a class="navbar-brand">conduit</a>
+                <ul class="nav navbar-nav pull-xs-right">
+                    <li class="nav-item"><a class="nav-link">Home</a></li>
+                    <li class="nav-item"><a class="nav-link">Sign in</a></li>
+                    <li class="nav-item"><a class="nav-link">Sign up</a></li>
+                </ul>
+            </div>
+        </nav>
+        <div id="content-slot">
+    |]
+
+    bottom :: LBS.ByteString
+    bottom = [Perl6.q|
+        </div>
+        <footer>
+            <div class="container"><a href="/" class="logo-font">conduit</a><span class="attribution"> An interactive
+                    learning project from <a href="https://thinkster.io">Thinkster</a>. Code &amp; design licensed under
+                    MIT. </span></div>
+        </footer>
+    </body>
+
+    </html>
+    |]

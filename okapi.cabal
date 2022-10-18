@@ -297,6 +297,7 @@ executable realworld-htmx-exe
     , hedis
     , http-api-data
     , http-types
+    , interpolatedstring-perl6
     , lucid2
     , lucid2-htmx
     , memory
@@ -332,6 +333,7 @@ executable realworld-htmx-exe
     , GeneralizedNewtypeDeriving
     , MultiParamTypeClasses
     , OverloadedStrings
+    , QuasiQuotes
     , RankNTypes
     , ScopedTypeVariables
     , TypeApplications
