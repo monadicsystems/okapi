@@ -78,48 +78,73 @@ conduitServer =
 -- Home
 
 home :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session) => m ()
-home = do
+home = homeRoute >>= homeHandler
+
+homeRoute :: Okapi.MonadServer m => m ()
+homeRoute = do
   Okapi.methodGET
   Okapi.pathEnd
-  UI.writeLucid UI.Home
+
+homeHandler :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session) => () -> m ()
+homeHandler _ = UI.writeLucid UI.Home
 
 -- Signup Form
 
 signupForm :: Okapi.MonadServer m => m ()
-signupForm = do
-  Okapi.methodGET
-  Okapi.pathParam @Text.Text `Okapi.is` "form"
-  Okapi.pathParam @Text.Text `Okapi.is` "signup"
-  Okapi.pathEnd
-  UI.writeLucid $ UI.SignupForm Nothing []
+signupForm = signupFormRoute >>= signupFormHandler
+  where
+    signupFormRoute :: Okapi.MonadServer m => m ()
+    signupFormRoute = do
+      Okapi.methodGET
+      Okapi.pathParam @Text.Text `Okapi.is` "form"
+      Okapi.pathParam @Text.Text `Okapi.is` "signup"
+      Okapi.pathEnd
+
+    signupFormHandler :: Okapi.MonadServer m => () -> m ()
+    signupFormHandler _ = UI.writeLucid $ UI.SignupForm Nothing []
 
 -- Submit Signup Form
 
 submitSignupForm :: Okapi.MonadServer m => m ()
-submitSignupForm = do
-  Okapi.methodPOST
-  Okapi.pathParam @Text.Text `Okapi.is` "signup"
-  Okapi.pathEnd
-  Okapi.redirect 301 "/"
+submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
+  where
+    submitSignupFormRoute :: Okapi.MonadServer m => m ()
+    submitSignupFormRoute = do
+      Okapi.methodPOST
+      Okapi.pathParam @Text.Text `Okapi.is` "signup"
+      Okapi.pathEnd
 
--- Login Form
+    submitSignupFormHandler :: Okapi.MonadServer m => () -> m ()
+    submitSignupFormHandler _ = Okapi.redirect 301 "/"
+
+-- Signin Form
 
 signinForm :: Okapi.MonadServer m => m ()
-signinForm = do
-  Okapi.methodGET
-  Okapi.pathParam @Text.Text `Okapi.is` "form"
-  Okapi.pathParam @Text.Text `Okapi.is` "signin"
-  Okapi.pathEnd
-  UI.writeLucid $ UI.SigninForm Nothing []
+signinForm = signinFormRoute >>= signinFormHandler
+  where
+    signinFormRoute :: Okapi.MonadServer m => m ()
+    signinFormRoute = do
+      Okapi.methodGET
+      Okapi.pathParam @Text.Text `Okapi.is` "form"
+      Okapi.pathParam @Text.Text `Okapi.is` "signin"
+      Okapi.pathEnd
+
+    signinFormHandler :: Okapi.MonadServer m => () -> m ()
+    signinFormHandler _ = UI.writeLucid $ UI.SigninForm Nothing []
 
 -- Submit Signin Form
 
 submitSigninForm :: Okapi.MonadServer m => m ()
-submitSigninForm = do
-  Okapi.methodPOST
-  Okapi.pathParam @Text.Text `Okapi.is` "signin"
-  Okapi.pathEnd
-  Okapi.redirect 301 "/"
+submitSigninForm = submitSigninFormRoute >>= submitSigninFormHandler
+  where
+    submitSigninFormRoute :: Okapi.MonadServer m => m ()
+    submitSigninFormRoute = do
+      Okapi.methodPOST
+      Okapi.pathParam @Text.Text `Okapi.is` "signin"
+      Okapi.pathEnd
+
+    submitSigninFormHandler :: Okapi.MonadServer m => () -> m ()
+    submitSigninFormHandler _ = Okapi.redirect 301 "/"
 
 -- Logout
 
