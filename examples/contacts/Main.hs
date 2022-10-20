@@ -76,7 +76,7 @@ contactsServer = wrapPartialIfNotHtmxRequest $ Okapi.route routeParser \case
     writeLucid $ contactsToTable allContacts
   CreateContact -> do
     contactForm <- Okapi.bodyURLEncoded @ContactForm
-    newContact <- insertNewContact contactForm
+    newContact <- insertContact contactForm
     writeLucid do
       contactToRow newContact
       addContactRow
@@ -120,6 +120,16 @@ pattern DeleteContact contactID = (Okapi.DELETE, ["contacts", Okapi.PathParam co
 toURL :: (Okapi.Method, Okapi.Path) -> Text.Text
 toURL (_, path) = Okapi.renderPath path
 
+toHtmxAttribute :: (Okapi.Method, Okapi.Path) -> Lucid.Attributes
+toHtmxAttribute (method, path) = case method of
+  Okapi.GET -> Htmx.hxGet_ url
+  Okapi.POST -> Htmx.hxPost_ url
+  Okapi.PUT -> Htmx.hxPut_ url
+  Okapi.DELETE -> Htmx.hxDelete_ url
+  _ -> class_ ""
+  where
+    url = Okapi.renderPath path
+
 -- View generating functions
 
 contactsToTable :: [Contact] -> Lucid.Html ()
@@ -139,19 +149,19 @@ contactsToTable contacts =
               addContactRow
 
 contactToRow :: Contact -> Lucid.Html ()
-contactToRow (Contact key name email) =
+contactToRow (Contact id' name email) =
   tr_ [] do
     td_ [class_ "whitespace-nowrap py-4 pl-4 pr-3 text-md font-medium text-gray-900 sm:pl-6"] $ Lucid.toHtml name
     td_ [class_ "whitespace-nowrap px-3 py-4 text-md text-gray-500"] $ Lucid.toHtml email
     td_ [class_ "whitespace-nowrap flex px-3 py-4 text-md text-gray-500"] do
       button_
         [ class_ "inline-flex items-center rounded-md border border-gray-300 bg-indigo-400 px-3 py-2 text-md font-medium leading-4 text-gray-700 shadow-sm hover:bg-indigo-500",
-          Htmx.hxGet_ $ toURL $ EditContact key
+          Htmx.hxGet_ $ toURL $ EditContact id'
         ]
         "Edit"
       button_
         [ class_ "ml-2 inline-flex items-center rounded-md border border-gray-300 bg-red-400 px-3 py-2 text-md font-medium leading-4 text-gray-700 shadow-sm hover:bg-red-500",
-          Htmx.hxDelete_ $ toURL $ DeleteContact key,
+          toHtmxAttribute $ DeleteContact id',
           Htmx.hxConfirm_ $ "Are you sure want to delete the contact information for " <> name <> "?"
         ]
         "Delete"
@@ -182,7 +192,7 @@ addContactRow =
         "Add"
 
 contactToEditContactRow :: Contact -> Lucid.Html ()
-contactToEditContactRow (Contact key name email) =
+contactToEditContactRow (Contact id' name email) =
   tr_ [] do
     td_ [class_ "whitespace-nowrap py-4 pl-4 pr-3 text-md font-medium text-gray-900 sm:pl-6"] $
       input_
@@ -202,12 +212,12 @@ contactToEditContactRow (Contact key name email) =
       button_
         [ class_ "inline-flex items-center rounded-md border border-gray-300 bg-green-300 px-3 py-2 text-md font-medium leading-4 text-gray-700 shadow-sm hover:bg-green-400",
           Htmx.hxInclude_ "closest tr",
-          Htmx.hxPut_ $ toURL $ UpdateContact key
+          Htmx.hxPut_ $ toURL $ UpdateContact id'
         ]
         "Save"
       button_
         [ class_ "ml-2 inline-flex items-center rounded-md border border-gray-300 bg-red-400 px-3 py-2 text-md font-medium leading-4 text-gray-700 shadow-sm hover:bg-red-500",
-          Htmx.hxGet_ $ toURL $ GetContact key
+          Htmx.hxGet_ $ toURL $ GetContact id'
         ]
         "Cancel"
 
@@ -236,12 +246,10 @@ contactsTableSchema =
           }
     }
 
-insertNewContact :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => ContactForm -> m Contact
-insertNewContact contactForm = do
-  maybeNewContactID <- runStatementOne $ Rel8.insert $ contactFormInsert contactForm
-  case maybeNewContactID of
-    Nothing -> Okapi.throw Okapi.internalServerError
-    Just newContactID -> getContactByID newContactID
+getAllContacts :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m [Contact]
+getAllContacts = do
+  allContactRows <- runStatement $ Rel8.select queryAllContacts
+  pure $ contactRowToContact <$> allContactRows
 
 getContactByID :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> m Contact
 getContactByID contactID = do
@@ -250,10 +258,12 @@ getContactByID contactID = do
     Nothing -> Okapi.throw Okapi.internalServerError
     Just contactRow -> pure $ contactRowToContact contactRow
 
-getAllContacts :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m [Contact]
-getAllContacts = do
-  allContactRows <- runStatement $ Rel8.select queryAllContacts
-  pure $ contactRowToContact <$> allContactRows
+insertContact :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => ContactForm -> m Contact
+insertContact contactForm = do
+  maybeNewContactID <- runStatementOne $ Rel8.insert $ contactInsert contactForm
+  case maybeNewContactID of
+    Nothing -> Okapi.throw Okapi.internalServerError
+    Just newContactID -> getContactByID newContactID
 
 updateContact :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> ContactForm -> m Contact
 updateContact contactID contactForm = do
@@ -269,14 +279,6 @@ deleteContact contactID = do
     then pure ()
     else Okapi.throw Okapi.internalServerError
 
-contactRowToContact :: ContactRow Rel8.Result -> Contact
-contactRowToContact row =
-  Contact
-    { contactID = contactRowID row,
-      contactName = contactRowName row,
-      contactEmail = contactRowEmail row
-    }
-
 queryAllContacts :: Rel8.Query (ContactRow Rel8.Expr)
 queryAllContacts = Rel8.orderBy Rel8.ascTable $ Rel8.each contactsTableSchema
 
@@ -286,8 +288,8 @@ queryContactByID contactID = do
   Rel8.where_ $ contactRowID contactRow ==. Rel8.lit contactID
   return contactRow
 
-contactFormInsert :: ContactForm -> Rel8.Insert [Int.Int64]
-contactFormInsert contactForm =
+contactInsert :: ContactForm -> Rel8.Insert [Int.Int64]
+contactInsert contactForm =
   Rel8.Insert
     { into = contactsTableSchema,
       rows =
@@ -325,6 +327,11 @@ contactDelete contactID =
       returning = Rel8.NumberOfRowsAffected
     }
 
+runStatementOne :: (IO.MonadIO m, Okapi.MonadServer m, Reader.MonadReader AppEnv m) => Hasql.Statement () [a] -> m (Maybe a)
+runStatementOne statement = do
+  rows <- runStatement statement
+  pure $ Maybe.listToMaybe rows
+
 runStatement :: (IO.MonadIO m, Okapi.MonadServer m, Reader.MonadReader AppEnv m) => Hasql.Statement () o -> m o
 runStatement statement = do
   let transaction = Hasql.statement () statement
@@ -334,11 +341,6 @@ runStatement statement = do
   case dbResult of
     Left usageError -> Okapi.throw (Okapi.internalServerError {Okapi.responseBody = Okapi.ResponseBodyRaw [Perl6.qq| {usageError} |]})
     Right success -> pure success
-
-runStatementOne :: (IO.MonadIO m, Okapi.MonadServer m, Reader.MonadReader AppEnv m) => Hasql.Statement () [a] -> m (Maybe a)
-runStatementOne statement = do
-  rows <- runStatement statement
-  pure $ Maybe.listToMaybe rows
 
 -- Helpers
 
@@ -400,3 +402,11 @@ wrapPartialIfNotHtmxRequest server = do
 
     </html>
     |]
+
+contactRowToContact :: ContactRow Rel8.Result -> Contact
+contactRowToContact row =
+  Contact
+    { contactID = contactRowID row,
+      contactName = contactRowName row,
+      contactEmail = contactRowEmail row
+    }
