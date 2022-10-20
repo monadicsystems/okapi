@@ -12,10 +12,11 @@ import qualified Hasql.Pool as Hasql
 import Lucid
 import qualified Lucid
 import qualified Lucid.Htmx as Htmx
-import Main (UpdateContact)
 import qualified Okapi
 import qualified Rel8
 import qualified Text.InterpolatedString.Perl6 as Perl6
+import qualified Web.FormUrlEncoded as Web
+import qualified GHC.Generics as Generics
 
 newtype App a = App
   { unApp :: Reader.ReaderT AppEnv IO a
@@ -25,7 +26,7 @@ newtype App a = App
 execute :: AppEnv -> App a -> IO a
 execute appEnv (App app) = Reader.runReaderT app appEnv
 
-data AppEnv = AppEnv
+newtype AppEnv = AppEnv
   { getDBPool :: Hasql.Pool
   }
 
@@ -51,6 +52,9 @@ pattern GetContacts = (Okapi.GET, ["contacts"])
 pattern CreateContact :: (Okapi.Method, Okapi.Path)
 pattern CreateContact = (Okapi.POST, ["contacts"])
 
+pattern GetContact :: Int.Int64 -> (Okapi.Method, Okapi.Path)
+pattern GetContact contactID = (Okapi.GET, ["contacts", Okapi.PathParam contactID])
+
 pattern EditContact :: Int.Int64 -> (Okapi.Method, Okapi.Path)
 pattern EditContact contactID = (Okapi.GET, ["contacts", "edit", Okapi.PathParam contactID])
 
@@ -60,10 +64,7 @@ pattern UpdateContact contactID = (Okapi.PUT, ["contacts", Okapi.PathParam conta
 pattern DeleteContact :: Int.Int64 -> (Okapi.Method, Okapi.Path)
 pattern DeleteContact contactID = (Okapi.DELETE, ["contacts", Okapi.PathParam contactID])
 
-toURL :: (Okapi.Method, Okapi.Path) -> Text.Text
-toURL (_, path) = Okapi.renderPath path
-
-contactsServer :: (Okapi.MonadServer m, IO.MonadIO m) => m ()
+contactsServer :: (Okapi.MonadServer m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m ()
 contactsServer = wrapPartialIfNotHtmxRequest $ Okapi.route routeParser \case
   GetContacts -> do
     let myContacts =
@@ -71,12 +72,21 @@ contactsServer = wrapPartialIfNotHtmxRequest $ Okapi.route routeParser \case
             Contact 2 "Derek" "bod@fisher.com",
             Contact 3 "Brian" "brian@goodie.com"
           ]
-    writeLucid myContacts
-  CreateContact -> undefined
+    writeLucid $ contactsToTable myContacts
+  CreateContact -> do
+    contactForm <- Okapi.bodyURLEncoded @ContactForm
+    let newContact = Contact 99 (contactFormName contactForm) (contactFormEmail contactForm)
+    writeLucid do
+      contactToRow newContact
+      addContactRow
+  GetContact contactID -> undefined
   EditContact contactID -> undefined
   UpdateContact contactID -> undefined
   DeleteContact contactID -> undefined
   _ -> Okapi.next
+
+toURL :: (Okapi.Method, Okapi.Path) -> Text.Text
+toURL (_, path) = Okapi.renderPath path
 
 routeParser :: Okapi.MonadServer m => m (Okapi.Method, Okapi.Path)
 routeParser = do
@@ -103,14 +113,14 @@ wrapPartialIfNotHtmxRequest server = do
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Mercury Meetup Contacts</title>
+        <title>My Contact Book</title>
         <script src="https://unpkg.com/htmx.org@1.8.0"></script>
         <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     </head>
 
-    <body class="flex h-screen justify-center items-center">
+    <body class="flex justify-center items-center my-20">
       <main class="w-full px-10">
-        <h1 class="text-xl font-semibold mb-2">Haskell Talks @ Mercury Contact List</h1>
+        <h1 class="text-xl font-semibold mb-2">My Contact Book</h1>
     |]
 
     bottom :: LBS.ByteString
@@ -123,9 +133,9 @@ wrapPartialIfNotHtmxRequest server = do
     |]
 
 data ContactRow f = ContactRow
-  { key :: Rel8.Column f Int.Int64,
-    name :: Rel8.Column f Text.Text,
-    email :: Rel8.Column f Text.Text
+  { contactRowID :: Rel8.Column f Int.Int64,
+    contactRowName :: Rel8.Column f Text.Text,
+    contactRowEmail :: Rel8.Column f Text.Text
   }
 
 contactTableSchema :: Rel8.TableSchema (ContactRow Rel8.Name)
@@ -135,16 +145,16 @@ contactTableSchema =
       schema = Nothing,
       columns =
         ContactRow
-          { key = "pk_contacts",
-            name = "name",
-            email = "email"
+          { contactRowID = "pk_contacts",
+            contactRowName = "name",
+            contactRowEmail = "email"
           }
     }
 
 data Contact = Contact
-  { key :: Int.Int64,
-    name :: Text.Text,
-    email :: Text.Text
+  { contactRowID :: Int.Int64,
+    contactRowName :: Text.Text,
+    contactRowEmail :: Text.Text
   }
 
 {-
@@ -173,8 +183,8 @@ data Contact = Contact
     </tr>
 -}
 
-contactToTableRow :: Contact -> Lucid.Html ()
-contactToTableRow (Contact key name email) =
+contactToRow :: Contact -> Lucid.Html ()
+contactToRow (Contact key name email) =
   tr_ [] do
     td_ [class_ "whitespace-nowrap py-4 pl-4 pr-3 text-md font-medium text-gray-900 sm:pl-6"] $ Lucid.toHtml name
     td_ [class_ "whitespace-nowrap px-3 py-4 text-md text-gray-500"] $ Lucid.toHtml email
@@ -197,14 +207,14 @@ contactToEditForm (Contact key name email) =
     td_ [class_ "whitespace-nowrap py-4 pl-4 pr-3 text-md font-medium text-gray-900 sm:pl-6"] $
       input_
         [ type_ "text",
-          name_ "name",
+          name_ "contactFormName",
           value_ name,
           class_ "block w-full rounded-md border-gray-500 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm"
         ]
     td_ [class_ "whitespace-nowrap px-3 py-4 text-md text-gray-500"] $
       input_
         [ type_ "email",
-          name_ "email",
+          name_ "contactFormEmail",
           value_ email,
           class_ "block w-full rounded-md border-gray-500 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm"
         ]
@@ -230,7 +240,7 @@ contactToEditForm (Contact key name email) =
 -}
 
 contactsToTable :: [Contact] -> Lucid.Html ()
-contactsToTable =
+contactsToTable contacts =
   div_ [class_ "mt-8 flex flex-col"] do
     div_ [class_ "-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8"] do
       div_ [class_ "inline-block min-w-full py-2 align-middle md:px-6 lg:px-8"] do
@@ -242,29 +252,33 @@ contactsToTable =
                 th_ [class_ "px-3 py-3.5 text-left text-md font-semibold text-gray-900"] "Email"
                 th_ [class_ "px-3 py-3.5 text-left text-md font-semibold text-gray-900"] "Actions"
             tbody_ [Htmx.hxTarget_ "closest tr", Htmx.hxSwap_ "outerHTML", class_ "divide-y divide-gray-200 bg-white"] do
-              mapM_ contactToTableRow contacts
-              tr_ [] do
-                td_ [class_ "whitespace-nowrap py-4 pl-4 pr-3 text-md font-medium text-gray-900 sm:pl-6"] $
-                  input_
-                    [ type_ "text",
-                      name_ "name",
-                      value_ "",
-                      class_ "block w-full rounded-md border-gray-500 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm"
-                    ]
-                td_ [class_ "whitespace-nowrap px-3 py-4 text-md text-gray-500"] $
-                  input_
-                    [ type_ "email",
-                      name_ "email",
-                      value_ "",
-                      class_ "block w-full rounded-md border-gray-500 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm"
-                    ]
-                td_ [class_ "whitespace-nowrap flex px-3 py-4 text-md text-gray-500"] do
-                  button_
-                    [ class_ "inline-flex items-center rounded-md border border-gray-300 bg-green-300 px-3 py-2 text-md font-medium leading-4 text-gray-700 shadow-sm hover:bg-green-400",
-                      Htmx.hxInclude_ "closest tr",
-                      Htmx.hxPost_ $ toURL CreateContact
-                    ]
-                    "Add"
+              mapM_ contactToRow contacts
+              addContactRow
+
+addContactRow :: Lucid.Html ()
+addContactRow =
+  tr_ [] do
+    td_ [class_ "whitespace-nowrap py-4 pl-4 pr-3 text-md font-medium text-gray-900 sm:pl-6"] $
+      input_
+        [ type_ "text",
+          name_ "contactFormName",
+          value_ "",
+          class_ "block w-full rounded-md border-gray-500 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm"
+        ]
+    td_ [class_ "whitespace-nowrap px-3 py-4 text-md text-gray-500"] $
+      input_
+        [ type_ "email",
+          name_ "contactFormEmail",
+          value_ "",
+          class_ "block w-full rounded-md border-gray-500 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm"
+        ]
+    td_ [class_ "whitespace-nowrap flex px-3 py-4 text-md text-gray-500"] do
+      button_
+        [ class_ "inline-flex items-center rounded-md border border-gray-300 bg-green-300 px-3 py-2 text-md font-medium leading-4 text-gray-700 shadow-sm hover:bg-green-400",
+          Htmx.hxInclude_ "closest tr",
+          Htmx.hxPost_ $ toURL CreateContact
+        ]
+        "Add"
 
 toText :: Show a => a -> Text.Text
 toText = Text.pack . show
@@ -288,18 +302,18 @@ blankHtml = ""
 -}
 
 data ContactForm = ContactForm
-  { name :: Text.Text,
-    email :: Text.Text
-  }
+  { contactFormName :: Text.Text,
+    contactFormEmail :: Text.Text
+  } deriving (Generics.Generic, Web.FromForm)
 
 instance Okapi.Writeable (Lucid.Html ()) where
   toLBS :: Lucid.Html () -> LBS.ByteString
   toLBS = Lucid.renderBS
 
-writeLucid :: (Okapi.MonadServer m, Lucid.ToHtml a) => a -> m ()
-writeLucid htmlable = do
+writeLucid :: Okapi.MonadServer m => Lucid.Html () -> m ()
+writeLucid html = do
   Okapi.setHeader ("Content-Type", "text/html;charset=utf-8")
-  Okapi.write $ toHtmlPure htmlable
-  where
-    toHtmlPure :: Lucid.ToHtml a => a -> Lucid.Html ()
-    toHtmlPure = Lucid.toHtml
+  Okapi.write $ Lucid.renderBS html
+  -- where
+  --   toHtmlPure :: Lucid.ToHtml a => a -> Lucid.Html ()
+  --   toHtmlPure = Lucid.toHtml
