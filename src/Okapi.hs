@@ -126,6 +126,7 @@ module Okapi
     -- ** Values
     ok,
     notFound,
+    noContent,
     redirect,
     forbidden,
     internalServerError,
@@ -226,7 +227,8 @@ module Okapi
     Writeable (..),
     overwrite,
     write,
-    setResponse,
+    -- setResponse,
+    respond
     -- popResponseBodyRaw,
   )
 where
@@ -849,6 +851,13 @@ ok =
       responseBody = ResponseBodyRaw ""
    in Response {..}
 
+noContent :: Response
+noContent =
+  let responseStatus = 204
+      responseHeaders = []
+      responseBody = ResponseBodyRaw ""
+   in Response {..}
+
 notFound :: Response
 notFound =
   let responseStatus = 404
@@ -891,8 +900,8 @@ popResponseBodyRaw = do
 
 -- RESPONSE SETTERS
 
-setResponse :: MonadServer m => Response -> m ()
-setResponse response = State.modify (\state -> state {stateResponse = response})
+-- setResponse :: MonadServer m => Response -> m ()
+-- setResponse response = State.modify (\state -> state {stateResponse = response})
 
 setStatus :: MonadServer m => Status -> m ()
 setStatus status = State.modify (\state -> state {stateResponse = (stateResponse state) {responseStatus = status}})
@@ -967,6 +976,9 @@ write value = do
     ResponseBodyRaw raw -> raw <> toLBS value <> "\n"
     ResponseBodyFile _ -> toLBS value
     ResponseBodyEventSource _ -> toLBS value
+
+respond :: MonadServer m => Response -> m ()
+respond response = State.modify (\currentState -> currentState {stateResponse = response})
 
 class Writeable a where
   toLBS :: a -> LBS.ByteString
