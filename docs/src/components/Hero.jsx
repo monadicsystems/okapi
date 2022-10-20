@@ -16,7 +16,7 @@ import Okapi
 -- | Run a web server on port 3000 that responds to GET requests of the form:
 --   /greet/<name> OR /greet?name=<name> OR /greet
 main :: IO ()
-main = run id $ do
+main = run id do
   methodGET
   pathParam @Text \`is\` "greet"
   maybeName <- optional $ pathParam <|> queryParam "name"

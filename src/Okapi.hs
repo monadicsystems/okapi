@@ -1438,6 +1438,11 @@ class Monad m => MonadSession m s | m -> s where
       Just session -> do
         let newSession = modifier session
         putSession sessionID newSession
+  createSession :: s -> m ()
+  default createSession :: s -> m ()
+  createSession newSession = do
+    newSessionID <- generateSessionID
+    putSession newSessionID newSession
 
 sessionID :: (MonadServer m, MonadSession m s) => m SessionID
 sessionID = do

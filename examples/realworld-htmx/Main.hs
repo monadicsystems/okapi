@@ -1,9 +1,12 @@
 module Main where
 
+import qualified Data.Maybe as Maybe
+import qualified Control.Monad.IO.Class as IO
 import qualified Conduit.App as App
 import qualified Conduit.Model.FormError as Model
 import qualified Conduit.Model.SigninForm as Model
 import qualified Conduit.Model.SignupForm as Model
+import qualified Conduit.Model.User as Model
 import qualified Conduit.UI as UI
 import qualified Conduit.UI.SigninForm as UI
 import qualified Conduit.UI.SignupForm as UI
@@ -16,11 +19,16 @@ import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Function ((&))
+import qualified Data.Map as Map
 import qualified Data.Text as Text
 import qualified Data.Word as Word
 import qualified Database.Redis as Redis
 import qualified GHC.Generics as Generics
-import qualified Hasql.Connection as Hasql
+import qualified Hasql.Connection as Hasql.Connection
+import qualified Conduit.Database.User as Database
+import qualified Conduit.Database as Database
+import qualified Conduit.Model.Newtype as Model
+import qualified Hasql.Connection as Hasql (settings)
 import Lucid
   ( a_,
     body_,
@@ -48,13 +56,13 @@ import Lucid
   )
 import qualified Lucid
 import qualified Lucid.Htmx as Htmx
-import Network.Wai (Middleware)
 import qualified Okapi
 import qualified Rel8
 import qualified System.Random as Random
 import qualified Text.InterpolatedString.Perl6 as Perl6
 import qualified Web.Forma as Forma
-import qualified Data.Map as Map
+-- import qualified Hasql.Connection as Hasql
+import qualified Hasql.Pool as Hasql
 
 main :: IO ()
 main = do
@@ -62,13 +70,13 @@ main = do
   secret <- BS.readFile "secret.txt"
   let dbSettings = Hasql.settings "localhost" 5432 "realworld" secret "realworld"
       redisSettings = Redis.defaultConnectInfo
-  Right dbConn <- Hasql.acquire dbSettings
+  dbPool <- Hasql.acquire 100 (Just 10) dbSettings
   redisConn <- Redis.connect redisSettings
 
   -- Run server
-  Okapi.run (App.execute $ App.AppEnv dbConn redisConn) $ conduitMiddleware conduitServer
+  Okapi.run (App.execute $ App.AppEnv dbPool redisConn) $ conduitMiddleware conduitServer
 
-conduitServer :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session, App.Has Hasql.Connection App.AppEnv, App.Has Redis.Connection App.AppEnv) => m ()
+conduitServer :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => m ()
 conduitServer =
   Combinators.choice
     [ home,
@@ -83,7 +91,7 @@ conduitServer =
 
 -- Home
 
-home :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session) => m ()
+home :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User) => m ()
 home = homeRoute >>= homeHandler
 
 homeRoute :: Okapi.MonadServer m => m ()
@@ -91,7 +99,7 @@ homeRoute = do
   Okapi.methodGET
   Okapi.pathEnd
 
-homeHandler :: (Okapi.MonadServer m, Okapi.MonadSession m App.Session) => () -> m ()
+homeHandler :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User) => () -> m ()
 homeHandler _ = UI.writeLucid UI.Home
 
 -- Signup Form
@@ -111,7 +119,7 @@ signupForm = signupFormRoute >>= signupFormHandler
 
 -- Submit Signup Form
 
-submitSignupForm :: Okapi.MonadServer m => m ()
+submitSignupForm :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => m ()
 submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
   where
     submitSignupFormRoute :: Okapi.MonadServer m => m ()
@@ -120,7 +128,7 @@ submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
       Okapi.pathParam @Text.Text `Okapi.is` "signup"
       Okapi.pathEnd
 
-    submitSignupFormHandler :: Okapi.MonadServer m => () -> m ()
+    submitSignupFormHandler :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => () -> m ()
     submitSignupFormHandler _ = do
       signupForm <- Okapi.bodyURLEncoded @Model.SignupForm
       let formResult = Validate.signupForm signupForm
@@ -129,13 +137,23 @@ submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
           UI.writeLucid $ UI.SignupForm (Just signupForm) [Model.FormError formParserError]
         Forma.ValidationFailed formErrorMap -> do
           let formErrors =
-                Prelude.map (\(field, f) -> Model.FormError $ f $ Forma.showFieldName field)
-                $ Map.toList
-                $ formErrorMap
+                Prelude.map (\(field, f) -> Model.FormError $ f $ Forma.showFieldName field) $
+                  Map.toList formErrorMap
           UI.writeLucid $ UI.SignupForm (Just signupForm) formErrors
         Forma.Succeeded validatedSignupForm -> do
           -- TODO: Write result to DB and store session
-          Okapi.redirect 301 "/"
+          -- generate salt
+          -- hashpassword
+          -- bam
+          maybeNewUserKey <- Database.runStatementOne $ Rel8.insert $ Database.insertNewUser validatedSignupForm (Model.Salt "", Model.HashedPassword "123")
+          case maybeNewUserKey of
+            Nothing -> Okapi.throw Okapi.internalServerError
+            Just newUserKey -> do
+              maybeNewUserRow <- Database.runStatementOne $ Rel8.select $ Database.queryUserByKey newUserKey
+              case maybeNewUserRow of
+                Nothing -> Okapi.throw Okapi.internalServerError
+                Just newUserRow -> Okapi.createSession $ Database.userRowToUser newUserRow
+              Okapi.redirect 301 "/"
 
 -- Signin Form
 
@@ -172,9 +190,8 @@ submitSigninForm = submitSigninFormRoute >>= submitSigninFormHandler
           UI.writeLucid $ UI.SigninForm (Just signinForm) [Model.FormError formParserError]
         Forma.ValidationFailed formErrorMap -> do
           let formErrors =
-                Prelude.map (\(field, f) -> Model.FormError $ f $ Forma.showFieldName field)
-                $ Map.toList
-                $ formErrorMap
+                Prelude.map (\(field, f) -> Model.FormError $ f $ Forma.showFieldName field) $
+                  Map.toList formErrorMap
           UI.writeLucid $ UI.SigninForm (Just signinForm) formErrors
         Forma.Succeeded validatedSignupForm -> do
           -- TODO: Write result to DB and store session
@@ -201,7 +218,7 @@ unfollow = undefined
 
 conduitMiddleware ::
   ( Okapi.MonadServer m,
-    Okapi.MonadSession m App.Session
+    Okapi.MonadSession m Model.User
   ) =>
   Okapi.Middleware m
 conduitMiddleware = wrapIfNotHtmxRequest . Okapi.withSession
