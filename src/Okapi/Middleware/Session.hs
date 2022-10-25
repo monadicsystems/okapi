@@ -17,10 +17,12 @@ import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as BS
 import qualified Data.Either as Either
-import qualified Okapi.Request as Request
-import qualified Okapi.Response as Response
-import qualified Okapi.Server as Server
-import qualified Okapi.Server.Failure as Failure
+import qualified Okapi.Effect.Failure as Failure
+import qualified Okapi.Effect.Request as Request
+import qualified Okapi.Effect.Response as Response
+import qualified Okapi.Effect.Server as Server
+import qualified Okapi.Type.Failure as Failure
+import qualified Okapi.Type.Server as Server
 
 newtype SessionID = SessionID {unSessionID :: BS.ByteString}
   deriving (Eq, Show)
@@ -64,13 +66,13 @@ instance MonadSession m s => MonadSession (Server.ServerT m) s where
   clearSession :: MonadSession m s => SessionID -> Server.ServerT m ()
   clearSession = Morph.lift . clearSession
 
-sessionID :: (Server.ServerM m, MonadSession m s) => m SessionID
+sessionID :: (Request.RequestM m, MonadSession m s) => m SessionID
 sessionID = do
   encodedSessionID <- Request.cookieCrumb "session_id"
   secret <- sessionSecret
   maybe Failure.next pure (decodeSessionID secret encodedSessionID)
 
-session :: (Server.ServerM m, MonadSession m s) => m s
+session :: (Request.RequestM m, MonadSession m s) => m s
 session = do
   sessionID' <- sessionID
   maybeSession <- getSession sessionID'

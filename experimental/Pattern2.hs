@@ -16,14 +16,14 @@ import qualified Data.Map as Map
 import Data.Text
 import qualified Network.HTTP.Types as HTTP
 import Okapi
-import Okapi.Response
+import Okapi.Effect.Response
 import Okapi.Types
 import Web.HttpApiData
 
 -- $setup
 -- >>> :set -XFlexibleContexts
 -- >>> :set -XOverloadedStrings
--- >>> import Okapi.Response
+-- >>> import Okapi.Effect.Response
 -- >>> import Okapi.Test
 
 type Query = Map Text QueryValue

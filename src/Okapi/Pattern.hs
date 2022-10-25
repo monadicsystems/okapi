@@ -9,8 +9,9 @@ import qualified Data.Attoparsec.Text as Atto
 import qualified Data.Either.Extra as Either
 import qualified Data.List as List
 import qualified Data.Text as Text
-import qualified Okapi.Request as Request
-import qualified Server.Request as Request
+import qualified Okapi.Effect.Request as Request
+import qualified Okapi.Effect.Server as Server
+import qualified Okapi.Type.Request as Request
 import qualified Web.HttpApiData as Web
 
 -- $routing

@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.Server.Response where
+module Okapi.Type.Response where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -65,22 +65,3 @@ internalServerError =
       headers = []
       body = Raw "Internal Server Error"
    in Response {..}
-
-class Monad m => StateM m where
-  get :: m Response
-  put :: Response -> m ()
-
-gets :: StateM m => (Response -> a) -> m a
-gets projection = projection <$> get
-
-modify :: StateM m => (Response -> Response) -> m ()
-modify modifier = do
-  response <- get
-  put $ modifier response
-
-look :: StateM m => m a -> m a
-look action = do
-  response <- get
-  result <- action
-  put response
-  pure result

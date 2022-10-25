@@ -5,7 +5,7 @@ module Okapi.Middleware where
 
 import Data.Text
 import Okapi.Parser
-import Okapi.Response
+import Okapi.Effect.Response
 import Okapi.Types
 
 applyMiddlewares :: ServerM m => [m Response -> m Response] -> m Response -> m Response

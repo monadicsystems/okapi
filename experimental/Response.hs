@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.Response
+module Okapi.Effect.Response
   ( ok,
     notFound,
     redirect,

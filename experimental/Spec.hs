@@ -1,6 +1,6 @@
 type Okapi = ServerT IO
 
-testServer :: Okapi Okapi.Response
+testServer :: Okapi Okapi.Effect.Response
 testServer = do
   let parser1 = do
         get
@@ -60,19 +60,19 @@ testSession = do
   assertStatus 200 res3
   assertBody "done" res3
 
-pattern BlogRoute :: Okapi.Request
+pattern BlogRoute :: Okapi.Effect.Request
 pattern BlogRoute <-
   Request Okapi.Patterns.GET ["blog"] _ _ _
   where
     BlogRoute = Request Okapi.Patterns.GET ["blog"] mempty mempty mempty
 
-pattern BlogIDRoute :: Int -> Okapi.Request
+pattern BlogIDRoute :: Int -> Okapi.Effect.Request
 pattern BlogIDRoute blogID <-
   Request Okapi.Patterns.GET ["blog", parseUrlPiece -> Right blogID] _ _ _
   where
     BlogIDRoute blogID = Request Okapi.Patterns.GET ["blog", toUrlPiece blogID] mempty mempty mempty
 
-pattern BlogIDSectionRoute :: Int -> Text -> Okapi.Request
+pattern BlogIDSectionRoute :: Int -> Text -> Okapi.Effect.Request
 pattern BlogIDSectionRoute blogID sectionName <-
   Request Okapi.Patterns.GET ["blog", PathParam blogID, sectionName] _ _ _
   where
@@ -85,13 +85,13 @@ pattern BlogQueryParamsRoute author category <-
   where
     BlogQueryParamsRoute author category = [("author", QueryParam $ toQueryParam author), ("category", QueryParam $ toQueryParam category)]
 
-pattern BlogQueryRoute :: Text -> Text -> Okapi.Request
+pattern BlogQueryRoute :: Text -> Text -> Okapi.Effect.Request
 pattern BlogQueryRoute author category <-
   Request Okapi.Patterns.GET ["blog"] (BlogQueryParamsRoute author category) _ _
   where
     BlogQueryRoute author category = Request Okapi.Patterns.GET ["blog"] (BlogQueryParamsRoute author category) mempty mempty
 
--- | Test example patterns in Okapi.Request module
+-- | Test example patterns in Okapi.Effect.Request module
 --
 -- >>> parser = testMatcher
 --
@@ -112,7 +112,7 @@ pattern BlogQueryRoute author category <-
 -- >>> result5 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog?author=Diamond" "")
 -- >>> assertResponse is200 result5
 -- False
-testMatcher :: ServerM m => m Okapi.Response
+testMatcher :: ServerM m => m Okapi.Effect.Response
 testMatcher = match $ \case
   BlogRoute -> respond ok
   BlogIDRoute blogID -> respond ok
@@ -120,7 +120,7 @@ testMatcher = match $ \case
   BlogQueryRoute author category -> respond ok
   _ -> Okapi.next
 
-testPattern :: (Okapi.Request -> Bool) -> Okapi.Request -> Bool
+testPattern :: (Okapi.Effect.Request -> Bool) -> Okapi.Effect.Request -> Bool
 testPattern f = f
 
 -- >>> testBlogPattern

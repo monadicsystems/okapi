@@ -120,7 +120,7 @@ import Prelude hiding (head)
 -- $setup
 -- >>> :set -XFlexibleContexts
 -- >>> :set -XOverloadedStrings
--- >>> import Okapi.Response
+-- >>> import Okapi.Effect.Response
 -- >>> import Okapi.Test
 
 -- |

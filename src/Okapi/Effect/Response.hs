@@ -5,7 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.Response where
+module Okapi.Effect.Response where
 
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Except as Except
@@ -16,8 +16,9 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Okapi.Event as Event
-import qualified Okapi.Server.Failure as Failure
-import qualified Okapi.Server.Response as Response
+import qualified Okapi.State.Response as Response
+import qualified Okapi.Type.Failure as Failure
+import qualified Okapi.Type.Response as Response
 import qualified Web.Cookie as Web
 
 class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Response.StateM m) => ResponseM m

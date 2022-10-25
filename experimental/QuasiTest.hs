@@ -10,7 +10,7 @@ someRoute =
   ?female{Text}
   |]
 
-someRouteHandler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
+someRouteHandler :: (Int, Text, Text, Text) -> Okapi Okapi.Effect.Response
 someRouteHandler (_, _, _, _) = respond ok
 
 someRoute2 =
@@ -25,7 +25,7 @@ someRoute2 =
   >>= someRoute2Handler
   |]
 
-someRoute2Handler :: (Int, Text, Text, Text) -> Okapi Okapi.Response
+someRoute2Handler :: (Int, Text, Text, Text) -> Okapi Okapi.Effect.Response
 someRoute2Handler (_, _, _, _) = respond ok
 
 someRoute3 =
@@ -36,7 +36,7 @@ someRoute3 =
   >>= verifyTodo
   |]
 
-verifyTodo :: Int -> Okapi Okapi.Response
+verifyTodo :: Int -> Okapi Okapi.Effect.Response
 verifyTodo id_ = if id_ > 0 then pure ok else Okapi.throw _204
 
 someRoute3TestSession :: Session ()
@@ -61,7 +61,7 @@ testSomeRoute = do
   print (urlFunc (5, "John", "World", "true") == urlFunc2 (5, "John", "World", "true"))
 -}
 
-testServerQuasi :: Okapi Okapi.Response
+testServerQuasi :: Okapi Okapi.Effect.Response
 testServerQuasi =
   choice
     [ parser3,

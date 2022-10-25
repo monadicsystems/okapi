@@ -16,14 +16,14 @@ import qualified Data.Map as Map
 import Data.Text
 import qualified Network.HTTP.Types as HTTP
 import Okapi
-import Okapi.Response
+import Okapi.Effect.Response
 import Okapi.Types
 import Web.HttpApiData
 
 -- $setup
 -- >>> :set -XFlexibleContexts
 -- >>> :set -XOverloadedStrings
--- >>> import Okapi.Response
+-- >>> import Okapi.Effect.Response
 -- >>> import Okapi.Test
 
 data Pattern = Pattern HTTP.Method [Text] deriving (Eq, Show)
@@ -124,7 +124,7 @@ testBlogIdPattern = testPattern (\case BlogRouteId 7 -> True; _ -> False) (BlogR
 -- $setup
 -- >>> :set -XFlexibleContexts
 -- >>> :set -XOverloadedStrings
--- >>> import Okapi.Response
+-- >>> import Okapi.Effect.Response
 -- >>> import Okapi.Test
 
 {-

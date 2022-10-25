@@ -80,15 +80,46 @@ import qualified Network.Wai.Middleware.Gzip as WAI
 import qualified Network.Wai.Parse as WAI
 import qualified Network.Wai.Test as WAI
 import qualified Network.WebSockets as WebSockets
+import qualified Okapi.Effect.Failure as Failure
+import qualified Okapi.Effect.Request as Effect.Request
+import qualified Okapi.Effect.Response as Response
+import qualified Okapi.Effect.Server as Server
 import qualified Okapi.Event as Event
 import qualified Okapi.Middleware.Session as Session
-import qualified Okapi.Server as Server
-import qualified Okapi.Server.Failure as Failure
-import qualified Okapi.Server.Request as Request
-import qualified Okapi.Server.Response as Response
+import qualified Okapi.Type.Failure as Failure
+import qualified Okapi.Type.Request as Request
+import qualified Okapi.Type.Response as Response
+import qualified Okapi.Type.Server as Server
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
+
+-- $middleware
+--
+-- Middlewares allow you to modify the behavior of Okapi handlers.
+-- Middlewares are functions that take a handler and return another handler.
+-- Middlewares can be composed with the fish operator @>=>@.
+--
+-- @
+--  clearHeadersMiddleware >=> pathPrefix ["jello"] :: forall m. Middleware m
+-- @
+
+applyMiddlewares :: Server.ServerM m => [m () -> m ()] -> (m () -> m ())
+applyMiddlewares middlewares handler =
+  List.foldl (\handler middleware -> middleware handler) handler middlewares
+
+-- TODO: Is this needed? Idea taken from OCaml Dream framework
+
+scope :: Server.ServerM m => Request.Path -> [m () -> m ()] -> (m () -> m ())
+scope prefix middlewares handler = Effect.Request.path `Failure.is` prefix >> applyMiddlewares middlewares handler
+
+clearHeadersMiddleware :: Response.ResponseM m => m () -> m ()
+clearHeadersMiddleware handler = do
+  Response.setHeaders []
+  handler
+
+prefixPathMiddleware :: Effect.Request.RequestM m => Request.Path -> (m () -> m ())
+prefixPathMiddleware prefix handler = Effect.Request.path `Failure.is` prefix >> handler
 
 -- $wai
 --

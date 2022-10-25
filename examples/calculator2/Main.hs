@@ -50,7 +50,7 @@ pattern OpHasPathParams op x y = ["calc", Okapi.PathParam op, Okapi.PathParam x,
 main :: IO ()
 main = Okapi.run id calculator
 
-calculator :: Okapi Okapi.Response
+calculator :: Okapi Okapi.Effect.Response
 calculator =
   Okapi.route Okapi.path $ \case
     OpNoPathParams op -> do
@@ -60,7 +60,7 @@ calculator =
     OpHasPathParams op x y -> handle op x y
     _ -> Okapi.next
 
-handle :: Op -> Int -> Int -> Okapi Okapi.Response
+handle :: Op -> Int -> Int -> Okapi Okapi.Effect.Response
 handle op x y = case op of
   AddOp -> Okapi.ok Function.& Okapi.setJSON (x + y) Function.& respond
   SubOp -> Okapi.ok Function.& Okapi.setJSON (x - y) Function.& respond
@@ -69,7 +69,7 @@ handle op x y = case op of
     Okapi.guardThrow Okapi.forbidden (y == 0)
     Okapi.ok Function.& Okapi.setJSON DivResult {answer = x `div` y, remainder = x `mod` y} Function.& respond
 
-respond :: Okapi.Response -> Okapi Okapi.Response
+respond :: Okapi.Effect.Response -> Okapi Okapi.Effect.Response
 respond response = do
   Okapi.methodEnd
   Okapi.pathEnd

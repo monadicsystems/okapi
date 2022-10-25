@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Okapi.Request where
+module Okapi.Effect.Request where
 
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Combinators as Combinators
@@ -23,11 +23,13 @@ import qualified Data.Text.Encoding.Base64 as Text
 import qualified Data.Vault.Lazy as Vault
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai.Parse as WAI
-import qualified Okapi.Server.Failure as Failure
-import qualified Okapi.Server.Request as Request
+import qualified Okapi.State.Request as Request
+import qualified Okapi.Type.Failure as Failure
+import qualified Okapi.Type.Request as Request
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
+import qualified Okapi.Effect.Failure as Failure
 
 class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Request.StateM m) => RequestM m
 

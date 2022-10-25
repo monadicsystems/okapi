@@ -2,7 +2,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.Server.Request where
+module Okapi.Type.Request where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -66,22 +66,3 @@ type HeaderName = HTTP.HeaderName
 type Cookie = [Crumb]
 
 type Crumb = (BS.ByteString, BS.ByteString)
-
-class Monad m => StateM m where
-  get :: m Request
-  put :: Request -> m ()
-
-gets :: StateM m => (Request -> a) -> m a
-gets projection = projection <$> get
-
-modify :: StateM m => (Request -> Request) -> m ()
-modify modifier = do
-  request <- get
-  put $ modifier request
-
-look :: StateM m => m a -> m a
-look action = do
-  request <- get
-  result <- action
-  put request
-  pure result
