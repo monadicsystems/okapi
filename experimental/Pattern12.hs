@@ -49,13 +49,13 @@ pattern PathParam param <-
   where
     PathParam param = toUrlPiece param
 
-parsePattern :: MonadServer m => m Pattern
+parsePattern :: ServerM m => m Pattern
 parsePattern = do
   method <- parseMethod
   path <- many parsePathSeg
   pure $ Pattern method path
 
-matchWith :: MonadServer m => (Pattern -> m Response) -> m Response
+matchWith :: ServerM m => (Pattern -> m Response) -> m Response
 matchWith matcher = parsePattern >>= matcher
 
 encodePattern :: Pattern -> URL
@@ -101,7 +101,7 @@ pattern BlogRouteIdSection blogID sectionName =
 -- >>> result5 <- testIO testMatcher (TestRequest "GET" [] "/blog?author=Johnson" "")
 -- >>> assertResponse is200 result5
 -- True
-testMatcher :: MonadServer m => m Response
+testMatcher :: ServerM m => m Response
 testMatcher = matchWith $ \case
   BlogRoute -> respond ok
   BlogRouteId blogID -> respond ok

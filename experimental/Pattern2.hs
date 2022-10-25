@@ -70,14 +70,14 @@ viewQuery name query = case Map.lookup name query of
   Nothing -> (Nothing, query)
   Just value -> (Just value, Map.delete name query)
 
-parsePattern :: MonadServer m => m Pattern
+parsePattern :: ServerM m => m Pattern
 parsePattern = do
   method <- parseMethod
   path <- some parsePathSeg
   query <- fmap (\case Just txt -> QueryParam txt; Nothing -> QueryFlag) parseAllQueryItems
   pure $ Pattern method path query
 
-matchWith :: MonadServer m => (Pattern -> m Response) -> m Response
+matchWith :: ServerM m => (Pattern -> m Response) -> m Response
 matchWith matcher = parsePattern >>= matcher
 
 {-
@@ -163,7 +163,7 @@ pattern BlogQueryRoute author category <-
 -- >>> result5 <- testIO parser (TestRequest "GET" [] "/blog?author=Diamond" "")
 -- >>> assertResponse is200 result5
 -- False
-testMatcher :: MonadServer m => m Response
+testMatcher :: ServerM m => m Response
 testMatcher = matchWith $ \case
   BlogRoute -> respond ok
   BlogRouteId blogID -> respond ok

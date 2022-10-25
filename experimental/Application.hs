@@ -34,7 +34,7 @@ app ::
   Wai.Application
 app hoister defaultResponse okapiT waiRequest respond = do
   state <- waiRequestToState waiRequest
-  (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT) state
+  (eitherFailureOrResponse, _state) <- (State.runStateT . Except.runExceptT . runServerT $ Morph.hoist hoister okapiT) state
   let response =
         case eitherFailureOrResponse of
           Left Skip -> defaultResponse

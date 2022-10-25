@@ -163,10 +163,10 @@ queryParams = undefined
     }
 -}
 
-getRawURL :: MonadServer m => m Text
+getRawURL :: ServerM m => m Text
 getRawURL = undefined
 
--- match :: MonadServer m => Pattern a -> m a
+-- match :: ServerM m => Pattern a -> m a
 -- match pattern = do
 --   rawURL <- getRawURL
 --   maybe next return (matcher pattern rawURL)

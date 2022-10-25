@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE LambdaCase #-}
+
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Okapi.HSP (hsp) where
@@ -31,7 +31,7 @@ Must use trailing slash!
 hsp :: TH.QuasiQuoter
 hsp =
   TH.QuasiQuoter
-    { TH.quoteExp  = (\fp -> (normalizeDirTree "" <$> buildDirTree' fp) >>= buildExpr),
+    { TH.quoteExp  = buildDirTree' Monad.>=> (buildExpr . normalizeDirTree ""),
       TH.quotePat  = undefined,
       TH.quoteType = undefined,
       TH.quoteDec  = undefined
@@ -53,11 +53,11 @@ buildExpr (File name ext) = case ext of
         pure $ TH.NoBindS $ TH.AppE (TH.AppE isParser (TH.ParensE (TH.AppTypeE pathParamParser textType))) nameStringLit
     let pathEndParser = TH.VarE $ TH.mkName "Okapi.pathEnd"
     let prefixStmts :: [TH.Stmt] = [headStmt, TH.NoBindS pathEndParser]
-    let fileName = (Text.unpack name) <> (Text.unpack ext)
+    let fileName = Text.unpack name <> Text.unpack ext
 
     fileContents <- IO.liftIO $ readFile fileName
     let
-      indentedFileContents = unlines $ map (\line -> "  " <> line) $ lines fileContents
+      indentedFileContents = unlines $ map ("  " <>) $ lines fileContents
       doBlock = "do\n" <> indentedFileContents
     case parseExp doBlock of
       Left _ -> do
@@ -100,7 +100,7 @@ normalizeDirTree _ file = file
 
 fixName :: Text.Text -> Text.Text -> Text.Text
 fixName longerName shorterName =
-  Text.pack $ FilePath.joinPath $ (FilePath.splitDirectories $ Text.unpack longerName) List.\\ (FilePath.splitDirectories $ Text.unpack shorterName)
+  Text.pack $ FilePath.joinPath $ FilePath.splitDirectories (Text.unpack longerName) List.\\ FilePath.splitDirectories (Text.unpack shorterName)
 
 -- TODO: REAL This is the main function HERE!
 buildDirTree' root = do
@@ -121,12 +121,7 @@ buildDirTree rootDir = do
 
 isPathParam :: FilePath -> Bool
 isPathParam (h:t) =
-  if h == '['
-  then
-    if (dropWhile (']' /=) t) == "]"
-    then True
-    else False
-  else False
+  h == '[' && (dropWhile (']' /=) t) == "]"
 isPathParam _ = False
 
 removeBrackets :: FilePath -> FilePath
@@ -134,4 +129,4 @@ removeBrackets (h:t) = takeWhile (']' /=) t
 removeBrackets _     = error "No Brackets to remove dude!"
 
 parseExp :: String -> Either String TH.Exp
-parseExp = either Left (Right . Meta.toExp) . Meta.parseResultToEither . Exts.parseExpWithMode (Exts.defaultParseMode {Exts.extensions = [Exts.EnableExtension Exts.TypeApplications, Exts.EnableExtension Exts.BlockArguments]})
+parseExp = fmap Meta.toExp . Meta.parseResultToEither . Exts.parseExpWithMode (Exts.defaultParseMode {Exts.extensions = [Exts.EnableExtension Exts.TypeApplications, Exts.EnableExtension Exts.BlockArguments]})

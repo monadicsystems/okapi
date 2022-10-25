@@ -99,7 +99,7 @@ test ::
   Request ->
   (Either Failure Response, State)
 test hoister okapiT request =
-  (State.runStateT . Except.runExceptT . unOkapiT $ Morph.hoist hoister okapiT)
+  (State.runStateT . Except.runExceptT . runServerT $ Morph.hoist hoister okapiT)
     (requestToState request)
 
 testIO ::

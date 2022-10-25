@@ -76,7 +76,7 @@ main = do
   -- Run server
   Okapi.run (App.execute $ App.AppEnv dbPool redisConn) $ conduitMiddleware conduitServer
 
-conduitServer :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => m ()
+conduitServer :: (Okapi.ServerM m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => m ()
 conduitServer =
   Combinators.choice
     [ home,
@@ -91,44 +91,44 @@ conduitServer =
 
 -- Home
 
-home :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User) => m ()
+home :: (Okapi.ServerM m, Okapi.MonadSession m Model.User) => m ()
 home = homeRoute >>= homeHandler
 
-homeRoute :: Okapi.MonadServer m => m ()
+homeRoute :: Okapi.ServerM m => m ()
 homeRoute = do
   Okapi.methodGET
   Okapi.pathEnd
 
-homeHandler :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User) => () -> m ()
+homeHandler :: (Okapi.ServerM m, Okapi.MonadSession m Model.User) => () -> m ()
 homeHandler _ = UI.writeLucid UI.Home
 
 -- Signup Form
 
-signupForm :: Okapi.MonadServer m => m ()
+signupForm :: Okapi.ServerM m => m ()
 signupForm = signupFormRoute >>= signupFormHandler
   where
-    signupFormRoute :: Okapi.MonadServer m => m ()
+    signupFormRoute :: Okapi.ServerM m => m ()
     signupFormRoute = do
       Okapi.methodGET
       Okapi.pathParam @Text.Text `Okapi.is` "form"
       Okapi.pathParam @Text.Text `Okapi.is` "signup"
       Okapi.pathEnd
 
-    signupFormHandler :: Okapi.MonadServer m => () -> m ()
+    signupFormHandler :: Okapi.ServerM m => () -> m ()
     signupFormHandler _ = UI.writeLucid $ UI.SignupForm Nothing []
 
 -- Submit Signup Form
 
-submitSignupForm :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => m ()
+submitSignupForm :: (Okapi.ServerM m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => m ()
 submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
   where
-    submitSignupFormRoute :: Okapi.MonadServer m => m ()
+    submitSignupFormRoute :: Okapi.ServerM m => m ()
     submitSignupFormRoute = do
       Okapi.methodPOST
       Okapi.pathParam @Text.Text `Okapi.is` "signup"
       Okapi.pathEnd
 
-    submitSignupFormHandler :: (Okapi.MonadServer m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => () -> m ()
+    submitSignupFormHandler :: (Okapi.ServerM m, Okapi.MonadSession m Model.User, Reader.MonadReader App.AppEnv m, IO.MonadIO m) => () -> m ()
     submitSignupFormHandler _ = do
       signupForm <- Okapi.bodyURLEncoded @Model.SignupForm
       let formResult = Validate.signupForm signupForm
@@ -157,31 +157,31 @@ submitSignupForm = submitSignupFormRoute >>= submitSignupFormHandler
 
 -- Signin Form
 
-signinForm :: Okapi.MonadServer m => m ()
+signinForm :: Okapi.ServerM m => m ()
 signinForm = signinFormRoute >>= signinFormHandler
   where
-    signinFormRoute :: Okapi.MonadServer m => m ()
+    signinFormRoute :: Okapi.ServerM m => m ()
     signinFormRoute = do
       Okapi.methodGET
       Okapi.pathParam @Text.Text `Okapi.is` "form"
       Okapi.pathParam @Text.Text `Okapi.is` "signin"
       Okapi.pathEnd
 
-    signinFormHandler :: Okapi.MonadServer m => () -> m ()
+    signinFormHandler :: Okapi.ServerM m => () -> m ()
     signinFormHandler _ = UI.writeLucid $ UI.SigninForm Nothing []
 
 -- Submit Signin Form
 
-submitSigninForm :: Okapi.MonadServer m => m ()
+submitSigninForm :: Okapi.ServerM m => m ()
 submitSigninForm = submitSigninFormRoute >>= submitSigninFormHandler
   where
-    submitSigninFormRoute :: Okapi.MonadServer m => m ()
+    submitSigninFormRoute :: Okapi.ServerM m => m ()
     submitSigninFormRoute = do
       Okapi.methodPOST
       Okapi.pathParam @Text.Text `Okapi.is` "signin"
       Okapi.pathEnd
 
-    submitSigninFormHandler :: Okapi.MonadServer m => () -> m ()
+    submitSigninFormHandler :: Okapi.ServerM m => () -> m ()
     submitSigninFormHandler _ = do
       signinForm <- Okapi.bodyURLEncoded @Model.SigninForm
       let formResult = Validate.signinForm signinForm
@@ -199,7 +199,7 @@ submitSigninForm = submitSigninFormRoute >>= submitSigninFormHandler
 
 -- Logout
 
-logout :: Okapi.MonadServer m => m ()
+logout :: Okapi.ServerM m => m ()
 logout = do
   Okapi.methodPOST
   Okapi.pathParam @Text.Text `Okapi.is` "logout"
@@ -208,22 +208,22 @@ logout = do
 
 -- Follow
 
-follow :: Okapi.MonadServer m => m ()
+follow :: Okapi.ServerM m => m ()
 follow = undefined
 
 -- Unfollow
 
-unfollow :: Okapi.MonadServer m => m ()
+unfollow :: Okapi.ServerM m => m ()
 unfollow = undefined
 
 conduitMiddleware ::
-  ( Okapi.MonadServer m,
+  ( Okapi.ServerM m,
     Okapi.MonadSession m Model.User
   ) =>
   Okapi.Middleware m
 conduitMiddleware = wrapIfNotHtmxRequest . Okapi.withSession
 
-wrapIfNotHtmxRequest :: Okapi.MonadServer m => Okapi.Middleware m
+wrapIfNotHtmxRequest :: Okapi.ServerM m => Okapi.Middleware m
 wrapIfNotHtmxRequest handler = do
   hxRequestHeaderValue <- Combinators.optional $ Okapi.header "HX-Request"
   case hxRequestHeaderValue of

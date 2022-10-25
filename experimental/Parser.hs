@@ -128,7 +128,7 @@ import Prelude hiding (head)
 -- >>> result <- testIO parser $ request GET "" "" []
 -- >>> assertResponse is200 result
 -- True
-get :: forall m. MonadServer m => m ()
+get :: forall m. ServerM m => m ()
 get = method HTTP.methodGet
 
 -- |
@@ -136,7 +136,7 @@ get = method HTTP.methodGet
 -- >>> result <- testIO parser (TestRequest "POST" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-post :: forall m. MonadServer m => m ()
+post :: forall m. ServerM m => m ()
 post = method HTTP.methodPost
 
 -- |
@@ -144,7 +144,7 @@ post = method HTTP.methodPost
 -- >>> result <- testIO parser (TestRequest "HEAD" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-head :: forall m. MonadServer m => m ()
+head :: forall m. ServerM m => m ()
 head = method HTTP.methodHead
 
 -- |
@@ -152,7 +152,7 @@ head = method HTTP.methodHead
 -- >>> result <- testIO parser (TestRequest "PUT" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-put :: forall m. MonadServer m => m ()
+put :: forall m. ServerM m => m ()
 put = method HTTP.methodPut
 
 -- |
@@ -160,7 +160,7 @@ put = method HTTP.methodPut
 -- >>> result <- testIO parser (TestRequest "DELETE" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-delete :: forall m. MonadServer m => m ()
+delete :: forall m. ServerM m => m ()
 delete = method HTTP.methodDelete
 
 -- |
@@ -168,7 +168,7 @@ delete = method HTTP.methodDelete
 -- >>> result <- testIO parser (TestRequest "TRACE" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-trace :: forall m. MonadServer m => m ()
+trace :: forall m. ServerM m => m ()
 trace = method HTTP.methodTrace
 
 -- |
@@ -176,7 +176,7 @@ trace = method HTTP.methodTrace
 -- >>> result <- testIO parser (TestRequest "CONNECT" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-connect :: forall m. MonadServer m => m ()
+connect :: forall m. ServerM m => m ()
 connect = method HTTP.methodConnect
 
 -- |
@@ -184,7 +184,7 @@ connect = method HTTP.methodConnect
 -- >>> result <- testIO parser (TestRequest "OPTIONS" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-options :: forall m. MonadServer m => m ()
+options :: forall m. ServerM m => m ()
 options = method HTTP.methodOptions
 
 -- |
@@ -192,7 +192,7 @@ options = method HTTP.methodOptions
 -- >>> result <- testIO parser (TestRequest "PATCH" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-patch :: forall m. MonadServer m => m ()
+patch :: forall m. ServerM m => m ()
 patch = method HTTP.methodPatch
 
 -- |
@@ -200,7 +200,7 @@ patch = method HTTP.methodPatch
 -- >>> result <- testIO parser (TestRequest "FOOBLAH" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-anyMethod :: forall m. MonadServer m => m ()
+anyMethod :: forall m. ServerM m => m ()
 anyMethod = parseMethod >> pure ()
 
 -- |
@@ -208,7 +208,7 @@ anyMethod = parseMethod >> pure ()
 -- >>> result <- testIO parser (TestRequest "CUSTOM" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-method :: forall m. MonadServer m => HTTP.Method -> m ()
+method :: forall m. ServerM m => HTTP.Method -> m ()
 method method = do
   method' <- parseMethod
   if method == method'
@@ -228,7 +228,7 @@ method method = do
 -- >>> result <- testIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
-pathSeg :: forall m. MonadServer m => Text.Text -> m ()
+pathSeg :: forall m. ServerM m => Text.Text -> m ()
 pathSeg goal = pathSegWith (goal ==)
 
 -- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
@@ -243,7 +243,7 @@ pathSeg goal = pathSegWith (goal ==)
 -- >>> result <- testIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
-path :: forall m. MonadServer m => [Text.Text] -> m ()
+path :: forall m. ServerM m => [Text.Text] -> m ()
 path = mapM_ pathSeg
 
 -- | Parses a single path segment and returns it as a Haskell value of the specified type
@@ -260,7 +260,7 @@ path = mapM_ pathSeg
 -- >>> result <- testIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result
 -- True
-pathParam :: forall a m. (MonadServer m, Web.FromHttpApiData a) => m a
+pathParam :: forall a m. (ServerM m, Web.FromHttpApiData a) => m a
 pathParam = do
   pathSeg <- parsePathSeg
   maybe next pure (Web.parseUrlPieceMaybe pathSeg)
@@ -279,7 +279,7 @@ pathParam = do
 -- >>> result <- testIO parser (TestRequest "GET" [] "/product/242301" "")
 -- >>> assertResponse is200 result
 -- True
-pathParamRaw :: forall m. MonadServer m => m Text.Text
+pathParamRaw :: forall m. ServerM m => m Text.Text
 pathParamRaw = parsePathSeg
 
 -- | Parses and discards a single path segment if it satisfies the given predicate function
@@ -300,7 +300,7 @@ pathParamRaw = parsePathSeg
 -- >>> result2 <- testIO parser (TestRequest "GET" [] "/product/5641" "")
 -- >>> assertFailure isSkip result2
 -- True
-pathSegWith :: forall m. MonadServer m => (Text.Text -> Bool) -> m ()
+pathSegWith :: forall m. ServerM m => (Text.Text -> Bool) -> m ()
 pathSegWith predicate = do
   pathSeg <- parsePathSeg
   if predicate pathSeg
@@ -308,7 +308,7 @@ pathSegWith predicate = do
     else next
 
 -- | Parses all the remaining path segments of a request
-pathWildcard :: forall m. MonadServer m => m (NonEmpty.NonEmpty Text.Text)
+pathWildcard :: forall m. ServerM m => m (NonEmpty.NonEmpty Text.Text)
 pathWildcard = do
   segs <- some pathParamRaw
   case segs of
@@ -336,7 +336,7 @@ pathWildcard = do
 -- True
 -- >>> assertResponse (hasBodyRaw "5") result
 -- True
-queryParam :: forall a m. (MonadServer m, Web.FromHttpApiData a) => Text.Text -> m a
+queryParam :: forall a m. (ServerM m, Web.FromHttpApiData a) => Text.Text -> m a
 queryParam queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   case queryItemValue of
@@ -369,7 +369,7 @@ queryParam queryItemName = do
 -- >>> result <- testIO parser (TestRequest "GET" [] "/flip/my/bit?value=b0" "")
 -- >>> assertResponse (hasBodyRaw "1") result
 -- True
-queryParamRaw :: forall m. MonadServer m => Text.Text -> m Text.Text
+queryParamRaw :: forall m. ServerM m => Text.Text -> m Text.Text
 queryParamRaw queryItemName = do
   (_, queryItemValue) <- parseQueryItem queryItemName
   case queryItemValue of
@@ -398,19 +398,19 @@ queryParamRaw queryItemName = do
 -- >>> result3 <- testIO parser (TestRequest "GET" [] "/users" "")
 -- >>> assertResponse (hasBodyRaw "[\"Derek\",\"Alice\",\"Bob\",\"Casey\",\"Alex\",\"Larry\"]") result3
 -- True
-queryFlag :: forall a m. MonadServer m => Text.Text -> m Bool
+queryFlag :: forall a m. ServerM m => Text.Text -> m Bool
 queryFlag queryItemName = do
   maybeQueryItem <- optional $ parseQueryItem queryItemName
   pure $ case maybeQueryItem of
     Nothing -> False
     Just _ -> True
 
-queryParams :: forall m. MonadServer m => m (Map Text.Text Text.Text)
+queryParams :: forall m. ServerM m => m (Map Text.Text Text.Text)
 queryParams = undefined
 
 -- HEADER HELPERS
 
-basicAuth :: forall m. MonadServer m => m (Text.Text, Text.Text)
+basicAuth :: forall m. ServerM m => m (Text.Text, Text.Text)
 basicAuth = do
   authValue <- header "Authorization"
   case Text.words $ Text.decodeUtf8 authValue of
@@ -423,32 +423,32 @@ basicAuth = do
             _ -> next
     _ -> next
 
--- TODO: cookie :: forall m. MonadServer m => Cookie
+-- TODO: cookie :: forall m. ServerM m => Cookie
 
-cookies :: forall m. MonadServer m => m Cookies
+cookies :: forall m. ServerM m => m Cookies
 cookies = do
   cookiesValue <- header "Cookie"
   pure $ Cookie.parseCookiesText cookiesValue
 
 -- TODO: Any checks required??
-header :: forall m. MonadServer m => HTTP.HeaderName -> m Char8.ByteString
+header :: forall m. ServerM m => HTTP.HeaderName -> m Char8.ByteString
 header headerName = do
   (_headerName, headerValue) <- parseHeader headerName
   pure headerValue
 
--- TODO: headers :: forall m. MonadServer m => m Headers
+-- TODO: headers :: forall m. ServerM m => m Headers
 
 -- BODY HELPERS
 
 -- TODO: Check HEADERS for correct content type?
 -- TODO: Check METHOD for correct HTTP method?
 
-bodyJSON :: forall a m. (MonadServer m, Aeson.FromJSON a) => m a
+bodyJSON :: forall a m. (ServerM m, Aeson.FromJSON a) => m a
 bodyJSON = do
   body <- bodyRaw
   maybe next pure (Aeson.decode body)
 
-bodyURLEncoded :: forall a m. (MonadServer m, Web.FromForm a) => m a
+bodyURLEncoded :: forall a m. (ServerM m, Web.FromForm a) => m a
 bodyURLEncoded = do
   body <- bodyRaw
   maybe next pure (eitherToMaybe $ Web.urlDecodeAsForm body)
@@ -459,12 +459,12 @@ bodyURLEncoded = do
       Right value -> Just value
 
 -- TODO: bodyFile functions for file uploads to server?
-bodyRaw :: forall m. MonadServer m => m LBS.ByteString
+bodyRaw :: forall m. ServerM m => m LBS.ByteString
 bodyRaw = parseBody
 
 -- Response helpers
 
-respond :: forall m. MonadServer m => Response -> m Response
+respond :: forall m. ServerM m => Response -> m Response
 respond response = do
   check1 <- methodParsed
   check2 <- pathParsed
@@ -475,23 +475,23 @@ respond response = do
 
 -- Error HELPERS
 
-next :: forall a m. MonadServer m => m a
+next :: forall a m. ServerM m => m a
 next = Except.throwError Skip
 
-throw :: forall a m. MonadServer m => Response -> m a
+throw :: forall a m. ServerM m => Response -> m a
 throw = Except.throwError . Error
 
-(<!>) :: forall a m. MonadServer m => m a -> m a -> m a
+(<!>) :: forall a m. ServerM m => m a -> m a -> m a
 parser1 <!> parser2 = Except.catchError parser1 (const parser2)
 
-guardThrow :: forall a m. MonadServer m => Response -> Bool -> m ()
+guardThrow :: forall a m. ServerM m => Response -> Bool -> m ()
 guardThrow _ True = pure ()
 guardThrow response False = throw response
 
-optionalThrow :: forall a m. MonadServer m => m a -> m (Maybe a)
+optionalThrow :: forall a m. ServerM m => m a -> m (Maybe a)
 optionalThrow parser = (Just <$> parser) <!> pure Nothing
 
-optionThrow :: forall a m. MonadServer m => a -> m a -> m a
+optionThrow :: forall a m. ServerM m => a -> m a -> m a
 optionThrow value parser = do
   mbValue <- optionalThrow parser
   case mbValue of
@@ -500,24 +500,24 @@ optionThrow value parser = do
 
 -- State Checks
 
-methodParsed :: MonadServer m => m Bool
+methodParsed :: ServerM m => m Bool
 methodParsed = State.gets stateRequestMethodParsed
 
-pathParsed :: MonadServer m => m Bool
+pathParsed :: ServerM m => m Bool
 pathParsed = State.gets (Prelude.null . requestPath . stateRequest)
 
-queryParsed :: MonadServer m => m Bool
+queryParsed :: ServerM m => m Bool
 queryParsed = State.gets (Prelude.null . requestQuery . stateRequest)
 
-headersParsed :: MonadServer m => m Bool
+headersParsed :: ServerM m => m Bool
 headersParsed = State.gets (Prelude.null . requestHeaders . stateRequest)
 
-bodyParsed :: MonadServer m => m Bool
+bodyParsed :: ServerM m => m Bool
 bodyParsed = State.gets stateRequestBodyParsed
 
 -- PRIMITIVE PARSERS (BELOW IS INTERNAL)
 
-parseMethod :: MonadServer m => m HTTP.Method
+parseMethod :: ServerM m => m HTTP.Method
 parseMethod = do
   isMethodParsed <- methodParsed
   if isMethodParsed
@@ -527,10 +527,10 @@ parseMethod = do
       State.modify (\state -> state {stateRequestMethodParsed = True})
       pure method
 
-parsePath :: MonadServer m => m [Text.Text]
+parsePath :: ServerM m => m [Text.Text]
 parsePath = some parsePathSeg
 
-parsePathSeg :: MonadServer m => m Text.Text
+parsePathSeg :: ServerM m => m Text.Text
 parsePathSeg = do
   maybePathSeg <- State.gets (safeHead . requestPath . stateRequest)
   case maybePathSeg of
@@ -543,7 +543,7 @@ parsePathSeg = do
     safeHead [] = Nothing
     safeHead (x : _) = Just x
 
-parseQueryItem :: MonadServer m => Text.Text -> m QueryItem
+parseQueryItem :: ServerM m => Text.Text -> m QueryItem
 parseQueryItem queryItemName = do
   maybeQueryItem <- State.gets (Foldable.find (\(queryItemName', _) -> queryItemName == queryItemName') . requestQuery . stateRequest)
   case maybeQueryItem of
@@ -552,19 +552,19 @@ parseQueryItem queryItemName = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = List.delete queryItem $ requestQuery $ stateRequest state}})
       pure queryItem
 
-parseQuery :: MonadServer m => m Query
+parseQuery :: ServerM m => m Query
 parseQuery = do
   query <- State.gets (requestQuery . stateRequest)
   State.modify (\state -> state {stateRequest = (stateRequest state) {requestQuery = []}})
   pure query
 
-parseHeaders :: MonadServer m => m Headers
+parseHeaders :: ServerM m => m Headers
 parseHeaders = do
   headers <- State.gets (requestHeaders . stateRequest)
   State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = []}})
   pure headers
 
-parseHeader :: MonadServer m => HTTP.HeaderName -> m Header
+parseHeader :: ServerM m => HTTP.HeaderName -> m Header
 parseHeader headerName = do
   maybeHeader <- State.gets (Foldable.find (\(headerName', _) -> headerName == headerName') . requestHeaders . stateRequest)
   case maybeHeader of
@@ -573,7 +573,7 @@ parseHeader headerName = do
       State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = List.delete header $ requestHeaders $ stateRequest state}})
       pure header
 
-parseBody :: forall m. MonadServer m => m LBS.ByteString
+parseBody :: forall m. ServerM m => m LBS.ByteString
 parseBody = do
   isBodyParsed <- bodyParsed
   if isBodyParsed
@@ -583,15 +583,15 @@ parseBody = do
       State.modify (\state -> state {stateRequestBodyParsed = True})
       pure body
 
-parseRequest :: MonadServer m => m Request
+parseRequest :: ServerM m => m Request
 parseRequest = Request <$> parseMethod <*> parsePath <*> Okapi.Parser.parseQuery <*> parseBody <*> parseHeaders
 
-match :: MonadServer m => (Request -> m Response) -> m Response
+match :: ServerM m => (Request -> m Response) -> m Response
 match matcher = parseRequest >>= matcher
 
 -- TODO: Probably don't need??? I don't think so after some thought
 {-
-routeToFile :: MonadServer m => Status -> Headers -> m Response
+routeToFile :: ServerM m => Status -> Headers -> m Response
 routeToFile status headers = do
   nonEmptyPath <- pathWildcard
   let filePath = nonEmptyPathToFilePath nonEmptyPath
@@ -600,17 +600,17 @@ routeToFile status headers = do
     nonEmptyPathToFilePath :: NonEmpty Text -> FilePath
     nonEmptyPathToFilePath (base :| path) = unpack $ base <> Text.intercalate "/" path
 
-static :: MonadServer m => [Text] ->
+static :: ServerM m => [Text] ->
 static
 -}
 
-lookupQuery :: MonadServer m => Text -> Query -> m QueryValue
+lookupQuery :: ServerM m => Text -> Query -> m QueryValue
 lookupQuery name query = maybe next pure (List.lookup name query)
 
-lookupHeaders :: MonadServer m => HeaderName -> Headers -> m BS.ByteString
+lookupHeaders :: ServerM m => HeaderName -> Headers -> m BS.ByteString
 lookupHeaders name headers = maybe next pure (List.lookup name headers)
 
-lookupForm :: (MonadServer m, Web.FromHttpApiData a) => Text -> Body -> m a
+lookupForm :: (ServerM m, Web.FromHttpApiData a) => Text -> Body -> m a
 lookupForm = undefined
 
 {-

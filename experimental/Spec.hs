@@ -112,7 +112,7 @@ pattern BlogQueryRoute author category <-
 -- >>> result5 <- testIO parser (TestRequest "Okapi.Patterns.GET" [] "/blog?author=Diamond" "")
 -- >>> assertResponse is200 result5
 -- False
-testMatcher :: MonadServer m => m Okapi.Response
+testMatcher :: ServerM m => m Okapi.Response
 testMatcher = match $ \case
   BlogRoute -> respond ok
   BlogIDRoute blogID -> respond ok

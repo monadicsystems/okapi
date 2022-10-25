@@ -19,7 +19,7 @@ instance Okapi.Writeable (Lucid.Html ()) where
 emptyHtml :: Lucid.Html ()
 emptyHtml = ""
 
-writeLucid :: (Okapi.MonadServer m, Lucid.ToHtml a) => a -> m ()
+writeLucid :: (Okapi.ServerM m, Lucid.ToHtml a) => a -> m ()
 writeLucid htmlable = do
   Okapi.setHeader ("Content-Type", "text/html;charset=utf-8")
   Okapi.write $ toHtmlPure htmlable

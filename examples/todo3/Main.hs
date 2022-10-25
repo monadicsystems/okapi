@@ -178,7 +178,7 @@ respond response = do
   pathEnd
   return response
 
-requestParts :: MonadServer m => m RequestParts
+requestParts :: ServerM m => m RequestParts
 requestParts = do
   m <- method
   p <- path

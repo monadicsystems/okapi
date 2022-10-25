@@ -52,7 +52,7 @@ storeHeader :: ... => Text -> Okapi a
 findPathParam :: forall a. FromHttpApiData a => Okapi a
 -}
 
-type MonadServer m =
+type ServerM m =
   ( Functor m,
     Applicative m,
     Applicative.Alternative m,
@@ -62,7 +62,7 @@ type MonadServer m =
     State.MonadState State m
   )
 
-newtype ServerT m a = ServerT {unOkapiT :: Except.ExceptT Failure (State.StateT State m) a}
+newtype ServerT m a = ServerT {runServerT :: Except.ExceptT Failure (State.StateT State m) a}
   deriving newtype
     ( Except.MonadError Failure,
       State.MonadState State
@@ -73,7 +73,7 @@ instance Functor m => Functor (ServerT m) where
   fmap f okapiT =
     ServerT . Except.ExceptT . State.StateT $
       ( fmap (\ ~(a, s') -> (f <$> a, s'))
-          . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
+          . State.runStateT (Except.runExceptT $ runServerT okapiT)
       )
   {-# INLINE fmap #-}
 
@@ -117,7 +117,7 @@ instance Monad m => Monad (ServerT m) where
     case eitherX of
       Left error -> pure (Left error, s)
       Right x -> do
-        ~(eitherResult, s'') <- State.runStateT (Except.runExceptT $ unOkapiT $ f x) s'
+        ~(eitherResult, s'') <- State.runStateT (Except.runExceptT $ runServerT $ f x) s'
         case eitherResult of
           Left error' -> pure (Left error', s')
           Right res -> pure (Right res, s'')
@@ -144,7 +144,7 @@ instance Reader.MonadReader r m => Reader.MonadReader r (ServerT m) where
   local = mapOkapiT . Reader.local
     where
       mapOkapiT :: (m (Either Failure a, State) -> n (Either Failure b, State)) -> ServerT m a -> ServerT n b
-      mapOkapiT f okapiT = ServerT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ unOkapiT okapiT)
+      mapOkapiT f okapiT = ServerT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ runServerT okapiT)
   reader = Morph.lift . Reader.reader
 
 instance Morph.MonadTrans ServerT where
@@ -155,7 +155,7 @@ instance Morph.MonadTrans ServerT where
 
 instance Morph.MFunctor ServerT where
   hoist :: Monad m => (forall a. m a -> n a) -> ServerT m b -> ServerT n b
-  hoist nat okapiT = ServerT . Except.ExceptT . State.StateT $ (nat . State.runStateT (Except.runExceptT $ unOkapiT okapiT))
+  hoist nat okapiT = ServerT . Except.ExceptT . State.StateT $ (nat . State.runStateT (Except.runExceptT $ runServerT okapiT))
 
 data State = State
   { stateRequest :: Request,
