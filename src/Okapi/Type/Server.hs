@@ -12,6 +12,7 @@ import qualified Control.Applicative as Applicative
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.IO.Class as IO
+import qualified Control.Monad.Logger as Logger
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.Reader.Class as Reader
 import qualified Control.Monad.State.Strict as State
@@ -116,6 +117,10 @@ instance Reader.MonadReader r m => Reader.MonadReader r (ServerT m) where
       mapOkapiT f okapiT = ServerT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ runServerT okapiT)
   reader :: Reader.MonadReader r m => (r -> a) -> ServerT m a
   reader = Morph.lift . Reader.reader
+
+instance Logger.MonadLogger m => Logger.MonadLogger (ServerT m) where
+  monadLoggerLog :: Logger.ToLogStr msg => Logger.Loc -> Logger.LogSource -> Logger.LogLevel -> msg -> ServerT m ()
+  monadLoggerLog loc logSrc logLvl msg = Morph.lift $ Logger.monadLoggerLog loc logSrc logLvl msg
 
 instance IO.MonadIO m => IO.MonadIO (ServerT m) where
   liftIO :: State.MonadIO m => IO a -> ServerT m a

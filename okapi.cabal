@@ -51,6 +51,7 @@ library
     , http-types
     , memory
     , mmorph
+    , monad-logger
     , mtl
     , network
     , parser-combinators
