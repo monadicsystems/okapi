@@ -9,6 +9,7 @@ module Okapi.Effect.Response where
 
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Except as Except
+import qualified Control.Monad.Logger as Logger
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
@@ -21,7 +22,7 @@ import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Response as Response
 import qualified Web.Cookie as Web
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Response.StateM m) => ResponseM m
+class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Response.StateM m) => ResponseM m
 
 -- RESPONSE START --
 

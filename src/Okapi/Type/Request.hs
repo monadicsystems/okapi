@@ -1,6 +1,9 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Okapi.Type.Request where
 
@@ -10,6 +13,7 @@ import qualified Data.Text as Text
 import qualified Data.Vault.Lazy as Vault
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai.Parse as WAI
+import qualified Web.HttpApiData as Web
 
 -- | Represents the HTTP request being parsed.
 data Request = Request
@@ -66,3 +70,50 @@ type HeaderName = HTTP.HeaderName
 type Cookie = [Crumb]
 
 type Crumb = (BS.ByteString, BS.ByteString)
+
+-- $patterns
+
+pattern GET :: Method
+pattern GET = Just "GET"
+
+pattern POST :: Method
+pattern POST = Just "POST"
+
+pattern PUT :: Method
+pattern PUT = Just "PUT"
+
+pattern PATCH :: Method
+pattern PATCH = Just "PATCH"
+
+pattern DELETE :: Method
+pattern DELETE = Just "DELETE"
+
+pattern TRACE :: Method
+pattern TRACE = Just "TRACE"
+
+pattern CONNECT :: Method
+pattern CONNECT = Just "CONNECT"
+
+pattern OPTIONS :: Method
+pattern OPTIONS = Just "OPTIONS"
+
+pattern HEAD :: Method
+pattern HEAD = Just "HEAD"
+
+pattern NULL :: Method
+pattern NULL = Nothing
+
+pattern PathParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
+pattern PathParam param <-
+  (Web.parseUrlPiece -> Right param)
+  where
+    PathParam param = Web.toUrlPiece param
+
+pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> QueryValue
+pattern IsQueryParam param <-
+  QueryParam (Web.parseUrlPiece -> Right param)
+  where
+    IsQueryParam param = QueryParam $ Web.toUrlPiece param
+
+pattern HasQueryFlag :: Maybe QueryValue
+pattern HasQueryFlag <- Just QueryFlag

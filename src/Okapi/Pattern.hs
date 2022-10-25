@@ -23,38 +23,6 @@ import qualified Web.HttpApiData as Web
 route :: Request.RequestM m => m a -> (a -> m ()) -> m ()
 route parser dispatcher = parser >>= dispatcher
 
--- $patterns
-
-pattern GET :: Request.Method
-pattern GET = Just "GET"
-
-pattern POST :: Request.Method
-pattern POST = Just "POST"
-
-pattern PATCH :: Request.Method
-pattern PATCH = Just "PATCH"
-
-pattern DELETE :: Request.Method
-pattern DELETE = Just "DELETE"
-
-pattern PUT :: Request.Method
-pattern PUT = Just "PUT"
-
-pattern PathParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
-pattern PathParam param <-
-  (Web.parseUrlPiece -> Right param)
-  where
-    PathParam param = Web.toUrlPiece param
-
-pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Request.QueryValue
-pattern IsQueryParam param <-
-  Request.QueryParam (Web.parseUrlPiece -> Right param)
-  where
-    IsQueryParam param = Request.QueryParam $ Web.toUrlPiece param
-
-pattern HasQueryFlag :: Maybe Request.QueryValue
-pattern HasQueryFlag <- Just Request.QueryFlag
-
 viewQuery :: Text.Text -> Request.Query -> (Maybe Request.QueryValue, Request.Query)
 viewQuery name query = case List.lookup name query of
   Nothing -> (Nothing, query)
