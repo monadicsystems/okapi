@@ -77,40 +77,40 @@ There are 5 types of parsers for each of the 5 parts of a HTTP request.
 1. Method Parsers
 
 ```haskell
-method :: ServerM m => m Method
+method :: MonadHTTP m => m Method
 
-matchMethod :: ServerM m => Method -> m ()
+matchMethod :: MonadHTTP m => Method -> m ()
 
-get :: ServerM m => m ()
+get :: MonadHTTP m => m ()
 get = matchMethod "GET"
 ```
 
 2. Path Parsers
 
 ```haskell
-path :: ServerM m => m Path -- Parses entire remaining path
+path :: MonadHTTP m => m Path -- Parses entire remaining path
 path = many seg
 
-seg :: ServerM m => m Text
+seg :: MonadHTTP m => m Text
 
-matchPath :: ServerM m => Path -> m ()
+matchPath :: MonadHTTP m => Path -> m ()
 matchPath desiredPath = mapM_ matchSeg desiredPath
 
-matchSeg :: ServerM m => Text -> m ()
+matchSeg :: MonadHTTP m => Text -> m ()
 
-pathParam :: ServerM m => FromHttpApiData a => m a
+pathParam :: MonadHTTP m => FromHttpApiData a => m a
 
-pathEnd :: ServerM m => m ()
+pathEnd :: MonadHTTP m => m ()
 ```
 
 4. Query Parsers
 
 ```haskell
-query :: ServerM m => m Query -- parses entire query
+query :: MonadHTTP m => m Query -- parses entire query
 
-queryParam :: ServerM m => FromHttpApiData a => Text -> m a
+queryParam :: MonadHTTP m => FromHttpApiData a => Text -> m a
 
-queryFlag :: ServerM m => Text -> m ()
+queryFlag :: MonadHTTP m => Text -> m ()
 
 queryParamRaw :: Text -> m Text
 ```
@@ -118,25 +118,25 @@ queryParamRaw :: Text -> m Text
 6. Body Parsers
 
 ```haskell
-body :: ServerM m => m Body
+body :: MonadHTTP m => m Body
 
-bodyJSON :: ServerM m, FromJSON a => m a
+bodyJSON :: MonadHTTP m, FromJSON a => m a
 
-bodyURLEncoded :: FromForm a, ServerM m => m a
+bodyURLEncoded :: FromForm a, MonadHTTP m => m a
 
-bodyMultipart :: FromForm a, ServerM m => m (a, [File])
+bodyMultipart :: FromForm a, MonadHTTP m => m (a, [File])
 ```
 
 8. Headers Parsers
 
 ```haskell
-headers :: ServerM m => m Headers
+headers :: MonadHTTP m => m Headers
 
-header :: ServerM m => HeaderName -> m Header
+header :: MonadHTTP m => HeaderName -> m Header
 
-cookie :: ServerM m => m Cookie
+cookie :: MonadHTTP m => m Cookie
 
-crumb :: ServerM m => Text -> m Crumb
+crumb :: MonadHTTP m => Text -> m Crumb
 ```
 
 We can use these to create increasingly complex parsers. For example, let's say we wanted to implement a HTTP parser that matches the request `GET /blog`. That would look like this:
@@ -196,12 +196,12 @@ pattern BlogCategoryRoute category = ["blog", PathParam category]
 uses these bidrectional patterns with the `route` parser, like so:
 
 ```haskell
-route :: ServerM m => (Path -> m Response) -> m Response
+route :: MonadHTTP m => (Path -> m Response) -> m Response
 route matcher = do
   path <- parsePath
   matcher path
   
-myAPI :: ServerM m => m Response
+myAPI :: MonadHTTP m => m Response
 myAPI = route $ \case
   BlogRoute uuid -> do
     get
@@ -222,7 +222,7 @@ myAPI = route $ \case
 Since both routes are `GET` requests, let's factor out the `get` parser:
 
 ```haskell
-myAPI :: ServerM m => m Response
+myAPI :: MonadHTTP m => m Response
 myAPI = do
   get
   route $ \case

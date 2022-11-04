@@ -52,7 +52,7 @@ storeHeader :: ... => Text -> Okapi a
 findPathParam :: forall a. FromHttpApiData a => Okapi a
 -}
 
-type ServerM m =
+type MonadHTTP m =
   ( Functor m,
     Applicative m,
     Applicative.Alternative m,

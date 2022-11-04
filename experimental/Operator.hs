@@ -15,21 +15,21 @@ import qualified Web.HttpApiData as Web
 -- >>> result <- testIO parser (TestRequest "GET" [] "/store/clothing" "")
 -- >>> assertResponse is200 result
 -- True
-(//) :: forall m a. ServerM m => m a -> Text.Text -> m ()
+(//) :: forall m a. MonadHTTP m => m a -> Text.Text -> m ()
 (//) action goal = action >> pathSeg goal
 
-(/:) :: forall m a. ServerM m => m a -> Text.Text -> m ()
+(/:) :: forall m a. MonadHTTP m => m a -> Text.Text -> m ()
 (/:) = undefined -- Adds named path param
 
-(/*) :: forall m a. ServerM m => m a -> m (NonEmpty.NonEmpty Text.Text)
+(/*) :: forall m a. MonadHTTP m => m a -> m (NonEmpty.NonEmpty Text.Text)
 (/*) action = action >> pathWildcard
 
 -- Should be query flag?? YES
-(??) :: forall m a. ServerM m => m a -> Text.Text -> m ()
+(??) :: forall m a. MonadHTTP m => m a -> Text.Text -> m ()
 (??) action queryItemName =
   action >> do
     flag <- queryFlag queryItemName
     if flag then pure () else next
 
-(?:) :: forall m a. ServerM m => m a -> Text.Text -> m ()
+(?:) :: forall m a. MonadHTTP m => m a -> Text.Text -> m ()
 (?:) = undefined -- This should be the query param version of

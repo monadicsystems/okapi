@@ -10,7 +10,7 @@ import qualified Data.Either.Extra as Either
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Okapi.Effect.Request as Request
-import qualified Okapi.Effect.Server as Server
+import qualified Okapi.Effect.HTTP as HTTP
 import qualified Okapi.Type.Request as Request
 import qualified Web.HttpApiData as Web
 
@@ -20,7 +20,7 @@ import qualified Web.HttpApiData as Web
 -- Routing can be extended to dispatch on any property of the request, including method, path, query, headers, and even body.
 -- By default, Okapi provides a @route@ function for dispatching on the path of the request.
 
-route :: Request.RequestM m => m a -> (a -> m ()) -> m ()
+route :: Request.MonadRequest m => m a -> (a -> m ()) -> m ()
 route parser dispatcher = parser >>= dispatcher
 
 viewQuery :: Text.Text -> Request.Query -> (Maybe Request.QueryValue, Request.Query)

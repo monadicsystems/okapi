@@ -69,7 +69,7 @@ grab = Reader.asks $ obtain @field
 
 -- The server
 
-contactsServer :: (Okapi.ServerM m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m ()
+contactsServer :: (Okapi.MonadHTTP m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m ()
 contactsServer = wrapPartialIfNotHtmxRequest $ Okapi.route routeParser \case
   GetContacts -> do
     allContacts <- getAllContacts
@@ -246,33 +246,33 @@ contactsTableSchema =
           }
     }
 
-getAllContacts :: (Okapi.ServerM m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m [Contact]
+getAllContacts :: (Okapi.MonadHTTP m, Reader.MonadReader AppEnv m, IO.MonadIO m) => m [Contact]
 getAllContacts = do
   allContactRows <- runStatement $ Rel8.select queryAllContacts
   pure $ contactRowToContact <$> allContactRows
 
-getContactByID :: (Okapi.ServerM m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> m Contact
+getContactByID :: (Okapi.MonadHTTP m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> m Contact
 getContactByID contactID = do
   maybeContactRow <- runStatementOne $ Rel8.select $ queryContactByID contactID
   case maybeContactRow of
     Nothing -> Okapi.throw Okapi.internalServerError
     Just contactRow -> pure $ contactRowToContact contactRow
 
-insertContact :: (Okapi.ServerM m, Reader.MonadReader AppEnv m, IO.MonadIO m) => ContactForm -> m Contact
+insertContact :: (Okapi.MonadHTTP m, Reader.MonadReader AppEnv m, IO.MonadIO m) => ContactForm -> m Contact
 insertContact contactForm = do
   maybeNewContactID <- runStatementOne $ Rel8.insert $ contactInsert contactForm
   case maybeNewContactID of
     Nothing -> Okapi.throw Okapi.internalServerError
     Just newContactID -> getContactByID newContactID
 
-updateContact :: (Okapi.ServerM m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> ContactForm -> m Contact
+updateContact :: (Okapi.MonadHTTP m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> ContactForm -> m Contact
 updateContact contactID contactForm = do
   rowsAffected <- runStatement $ Rel8.update $ contactUpdate contactID contactForm
   if rowsAffected == 1
     then getContactByID contactID
     else Okapi.throw Okapi.internalServerError
 
-deleteContact :: (Okapi.ServerM m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> m ()
+deleteContact :: (Okapi.MonadHTTP m, Reader.MonadReader AppEnv m, IO.MonadIO m) => Int.Int64 -> m ()
 deleteContact contactID = do
   rowsAffected <- runStatement $ Rel8.delete $ contactDelete contactID
   if rowsAffected == 1
@@ -327,12 +327,12 @@ contactDelete contactID =
       returning = Rel8.NumberOfRowsAffected
     }
 
-runStatementOne :: (IO.MonadIO m, Okapi.ServerM m, Reader.MonadReader AppEnv m) => Hasql.Statement () [a] -> m (Maybe a)
+runStatementOne :: (IO.MonadIO m, Okapi.MonadHTTP m, Reader.MonadReader AppEnv m) => Hasql.Statement () [a] -> m (Maybe a)
 runStatementOne statement = do
   rows <- runStatement statement
   pure $ Maybe.listToMaybe rows
 
-runStatement :: (IO.MonadIO m, Okapi.ServerM m, Reader.MonadReader AppEnv m) => Hasql.Statement () o -> m o
+runStatement :: (IO.MonadIO m, Okapi.MonadHTTP m, Reader.MonadReader AppEnv m) => Hasql.Statement () o -> m o
 runStatement statement = do
   let transaction = Hasql.statement () statement
       session = Hasql.transaction Hasql.Serializable Hasql.Write transaction
@@ -354,18 +354,18 @@ instance Okapi.Writeable (Lucid.Html ()) where
   toLBS :: Lucid.Html () -> LBS.ByteString
   toLBS = Lucid.renderBS
 
-writeLucid :: Okapi.ServerM m => Lucid.Html () -> m ()
+writeLucid :: Okapi.MonadHTTP m => Lucid.Html () -> m ()
 writeLucid html = do
   Okapi.setHeader ("Content-Type", "text/html;charset=utf-8")
   Okapi.write $ Lucid.renderBS html
 
-routeParser :: Okapi.ServerM m => m (Okapi.Method, Okapi.Path)
+routeParser :: Okapi.MonadHTTP m => m (Okapi.Method, Okapi.Path)
 routeParser = do
   parsedMethod <- Okapi.method
   parsedPath <- Okapi.path
   pure (parsedMethod, parsedPath)
 
-wrapPartialIfNotHtmxRequest :: Okapi.ServerM m => Okapi.Middleware m
+wrapPartialIfNotHtmxRequest :: Okapi.MonadHTTP m => Okapi.Middleware m
 wrapPartialIfNotHtmxRequest server = do
   hxRequestHeaderValue <- Combinators.optional $ Okapi.header "HX-Request"
   case hxRequestHeaderValue of

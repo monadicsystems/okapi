@@ -11,7 +11,7 @@ import qualified Control.Monad.IO.Class as IO
 import qualified Text.InterpolatedString.Perl6 as Perl6
 import qualified Data.Maybe as Maybe
 
-runStatement :: (IO.MonadIO m, Okapi.ServerM m, Reader.MonadReader App.AppEnv m) => Hasql.Statement () o -> m o
+runStatement :: (IO.MonadIO m, Okapi.MonadHTTP m, Reader.MonadReader App.AppEnv m) => Hasql.Statement () o -> m o
 runStatement statement = do
     let
         transaction = Hasql.statement () statement
@@ -23,7 +23,7 @@ runStatement statement = do
       Left usageError -> Okapi.throw (Okapi.internalServerError { Okapi.responseBody = Okapi.ResponseBodyRaw [Perl6.qq| {usageError} |]})
       Right success -> pure success
 
-runStatementOne :: (IO.MonadIO m, Okapi.ServerM m, Reader.MonadReader App.AppEnv m) => Hasql.Statement () [a] -> m (Maybe a)
+runStatementOne :: (IO.MonadIO m, Okapi.MonadHTTP m, Reader.MonadReader App.AppEnv m) => Hasql.Statement () [a] -> m (Maybe a)
 runStatementOne statement = do
     rows <- runStatement statement
     pure $ Maybe.listToMaybe rows

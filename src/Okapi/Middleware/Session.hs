@@ -1,4 +1,5 @@
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -18,11 +19,13 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as BS
 import qualified Data.Either as Either
 import qualified Okapi.Effect.Failure as Failure
+import qualified Okapi.Effect.HTTP as HTTP
 import qualified Okapi.Effect.Request as Request
+import qualified Okapi.Effect.Request.Headers as Headers
 import qualified Okapi.Effect.Response as Response
-import qualified Okapi.Effect.Server as Server
+import qualified Okapi.State.HTTP as HTTP
 import qualified Okapi.Type.Failure as Failure
-import qualified Okapi.Type.Server as Server
+import qualified Okapi.Type.HTTP as HTTP
 
 newtype SessionID = SessionID {unSessionID :: BS.ByteString}
   deriving (Eq, Show)
@@ -54,25 +57,25 @@ class Monad m => MonadSession m s | m -> s where
     newSessionID <- generateSessionID
     putSession newSessionID newSession
 
-instance MonadSession m s => MonadSession (Server.ServerT m) s where
-  sessionSecret :: MonadSession m s => Server.ServerT m BS.ByteString
+instance MonadSession m s => MonadSession (HTTP.HTTPT m) s where
+  sessionSecret :: MonadSession m s => HTTP.HTTPT m BS.ByteString
   sessionSecret = Morph.lift sessionSecret
-  generateSessionID :: MonadSession m s => Server.ServerT m SessionID
+  generateSessionID :: MonadSession m s => HTTP.HTTPT m SessionID
   generateSessionID = Morph.lift generateSessionID
-  getSession :: MonadSession m s => SessionID -> Server.ServerT m (Maybe s)
+  getSession :: MonadSession m s => SessionID -> HTTP.HTTPT m (Maybe s)
   getSession = Morph.lift . getSession
-  putSession :: MonadSession m s => SessionID -> s -> Server.ServerT m ()
+  putSession :: MonadSession m s => SessionID -> s -> HTTP.HTTPT m ()
   putSession sessionID = Morph.lift . putSession sessionID
-  clearSession :: MonadSession m s => SessionID -> Server.ServerT m ()
+  clearSession :: MonadSession m s => SessionID -> HTTP.HTTPT m ()
   clearSession = Morph.lift . clearSession
 
-sessionID :: (Request.RequestM m, MonadSession m s) => m SessionID
+sessionID :: (Request.MonadRequest m, MonadSession m s) => m SessionID
 sessionID = do
-  encodedSessionID <- Request.cookieCrumb "session_id"
+  encodedSessionID <- Headers.cookieCrumb "session_id"
   secret <- sessionSecret
   maybe Failure.next pure (decodeSessionID secret encodedSessionID)
 
-session :: (Request.RequestM m, MonadSession m s) => m s
+session :: (Request.MonadRequest m, MonadSession m s) => m s
 session = do
   sessionID' <- sessionID
   maybeSession <- getSession sessionID'
@@ -96,9 +99,9 @@ encodeSessionID secret (SessionID sessionID) =
       b64 = BS.encodeBase64' $ Memory.convert digest
    in b64 <> serial
 
-withSession :: (Server.ServerM m, MonadSession m s) => m () -> m ()
+withSession :: (HTTP.MonadHTTP m, MonadSession m s) => m () -> m ()
 withSession handler = do
-  mbSessionID <- Server.look $ Combinators.optional sessionID
+  mbSessionID <- HTTP.look $ Combinators.optional sessionID
   secret <- sessionSecret
   case mbSessionID of
     Nothing -> do

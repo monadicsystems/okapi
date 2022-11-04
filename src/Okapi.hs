@@ -81,15 +81,16 @@ import qualified Network.Wai.Parse as WAI
 import qualified Network.Wai.Test as WAI
 import qualified Network.WebSockets as WebSockets
 import qualified Okapi.Effect.Failure as Failure
+import qualified Okapi.Effect.HTTP as HTTP
 import qualified Okapi.Effect.Request as Effect.Request
+import qualified Okapi.Effect.Request.Path as Effect.Path
 import qualified Okapi.Effect.Response as Response
-import qualified Okapi.Effect.Server as Server
 import qualified Okapi.Event as Event
 import qualified Okapi.Middleware.Session as Session
 import qualified Okapi.Type.Failure as Failure
+import qualified Okapi.Type.HTTP as HTTP
 import qualified Okapi.Type.Request as Request
 import qualified Okapi.Type.Response as Response
-import qualified Okapi.Type.Server as Server
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
@@ -104,28 +105,28 @@ import qualified Web.HttpApiData as Web
 --  clearHeadersMiddleware >=> pathPrefix ["jello"] :: forall m. Middleware m
 -- @
 
-applyMiddlewares :: Server.ServerM m => [m () -> m ()] -> (m () -> m ())
+applyMiddlewares :: HTTP.MonadHTTP m => [m () -> m ()] -> (m () -> m ())
 applyMiddlewares middlewares handler =
   List.foldl (\handler middleware -> middleware handler) handler middlewares
 
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
-scope :: Server.ServerM m => Request.Path -> [m () -> m ()] -> (m () -> m ())
-scope prefix middlewares handler = Effect.Request.path `Failure.is` prefix >> applyMiddlewares middlewares handler
+scope :: HTTP.MonadHTTP m => Request.Path -> [m () -> m ()] -> (m () -> m ())
+scope prefix middlewares handler = Effect.Path.path `Failure.is` prefix >> applyMiddlewares middlewares handler
 
-clearHeadersMiddleware :: Response.ResponseM m => m () -> m ()
+clearHeadersMiddleware :: Response.MonadResponse m => m () -> m ()
 clearHeadersMiddleware handler = do
   Response.setHeaders []
   handler
 
-prefixPathMiddleware :: Effect.Request.RequestM m => Request.Path -> (m () -> m ())
-prefixPathMiddleware prefix handler = Effect.Request.path `Failure.is` prefix >> handler
+prefixPathMiddleware :: Effect.Request.MonadRequest m => Request.Path -> (m () -> m ())
+prefixPathMiddleware prefix handler = Effect.Path.path `Failure.is` prefix >> handler
 
 -- $wai
 --
 -- These functions are for interfacing with WAI (Web Application Interface).
 
-run :: Monad m => (forall a. m a -> IO a) -> Server.ServerT m () -> IO ()
+run :: Monad m => (forall a. m a -> IO a) -> HTTP.HTTPT m () -> IO ()
 run = serve 3000 Response.notFound
 
 serve ::
@@ -137,7 +138,7 @@ serve ::
   -- | Monad unlift function
   (forall a. m a -> IO a) ->
   -- | Parser
-  Server.ServerT m () ->
+  HTTP.HTTPT m () ->
   IO ()
 serve port defaultResponse hoister serverT = WAI.run port $ app defaultResponse hoister serverT
 
@@ -147,7 +148,7 @@ serveTLS ::
   WAI.Settings ->
   Response.Response ->
   (forall a. m a -> IO a) ->
-  Server.ServerT m () ->
+  HTTP.HTTPT m () ->
   IO ()
 serveTLS tlsSettings settings defaultResponse hoister serverT = WAI.runTLS tlsSettings settings $ app defaultResponse hoister serverT
 
@@ -158,7 +159,7 @@ serveWebsockets ::
   Int ->
   Response.Response ->
   (forall a. m a -> IO a) ->
-  Server.ServerT m () ->
+  HTTP.HTTPT m () ->
   IO ()
 serveWebsockets connSettings serverApp port defaultResponse hoister serverT = WAI.run port $ websocketsApp connSettings serverApp defaultResponse hoister serverT
 
@@ -170,7 +171,7 @@ serveWebsocketsTLS ::
   WebSockets.ServerApp ->
   Response.Response ->
   (forall a. m a -> IO a) ->
-  Server.ServerT m () ->
+  HTTP.HTTPT m () ->
   IO ()
 serveWebsocketsTLS tlsSettings settings connSettings serverApp defaultResponse hoister serverT = WAI.runTLS tlsSettings settings $ websocketsApp connSettings serverApp defaultResponse hoister serverT
 
@@ -179,14 +180,14 @@ app ::
   Monad m =>
   -- | The default response to pure if parser fails
   Response.Response ->
-  -- | Function for "unlifting" monad inside @ServerT@ to @IO@ monad
+  -- | Function for "unlifting" monad inside @HTTPT@ to @IO@ monad
   (forall a. m a -> IO a) ->
   -- | The parser used to equals the request
-  Server.ServerT m () ->
+  HTTP.HTTPT m () ->
   WAI.Application
 app defaultResponse hoister serverT waiRequest respond = do
   initialState <- waiRequestToState waiRequest
-  (failureOrUnit, (request, response)) <- (StateT.runStateT . ExceptT.runExceptT . Server.runServerT $ Morph.hoist hoister serverT) initialState
+  (failureOrUnit, (request, response)) <- (StateT.runStateT . ExceptT.runExceptT . HTTP.runServerT $ Morph.hoist hoister serverT) initialState
   let response' =
         case failureOrUnit of
           Left Failure.Next -> defaultResponse
@@ -223,7 +224,7 @@ websocketsApp ::
   WebSockets.ServerApp ->
   Response.Response ->
   (forall a. m a -> IO a) ->
-  Server.ServerT m () ->
+  HTTP.HTTPT m () ->
   WAI.Application
 websocketsApp connSettings serverApp defaultResponse hoister serverT =
   let backupApp = app defaultResponse hoister serverT

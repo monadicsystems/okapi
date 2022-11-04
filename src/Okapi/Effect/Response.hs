@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -22,17 +23,17 @@ import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Response as Response
 import qualified Web.Cookie as Web
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Response.StateM m) => ResponseM m
+type MonadResponse m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Response.MonadState m)
 
 -- RESPONSE START --
 
-setStatus :: ResponseM m => Response.Status -> m ()
+setStatus :: MonadResponse m => Response.Status -> m ()
 setStatus status = Response.modify (\response -> response {Response.status = status})
 
-setHeaders :: ResponseM m => Response.Headers -> m ()
+setHeaders :: MonadResponse m => Response.Headers -> m ()
 setHeaders headers = Response.modify (\response -> response {Response.headers = headers})
 
-setHeader :: ResponseM m => Response.Header -> m ()
+setHeader :: MonadResponse m => Response.Header -> m ()
 setHeader header = do
   headers' <- Response.gets Response.headers
   Response.modify (\response -> response {Response.headers = update header headers'})
@@ -44,39 +45,39 @@ setHeader header = do
         then pair : ps
         else pair' : update pair ps
 
-setBody :: ResponseM m => Response.Body -> m ()
+setBody :: MonadResponse m => Response.Body -> m ()
 setBody body = Response.modify (\response -> response {Response.body = body})
 
-setBodyRaw :: ResponseM m => LBS.ByteString -> m ()
+setBodyRaw :: MonadResponse m => LBS.ByteString -> m ()
 setBodyRaw lbs = setBody (Response.Raw lbs)
 
-setBodyFile :: ResponseM m => FilePath -> m ()
+setBodyFile :: MonadResponse m => FilePath -> m ()
 setBodyFile path = setBody (Response.File path) -- TODO: setHeader???
 
-setBodyEventSource :: ResponseM m => Event.EventSource -> m ()
+setBodyEventSource :: MonadResponse m => Event.EventSource -> m ()
 setBodyEventSource source = setBody (Response.EventSource source)
 
-setPlaintext :: ResponseM m => Text.Text -> m ()
+setPlaintext :: MonadResponse m => Text.Text -> m ()
 setPlaintext text = do
   setHeader ("Content-Type", "text/plain")
   setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
 
-setHTML :: ResponseM m => LBS.ByteString -> m ()
+setHTML :: MonadResponse m => LBS.ByteString -> m ()
 setHTML html = do
   setHeader ("Content-Type", "text/html")
   setBody (Response.Raw html)
 
-setJSON :: (Aeson.ToJSON a, ResponseM m) => a -> m ()
+setJSON :: (Aeson.ToJSON a, MonadResponse m) => a -> m ()
 setJSON value = do
   setHeader ("Content-Type", "application/json")
   setBodyRaw (Aeson.encode value)
 
-addHeader :: ResponseM m => Response.Header -> m ()
+addHeader :: MonadResponse m => Response.Header -> m ()
 addHeader header = do
   headers <- Response.gets Response.headers
   Response.modify (\response -> response {Response.headers = header : headers})
 
-addSetCookie :: ResponseM m => (BS.ByteString, BS.ByteString) -> m ()
+addSetCookie :: MonadResponse m => (BS.ByteString, BS.ByteString) -> m ()
 addSetCookie (key, value) = do
   let setCookieValue =
         LBS.toStrict $
@@ -89,10 +90,10 @@ addSetCookie (key, value) = do
                 }
   addHeader ("Set-Cookie", setCookieValue)
 
-overwrite :: ResponseM m => LBS.ByteString -> m ()
+overwrite :: MonadResponse m => LBS.ByteString -> m ()
 overwrite = setBodyRaw
 
-write :: (ResponseM m, Writeable a) => a -> m ()
+write :: (Writeable a, MonadResponse m) => a -> m ()
 write value = do
   body <- Response.gets Response.body
   setBodyRaw $ case body of
@@ -100,7 +101,7 @@ write value = do
     Response.File _ -> toLBS value
     Response.EventSource _ -> toLBS value
 
-respond :: ResponseM m => Response.Response -> m ()
+respond :: MonadResponse m => Response.Response -> m ()
 respond = Response.put
 
 class Writeable a where
@@ -116,7 +117,7 @@ instance Writeable LBS.ByteString where
 
 instance Writeable Int
 
-redirect :: ResponseM m => Response.Status -> Text.Text -> m ()
+redirect :: MonadResponse m => Response.Status -> Text.Text -> m ()
 redirect status url =
   let headers = [("Location", Text.encodeUtf8 url)]
       body = Response.Raw ""

@@ -301,7 +301,7 @@ select = do
   piece <- queryParam "piece"
   possibleMovesResult (Board mempty) position piece
   where
-    possibleMovesResult :: ServerM m => Board -> Position -> Piece -> m Result
+    possibleMovesResult :: MonadHTTP m => Board -> Position -> Piece -> m Result
     possibleMovesResult board startPosition piece = do
       let possibleMoves = calculatePossibleMoves board startPosition piece
       case possibleMoves of

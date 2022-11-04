@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -11,7 +12,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Okapi.Effect.Server where
+module Okapi.Effect.HTTP where
 
 import qualified Control.Applicative as Applicative
 import qualified Control.Monad as Monad
@@ -37,8 +38,10 @@ import qualified Data.Vault.Lazy as Vault
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai.Parse as WAI
 import qualified Okapi.Effect.Request as Request
+import qualified Okapi.Effect.Request.Path as Path
 import qualified Okapi.Effect.Response as Response
 import qualified Okapi.Event as Event
+import qualified Okapi.State.HTTP as HTTP
 import qualified Okapi.State.Request as Request
 import qualified Okapi.State.Response as Response
 import qualified Okapi.Type.Failure as Failure
@@ -48,14 +51,17 @@ import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 
-class (Request.RequestM m, Response.ResponseM m) => ServerM m
+type MonadHTTP m = (Request.MonadRequest m, Response.MonadResponse m)
 
-static :: ServerM m => m () -- TODO: Check file extension to set correct content type
+static :: (Path.MonadPath m, Response.MonadResponse m) => m () -- TODO: Check file extension to set correct content type
 static = do
-  filePathText <- Text.intercalate "/" <$> Request.path
+  filePathText <- Text.intercalate "/" <$> Path.path
   let filePath = Text.unpack filePathText
   Response.setBodyFile filePath
 
--- | Parses without modifying the state, even if it succeeds.
-look :: (Request.StateM m, Response.StateM m) => m a -> m a
-look = Response.look . Request.look
+look :: MonadHTTP m => m a -> m a
+look action = do
+  requestAndResponse <- HTTP.get
+  result <- action
+  HTTP.put requestAndResponse
+  pure result
