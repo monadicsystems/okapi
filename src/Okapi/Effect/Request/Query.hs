@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Okapi.Effect.Request.Query where
 
@@ -18,7 +19,7 @@ import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Request as Request
 import qualified Web.HttpApiData as Web
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Query.MonadState m) => MonadQuery m
+type MonadQuery m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Query.MonadState m)
 
 -- $queryParsers
 --

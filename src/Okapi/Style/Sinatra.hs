@@ -54,6 +54,7 @@ post setter responder = do
   responder params
 -}
 
+{-
 get :: HTTP.MonadHTTP m => m a -> (a -> m ()) -> m ()
 get handler = do
   Request.methodGET
@@ -76,3 +77,4 @@ example =
       put [route|/greet/:Int|] \age -> do
         Response.write age
     ]
+-}

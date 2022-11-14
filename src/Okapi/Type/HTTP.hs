@@ -16,9 +16,16 @@ import qualified Control.Monad.Logger as Logger
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.Reader.Class as Reader
 import qualified Control.Monad.State.Strict as State
+import qualified Okapi.State.Request.Body as Body
+import qualified Okapi.State.Request.Headers as Headers
+import qualified Okapi.State.Request.Method as Method
+import qualified Okapi.State.Request.Path as Path
+import qualified Okapi.State.Request.Query as Query
 import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Request as Request
 import qualified Okapi.Type.Response as Response
+import qualified Okapi.State.Request.Vault as Vault
+import qualified Data.Vault.Lazy as Vault
 
 -- | A concrete implementation of the @MonadHTTP@ type constraint.
 newtype HTTPT m a = HTTPT {runServerT :: Except.ExceptT Failure.Failure (State.StateT (Request.Request, Response.Response) m) a}
@@ -121,7 +128,7 @@ instance Logger.MonadLogger m => Logger.MonadLogger (HTTPT m) where
   monadLoggerLog loc logSrc logLvl msg = Morph.lift $ Logger.monadLoggerLog loc logSrc logLvl msg
 
 instance IO.MonadIO m => IO.MonadIO (HTTPT m) where
-  liftIO :: State.MonadIO m => IO a -> HTTPT m a
+  liftIO :: IO.MonadIO m => IO a -> HTTPT m a
   liftIO = Morph.lift . IO.liftIO
 
 instance Morph.MonadTrans HTTPT where
@@ -133,3 +140,39 @@ instance Morph.MonadTrans HTTPT where
 instance Morph.MFunctor HTTPT where
   hoist :: Monad m => (forall a. m a -> n a) -> HTTPT m b -> HTTPT n b
   hoist nat okapiT = HTTPT . Except.ExceptT . State.StateT $ nat . State.runStateT (Except.runExceptT $ runServerT okapiT)
+
+instance Monad m => Method.MonadState (HTTPT m) where
+  get :: Monad m => HTTPT m Request.Method
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.method req, s)
+  put :: Monad m => Request.Method -> HTTPT m ()
+  put method' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.method = method'}, res))
+
+instance Monad m => Path.MonadState (HTTPT m) where
+  get :: Monad m => HTTPT m Request.Path
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.path req, s)
+  put :: Monad m => Request.Path -> HTTPT m ()
+  put path' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.path = path'}, res))
+
+instance Monad m => Headers.MonadState (HTTPT m) where
+  get :: Monad m => HTTPT m Request.Headers
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.headers req, s)
+  put :: Monad m => Request.Headers -> HTTPT m ()
+  put headers' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.headers = headers'}, res))
+
+instance Monad m => Query.MonadState (HTTPT m) where
+  get :: Monad m => HTTPT m Request.Query
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.query req, s)
+  put :: Monad m => Request.Query -> HTTPT m ()
+  put query' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.query = query'}, res))
+
+instance Monad m => Body.MonadState (HTTPT m) where
+  get :: Monad m => HTTPT m Request.Body
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.body req, s)
+  put :: Monad m => Request.Body -> HTTPT m ()
+  put body' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.body = body'}, res))
+
+instance Monad m => Vault.MonadState (HTTPT m) where
+  get :: Monad m => HTTPT m Vault.Vault
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.vault req, s)
+  put :: Monad m => Vault.Vault -> HTTPT m ()
+  put vault' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.vault = vault'}, res))

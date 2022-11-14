@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Okapi.Effect.Request.Body where
 
@@ -22,8 +23,9 @@ import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Request as Request
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
+import qualified Okapi.Effect.Log as Log
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Body.MonadState m) => MonadBody m
+type MonadBody m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Body.MonadState m)
 
 -- $bodyParsers
 
@@ -73,6 +75,7 @@ bodyMultipart = do
 -- | Parse a single form parameter
 formParam :: forall a m. (Web.FromHttpApiData a, MonadBody m) => BS.ByteString -> m a
 formParam paramName = do
+  Log.logIt "Getting form param"
   body' <- body
   case body' of
     Request.Raw lbs -> do
@@ -85,6 +88,7 @@ formParam paramName = do
               paramValue' <- maybe Failure.next pure (Web.parseQueryParamMaybe paramValue)
               let newParams = List.delete (Text.decodeUtf8 paramName, paramValue) params
               Body.put $ Request.Raw $ Web.urlEncodeParams newParams
+              Log.logIt "Got form param"
               pure paramValue'
     Request.Multipart (params, files) -> do
       case lookup paramName params of
@@ -93,6 +97,7 @@ formParam paramName = do
           paramValue' <- maybe Failure.next pure (Web.parseQueryParamMaybe $ Text.decodeUtf8 paramValue)
           let newParams = List.delete (paramName, paramValue) params
           Body.put $ Request.Multipart (newParams, files)
+          Log.logIt "Got form param"
           pure paramValue'
 
 formParamList :: forall a m. (Web.FromHttpApiData a, MonadBody m) => BS.ByteString -> m (NonEmpty.NonEmpty a)

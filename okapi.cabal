@@ -29,6 +29,32 @@ library
   exposed-modules:
       Okapi
       Okapi.HSP
+      Okapi.Type.Request
+      Okapi.Event
+      Okapi.Effect.Failure
+      Okapi.Effect.HTTP
+      Okapi.Effect.Log
+      Okapi.Effect.Request
+      Okapi.Effect.Request.Body
+      Okapi.Effect.Request.Headers
+      Okapi.Effect.Request.Method
+      Okapi.Effect.Request.Path
+      Okapi.Effect.Request.Query
+      Okapi.Effect.Request.Vault
+      Okapi.Effect.Response
+      Okapi.Middleware.Session
+      Okapi.State.HTTP
+      Okapi.State.Request
+      Okapi.State.Request.Body
+      Okapi.State.Request.Headers
+      Okapi.State.Request.Method
+      Okapi.State.Request.Path
+      Okapi.State.Request.Query
+      Okapi.State.Request.Vault
+      Okapi.State.Response
+      Okapi.Type.Failure
+      Okapi.Type.HTTP
+      Okapi.Type.Response
   other-modules:
       Paths_okapi
   hs-source-dirs:
@@ -382,6 +408,79 @@ executable contacts-exe
     , interpolatedstring-perl6
     , lucid2
     , lucid2-htmx
+    , memory
+    , mmorph
+    , mtl
+    , network
+    , okapi
+    , parser-combinators
+    , random
+    , rel8
+    , text
+    , time
+    , transformers
+    , unagi-chan
+    , vault
+    , wai
+    , wai-extra
+    , wai-websockets
+    , warp
+    , warp-tls
+    , websockets
+    , word8
+  default-language: Haskell2010
+  default-extensions:
+      BlockArguments
+    , ConstraintKinds
+    , DataKinds
+    , DeriveAnyClass
+    , DeriveGeneric
+    , DerivingVia
+    , DuplicateRecordFields
+    , FlexibleContexts
+    , FlexibleInstances
+    , GeneralizedNewtypeDeriving
+    , InstanceSigs
+    , LambdaCase
+    , MultiParamTypeClasses
+    , OverloadedLabels
+    , OverloadedStrings
+    , PatternSynonyms
+    , QuasiQuotes
+    , RankNTypes
+    , ScopedTypeVariables
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeFamilies
+
+executable elm-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_okapi
+  hs-source-dirs:
+      examples/elm
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=1.4.7
+    , attoparsec
+    , base >=4.7 && <5
+    , base64
+    , bytestring
+    , containers
+    , cookie
+    , cryptonite
+    , extra
+    , forma
+    , hasql
+    , hasql-pool
+    , hasql-transaction
+    , hedis
+    , http-api-data
+    , http-types
+    , interpolatedstring-perl6
+    , lucid2
+    , lucid2-htmx
+    , monad-logger
     , memory
     , mmorph
     , mtl

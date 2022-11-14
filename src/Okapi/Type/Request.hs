@@ -108,7 +108,7 @@ pattern PathParam param <-
   (Web.parseUrlPiece -> Right param)
   where
     PathParam param = Web.toUrlPiece param
-
+{-
 pattern IsQueryParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> QueryValue
 pattern IsQueryParam param <-
   QueryParam (Web.parseUrlPiece -> Right param)
@@ -117,3 +117,4 @@ pattern IsQueryParam param <-
 
 pattern HasQueryFlag :: Maybe QueryValue
 pattern HasQueryFlag <- Just QueryFlag
+-}

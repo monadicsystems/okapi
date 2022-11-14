@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Okapi.Effect.Request.Vault where
 
@@ -10,7 +11,7 @@ import qualified Okapi.Effect.Failure as Failure
 import qualified Okapi.State.Request.Vault as Vault
 import qualified Okapi.Type.Failure as Failure
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Vault.MonadState m) => MonadVault m
+type MonadVault m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Vault.MonadState m)
 
 -- $vaultParsers
 

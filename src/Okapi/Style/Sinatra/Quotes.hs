@@ -19,7 +19,7 @@ Syntax of the DSL that describes the parser:
 
 The tuple is determined by the order of the types in the path description
 -}
-
+{-
 route :: QuasiQuoter
 route =
   QuasiQuoter
@@ -35,3 +35,4 @@ route =
       case parserResult of
         Left _ -> routePartsToExp []
         Right routeParts -> routePartsToExp routeParts
+-}

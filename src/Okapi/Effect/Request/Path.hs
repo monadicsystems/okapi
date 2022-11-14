@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Okapi.Effect.Request.Path where
 
@@ -15,7 +16,7 @@ import qualified Okapi.State.Request.Path as Path
 import qualified Okapi.Type.Failure as Failure
 import qualified Web.HttpApiData as Web
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Path.MonadState m) => MonadPath m
+type MonadPath m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Path.MonadState m)
 
 -- $pathParsers
 --
@@ -24,6 +25,9 @@ class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogge
 -- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
 path :: MonadPath m => m [Text.Text]
 path = Combinators.many pathParam
+
+pathPart :: MonadPath m => Text.Text -> m ()
+pathPart part = pathParam `Failure.is` part
 
 -- | Parses and discards a single path segment matching the given @Text@ value
 pathParam :: (Web.FromHttpApiData a, MonadPath m) => m a

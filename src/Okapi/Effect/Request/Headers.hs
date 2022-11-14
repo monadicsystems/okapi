@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -22,7 +23,7 @@ import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Request as Request
 import qualified Web.Cookie as Web
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Headers.MonadState m) => MonadHeaders m
+type MonadHeaders m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Headers.MonadState m)
 
 -- $headerParsers
 --

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Okapi.Effect.Request.Method where
 
@@ -12,7 +13,7 @@ import qualified Okapi.State.Request.Method as Method
 import qualified Okapi.Type.Failure as Failure
 import qualified Okapi.Type.Request as Request
 
-class (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Method.MonadState m) => MonadMethod m
+type  MonadMethod m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, Logger.MonadLogger m, Method.MonadState m)
 
 -- $ methodParsers
 --
