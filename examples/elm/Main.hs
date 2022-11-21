@@ -7,6 +7,7 @@ import qualified Control.Monad.IO.Class as IO
 import qualified Control.Monad.Logger as Logger
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.IORef as IORef
 import qualified Data.List as List
 import qualified Data.Map.Strict as Map
@@ -49,18 +50,25 @@ main = do
         body_ [] do
           div_ [id_ "connector", Htmx.hxExt_ "ws", Lucid.makeAttributes "ws-connect" "/foo"] do
             div_ [id_ "events"] do
-              form_ [id_ "form", Lucid.makeAttributes "ws-send" ""] do
+              form_ [id_ "", Lucid.makeAttributes "ws-send" ""] do
                 input_ [type_ "text", name_ "someText"]
 
 streamServerApp :: WS.ServerApp
 streamServerApp pendingConn = do
   -- Check path before accepting request
   conn <- WS.acceptRequest pendingConn
-  Monad.forever do
-    message :: Text.Text <- WS.receiveData conn
-    WS.sendTextData conn ("<div id=\"events\" hx-swap-oob=\"beforeend\"><p>" <> message <> "</p></div>" :: Text.Text)
+  Monad.forever $ eventLoop conn
 
--- WS.sendClose conn ("Bye" :: Text.Text)
+eventLoop :: WS.Connection -> IO ()
+eventLoop conn = do
+  message :: LBS.ByteString <- WS.receiveData conn
+  case Aeson.decode message of
+    Nothing -> do
+      print message
+      WS.sendTextData conn $ "<div id=\"events\" hx-swap-oob=\"beforeend\"><h1>Couldn't parse message.</h1><p>" <> message <> "</p></div>"
+    Just (value :: Aeson.Value) -> do
+      print value
+      WS.sendTextData conn $ "<div id=\"events\" hx-swap-oob=\"beforeend\"><p>" <> message <> "</p></div>"
 
 instance Logger.MonadLogger IO where
   monadLoggerLog ::

@@ -80,17 +80,18 @@ import qualified Network.Wai.Middleware.Gzip as WAI
 import qualified Network.Wai.Parse as WAI
 import qualified Network.Wai.Test as WAI
 import qualified Network.WebSockets as WebSockets
-import qualified Okapi.Effect.Failure as Failure
-import qualified Okapi.Effect.HTTP as HTTP
-import qualified Okapi.Effect.Request as Effect.Request
-import qualified Okapi.Effect.Request.Path as Effect.Path
-import qualified Okapi.Effect.Response as Response
+import qualified Okapi.Error as Error
 import qualified Okapi.Event as Event
+import qualified Okapi.HTTP as HTTP
 import qualified Okapi.Middleware.Session as Session
-import qualified Okapi.Type.Failure as Failure
-import qualified Okapi.Type.HTTP as HTTP
-import qualified Okapi.Type.Request as Request
-import qualified Okapi.Type.Response as Response
+import qualified Okapi.Request as Request
+import qualified Okapi.Request.Body as Body
+import qualified Okapi.Request.Headers as Headers
+import qualified Okapi.Request.Method as Method
+import qualified Okapi.Request.Path as Path
+import qualified Okapi.Request.Query as Query
+import qualified Okapi.Request.Vault as Vault
+import qualified Okapi.Response as Response
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
@@ -111,16 +112,16 @@ applyMiddlewares middlewares handler =
 
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
-scope :: HTTP.MonadHTTP m => Request.Path -> [m () -> m ()] -> (m () -> m ())
-scope prefix middlewares handler = Effect.Path.path `Failure.is` prefix >> applyMiddlewares middlewares handler
+scope :: HTTP.MonadHTTP m => Path.Path -> [m () -> m ()] -> (m () -> m ())
+scope prefix middlewares handler = Path.path `Error.is` prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: Response.MonadResponse m => m () -> m ()
 clearHeadersMiddleware handler = do
   Response.setHeaders []
   handler
 
-prefixPathMiddleware :: Effect.Request.MonadRequest m => Request.Path -> (m () -> m ())
-prefixPathMiddleware prefix handler = Effect.Path.path `Failure.is` prefix >> handler
+prefixPathMiddleware :: Request.MonadRequest m => Path.Path -> (m () -> m ())
+prefixPathMiddleware prefix handler = Path.path `Error.is` prefix >> handler
 
 -- $wai
 --
@@ -188,12 +189,9 @@ app ::
 app defaultResponse hoister serverT waiRequest respond = do
   initialState <- waiRequestToState waiRequest
   (failureOrUnit, (request, response)) <- (StateT.runStateT . ExceptT.runExceptT . HTTP.runServerT $ Morph.hoist hoister serverT) initialState
-  let response' =
-        case failureOrUnit of
-          Left Failure.Next -> defaultResponse
-          Left (Failure.Abort errorResponse) -> errorResponse
-          Right () -> response
-  responseToWaiApp response' waiRequest respond
+  case failureOrUnit of
+    Left error -> errorToWaiApp defaultResponse error waiRequest respond
+    Right () -> responseToWaiApp response waiRequest respond
   where
     responseToWaiApp :: Response.Response -> WAI.Application
     responseToWaiApp Response.Response {..} waiRequest respond = case body of
@@ -201,14 +199,21 @@ app defaultResponse hoister serverT waiRequest respond = do
       Response.File filePath -> respond $ WAI.responseFile (toEnum $ fromEnum status) headers filePath Nothing
       Response.EventSource eventSource -> (WAI.gzip WAI.def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
 
+    errorToWaiApp :: Response.Response -> Error.Error -> WAI.Application
+    errorToWaiApp _ Error.Error {..} waiRequest respond = case body of
+      Error.Raw raw -> respond $ WAI.responseLBS (toEnum $ fromEnum status) headers raw
+      Error.File filePath -> respond $ WAI.responseFile (toEnum $ fromEnum status) headers filePath Nothing
+      Error.EventSource eventSource -> (WAI.gzip WAI.def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
+    errorToWaiApp defaultResponse Error.Next waiRequest respond = responseToWaiApp defaultResponse waiRequest respond
+
     waiRequestToState :: WAI.Request -> IO (Request.Request, Response.Response)
     waiRequestToState waiRequest = do
       body <- case lookup "Content-Type" $ WAI.requestHeaders waiRequest of
-        Just "multipart/form-data" -> Request.Multipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
-        _ -> Request.Raw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
+        Just "multipart/form-data" -> Body.Multipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
+        _ -> Body.Raw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
       let method = Just $ WAI.requestMethod waiRequest
           path = WAI.pathInfo waiRequest
-          query = map (\case (name, Nothing) -> (name, Request.QueryFlag); (name, Just txt) -> (name, Request.QueryParam txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
+          query = map (\case (name, Nothing) -> (name, Query.QueryFlag); (name, Just txt) -> (name, Query.QueryParam txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
           headers = WAI.requestHeaders waiRequest
           vault = WAI.vault waiRequest
           request = Request.Request {..}
@@ -229,3 +234,79 @@ websocketsApp ::
 websocketsApp connSettings serverApp defaultResponse hoister serverT =
   let backupApp = app defaultResponse hoister serverT
    in WebSockets.websocketsOr connSettings serverApp backupApp
+
+-- $routing
+--
+-- Okapi implements routes and type-safe relative URLs using bidirectional pattern synonyms and view patterns.
+-- Routing can be extended to dispatch on any property of the request, including method, path, query, headers, and even body.
+-- By default, Okapi provides a @route@ function for dispatching on the path of the request.
+
+route :: Request.MonadRequest m => m a -> (a -> m ()) -> m ()
+route parser dispatcher = parser >>= dispatcher
+
+viewQuery :: Text.Text -> Query.Query -> (Maybe Query.QueryValue, Query.Query)
+viewQuery name query = case List.lookup name query of
+  Nothing -> (Nothing, query)
+  Just value -> (Just value, List.delete (name, value) query)
+
+viewQueryParam :: Web.FromHttpApiData a => Text.Text -> Query.Query -> (Maybe a, Query.Query)
+viewQueryParam name query = case List.lookup name query of
+  Just (Query.QueryParam param) -> case Web.parseQueryParamMaybe param of
+    Nothing -> (Nothing, query)
+    Just value -> (Just value, List.delete (name, Query.QueryParam param) query)
+  _ -> (Nothing, query)
+
+-- $relativeURLs
+--
+-- Relative URLs are useful when we want to refer to other locations within our app.
+-- Thanks to bidirectional patterns, we can use the same pattern to deconstruct an incoming request
+-- AND construct the relative URL that leads to itself.
+
+data RelURL = RelURL Path.Path Query.Query
+
+-- TODO: Use ToURL typeclass for Path and Query, then combine for RelURL??
+renderRelURL :: RelURL -> Text.Text
+renderRelURL (RelURL path query) = case (path, query) of
+  ([], []) -> ""
+  ([], q) -> "?" <> renderQuery q
+  (p, []) -> renderPath p
+  (p, q) -> renderPath p <> "?" <> renderQuery q
+
+renderPath :: Path.Path -> Text.Text
+renderPath [] = "/"
+renderPath (pathSeg : path) = "/" <> pathSeg <> loop path
+  where
+    loop :: Path.Path -> Text.Text
+    loop [] = ""
+    loop (pathSeg : path) = "/" <> pathSeg <> loop path
+
+renderQuery :: Query.Query -> Text.Text
+renderQuery [] = ""
+renderQuery ((name, Query.QueryFlag) : query) = name <> "&" <> renderQuery query
+renderQuery ((name, Query.QueryParam value) : query) = name <> "=" <> value <> "&" <> renderQuery query
+
+parseRelURL :: Text.Text -> Maybe RelURL
+parseRelURL possibleRelURL = Either.eitherToMaybe $
+  flip Atto.parseOnly possibleRelURL $ do
+    path <- Combinators.many pathSeg
+    maybeQueryStart <- Combinators.optional $ Atto.char '?'
+    case maybeQueryStart of
+      Nothing -> pure $ RelURL path []
+      Just _ -> do
+        query <- Combinators.many queryParam
+        pure $ RelURL path query
+  where
+    pathSeg :: Atto.Parser Text.Text
+    pathSeg = do
+      Atto.char '/'
+      Atto.takeWhile (\c -> c /= '/' && c /= '?')
+
+    queryParam :: Atto.Parser (Text.Text, Query.QueryValue)
+    queryParam = do
+      queryParamName <- Atto.takeWhile (\c -> c /= '=' && c /= '&')
+      mbEquals <- Combinators.optional $ Atto.char '='
+      case mbEquals of
+        Nothing -> pure (queryParamName, Query.QueryFlag)
+        Just _ -> do
+          queryParamValue <- Atto.takeWhile (/= '&')
+          pure (queryParamName, Query.QueryParam queryParamValue)

@@ -8,7 +8,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Middleware.Session where
+module Okapi.Middleware.Session
+  ( SessionID (..),
+    MonadSession (..),
+    withSession,
+    session,
+    sessionID,
+    decodeSessionID,
+    encodeSessionID,
+  )
+where
 
 import qualified Control.Monad.Combinators as Combinators
 import qualified Control.Monad.Morph as Morph
@@ -18,14 +27,16 @@ import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as BS
 import qualified Data.Either as Either
-import qualified Okapi.Effect.Failure as Failure
-import qualified Okapi.Effect.HTTP as HTTP
-import qualified Okapi.Effect.Request as Request
-import qualified Okapi.Effect.Request.Headers as Headers
-import qualified Okapi.Effect.Response as Response
-import qualified Okapi.State.HTTP as HTTP
-import qualified Okapi.Type.Failure as Failure
-import qualified Okapi.Type.HTTP as HTTP
+import qualified Okapi.Error as Error
+import qualified Okapi.HTTP as HTTP
+import qualified Okapi.Request as Request
+import qualified Okapi.Request.Body as Body
+import qualified Okapi.Request.Headers as Headers
+import qualified Okapi.Request.Method as Method
+import qualified Okapi.Request.Path as Path
+import qualified Okapi.Request.Query as Query
+import qualified Okapi.Request.Vault as Vault
+import qualified Okapi.Response as Response
 
 newtype SessionID = SessionID {unSessionID :: BS.ByteString}
   deriving (Eq, Show)
@@ -71,15 +82,15 @@ instance MonadSession m s => MonadSession (HTTP.HTTPT m) s where
 
 sessionID :: (Request.MonadRequest m, MonadSession m s) => m SessionID
 sessionID = do
-  encodedSessionID <- Headers.cookieCrumb "session_id"
+  encodedSessionID <- Headers.crumb "session_id"
   secret <- sessionSecret
-  maybe Failure.next pure (decodeSessionID secret encodedSessionID)
+  maybe Error.next pure (decodeSessionID secret encodedSessionID)
 
 session :: (Request.MonadRequest m, MonadSession m s) => m s
 session = do
   sessionID' <- sessionID
   maybeSession <- getSession sessionID'
-  maybe Failure.next pure maybeSession
+  maybe Error.next pure maybeSession
 
 decodeSessionID :: BS.ByteString -> BS.ByteString -> Maybe SessionID
 decodeSessionID secret encodedSessionID =

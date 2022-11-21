@@ -28,33 +28,20 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.HSP
-      Okapi.Type.Request
       Okapi.Event
-      Okapi.Effect.Failure
-      Okapi.Effect.HTTP
-      Okapi.Effect.Log
-      Okapi.Effect.Request
-      Okapi.Effect.Request.Body
-      Okapi.Effect.Request.Headers
-      Okapi.Effect.Request.Method
-      Okapi.Effect.Request.Path
-      Okapi.Effect.Request.Query
-      Okapi.Effect.Request.Vault
-      Okapi.Effect.Response
       Okapi.Middleware.Session
-      Okapi.State.HTTP
-      Okapi.State.Request
-      Okapi.State.Request.Body
-      Okapi.State.Request.Headers
-      Okapi.State.Request.Method
-      Okapi.State.Request.Path
-      Okapi.State.Request.Query
-      Okapi.State.Request.Vault
-      Okapi.State.Response
-      Okapi.Type.Failure
-      Okapi.Type.HTTP
-      Okapi.Type.Response
+      Okapi.Error
+      Okapi.Log
+      Okapi.Request
+      Okapi.Request.Method
+      Okapi.Request.Path
+      Okapi.Request.Query
+      Okapi.Request.Headers
+      Okapi.Request.Body
+      Okapi.Request.Vault
+      Okapi.Response
+      Okapi.HTTP
+      Okapi.Test
   other-modules:
       Paths_okapi
   hs-source-dirs:

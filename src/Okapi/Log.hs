@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.Effect.Log where
+module Okapi.Log (logIt) where
 
 import qualified Control.Monad.Logger as Logger
 import qualified Data.Text as Text

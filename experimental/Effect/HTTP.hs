@@ -51,17 +51,4 @@ import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 
-type MonadHTTP m = (Request.MonadRequest m, Response.MonadResponse m)
 
-static :: (Path.MonadPath m, Response.MonadResponse m) => m () -- TODO: Check file extension to set correct content type
-static = do
-  filePathText <- Text.intercalate "/" <$> Path.path
-  let filePath = Text.unpack filePathText
-  Response.setBodyFile filePath
-
-look :: MonadHTTP m => m a -> m a
-look action = do
-  requestAndResponse <- HTTP.get
-  result <- action
-  HTTP.put requestAndResponse
-  pure result
