@@ -1,22 +1,17 @@
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Okapi.Response
-  ( MonadResponse (..),
-    State (..),
-    gets,
-    modify,
-    look,
-    Response (..),
+  ( Parser (..),
+    Body (..),
     Status,
     Headers,
     Header,
-    Body (..),
+    Writeable (..),
     ok,
     noContent,
     notFound,
@@ -34,7 +29,6 @@ module Okapi.Response
     setJSON,
     addHeader,
     addSetCookie,
-    Writeable (..),
     overwrite,
     write,
     redirect,
@@ -50,51 +44,12 @@ import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import qualified GHC.Natural as Natural
-import qualified Network.HTTP.Types as HTTP
-import qualified Okapi.Error as Error
-import qualified Okapi.Event as Event
+import qualified Okapi.Internal.Error as Error
+import Okapi.Internal.Event as Event
+import Okapi.Internal.Response
 import qualified Web.Cookie as Web
 
-type MonadResponse m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
-
-class Monad m => State m where
-  get :: m Response
-  put :: Response -> m ()
-
-gets :: State m => (Response -> a) -> m a
-gets projection = projection <$> get
-
-modify :: State m => (Response -> Response) -> m ()
-modify modifier = do
-  response <- get
-  put $ modifier response
-
-look :: State m => m a -> m a
-look action = do
-  response <- get
-  result <- action
-  put response
-  pure result
-
--- | Represents HTTP responses that can be returned by a parser.
-data Response = Response
-  { status :: Status,
-    headers :: Headers,
-    body :: Body
-  }
-
-type Status = Natural.Natural
-
-type Headers = [Header]
-
-type Header = (HTTP.HeaderName, BS.ByteString)
-
--- | Represents the body of an HTTP response.
-data Body
-  = Raw LBS.ByteString
-  | File FilePath
-  | EventSource Event.EventSource
+type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
 
 ok :: Response
 ok =
@@ -131,18 +86,18 @@ internalServerError =
       body = Raw "Internal Server Error"
    in Response {..}
 
--- response :: MonadResponse m => m Response
+-- response :: Parser m => m Response
 -- response = get
 
 -- RESPONSE START --
 
-setStatus :: MonadResponse m => Status -> m ()
+setStatus :: Parser m => Status -> m ()
 setStatus status = modify (\response -> response {status = status})
 
-setHeaders :: MonadResponse m => Headers -> m ()
+setHeaders :: Parser m => Headers -> m ()
 setHeaders headers = modify (\response -> response {headers = headers})
 
-setHeader :: MonadResponse m => Header -> m ()
+setHeader :: Parser m => Header -> m ()
 setHeader header = do
   headers' <- gets headers
   modify (\response -> response {headers = update header headers'})
@@ -154,39 +109,39 @@ setHeader header = do
         then pair : ps
         else pair' : update pair ps
 
-setBody :: MonadResponse m => Body -> m ()
+setBody :: Parser m => Body -> m ()
 setBody body = modify (\response -> response {body = body})
 
-setBodyRaw :: MonadResponse m => LBS.ByteString -> m ()
+setBodyRaw :: Parser m => LBS.ByteString -> m ()
 setBodyRaw lbs = setBody (Raw lbs)
 
-setBodyFile :: MonadResponse m => FilePath -> m ()
+setBodyFile :: Parser m => FilePath -> m ()
 setBodyFile path = setBody (File path) -- TODO: setHeader???
 
-setBodyEventSource :: MonadResponse m => Event.EventSource -> m ()
+setBodyEventSource :: Parser m => Event.EventSource -> m ()
 setBodyEventSource source = setBody (EventSource source)
 
-setPlaintext :: MonadResponse m => Text.Text -> m ()
+setPlaintext :: Parser m => Text.Text -> m ()
 setPlaintext text = do
   setHeader ("Content-Type", "text/plain")
   setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
 
-setHTML :: MonadResponse m => LBS.ByteString -> m ()
+setHTML :: Parser m => LBS.ByteString -> m ()
 setHTML html = do
   setHeader ("Content-Type", "text/html")
   setBody (Raw html)
 
-setJSON :: (Aeson.ToJSON a, MonadResponse m) => a -> m ()
+setJSON :: (Aeson.ToJSON a, Parser m) => a -> m ()
 setJSON value = do
   setHeader ("Content-Type", "application/json")
   setBodyRaw (Aeson.encode value)
 
-addHeader :: MonadResponse m => Header -> m ()
+addHeader :: Parser m => Header -> m ()
 addHeader header = do
   headers <- gets headers
   modify (\response -> response {headers = header : headers})
 
-addSetCookie :: MonadResponse m => (BS.ByteString, BS.ByteString) -> m ()
+addSetCookie :: Parser m => (BS.ByteString, BS.ByteString) -> m ()
 addSetCookie (key, value) = do
   let setCookieValue =
         LBS.toStrict $
@@ -199,20 +154,7 @@ addSetCookie (key, value) = do
                 }
   addHeader ("Set-Cookie", setCookieValue)
 
-class Writeable a where
-  toLBS :: a -> LBS.ByteString
-  default toLBS :: Show a => a -> LBS.ByteString
-  toLBS = LBS.fromStrict . Text.encodeUtf8 . Text.pack . Prelude.takeWhile ('"' /=) . Prelude.dropWhile ('"' ==) . show
-
-instance Writeable Text.Text
-
-instance Writeable LBS.ByteString where
-  toLBS :: LBS.ByteString -> LBS.ByteString
-  toLBS = id
-
-instance Writeable Int
-
-write :: (Writeable a, MonadResponse m) => a -> m ()
+write :: (Writeable a, Parser m) => a -> m ()
 write value = do
   body <- gets body
   setBodyRaw $ case body of
@@ -220,10 +162,10 @@ write value = do
     File _ -> toLBS value
     EventSource _ -> toLBS value
 
-overwrite :: MonadResponse m => LBS.ByteString -> m ()
+overwrite :: Parser m => LBS.ByteString -> m ()
 overwrite = setBodyRaw
 
-redirect :: MonadResponse m => Status -> Text.Text -> m ()
+redirect :: Parser m => Status -> Text.Text -> m ()
 redirect status url =
   let headers = [("Location", Text.encodeUtf8 url)]
       body = Raw ""

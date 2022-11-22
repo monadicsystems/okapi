@@ -29,7 +29,6 @@ library
   exposed-modules:
       Okapi
       Okapi.Event
-      Okapi.Middleware.Session
       Okapi.Error
       Okapi.Log
       Okapi.Request
@@ -41,6 +40,16 @@ library
       Okapi.Request.Vault
       Okapi.Response
       Okapi.HTTP
+      Okapi.Internal.Error
+      Okapi.Internal.Request
+      Okapi.Internal.Request.Method
+      Okapi.Internal.Request.Path
+      Okapi.Internal.Request.Query
+      Okapi.Internal.Request.Headers
+      Okapi.Internal.Request.Body
+      Okapi.Internal.Request.Vault
+      Okapi.Internal.Response
+      Okapi.Internal.HTTP
       Okapi.Test
   other-modules:
       Paths_okapi

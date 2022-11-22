@@ -5,20 +5,15 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Okapi.Request.Body
-  ( MonadBody (..),
-    State (..),
-    gets,
-    modify,
-    look,
-    Body (..),
-    body,
-    bodyJSON,
-    bodyURLEncoded,
-    bodyMultipart,
+  ( Parser (..),
+    use,
+    json,
+    urlEncoded,
+    multipart,
     formParam,
-    formParamList,
-    formFile,
-    bodyEnd,
+    formParams,
+    file,
+    end,
   )
 where
 
@@ -34,41 +29,19 @@ import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text.Encoding as Text
 import qualified Network.Wai.Parse as WAI
 import qualified Okapi.Error as Error
+import qualified Okapi.Internal.Error as Error
+import Okapi.Internal.Request.Body
 import qualified Okapi.Log as Log
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 
-type MonadBody m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
-
-class Monad m => State m where
-  get :: m Body
-  put :: Body -> m ()
-
-gets :: State m => (Body -> a) -> m a
-gets projection = projection <$> get
-
-modify :: State m => (Body -> Body) -> m ()
-modify modifier = do
-  request <- get
-  put $ modifier request
-
-look :: State m => m a -> m a
-look action = do
-  request <- get
-  result <- action
-  put request
-  pure result
-
-data Body
-  = Raw LBS.ByteString
-  | Multipart ([WAI.Param], [WAI.File LBS.ByteString])
-  deriving (Eq, Show)
+type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
 
 -- $bodyParsers
 
--- | For getting the raw body of the request.
-body :: MonadBody m => m Body
-body = do
+-- | For getting the raw use of the request.
+use :: Parser m => m Body
+use = do
   currentBody <- get
   case currentBody of
     Raw (LBS.null -> True) -> pure currentBody
@@ -80,19 +53,19 @@ body = do
       put $ Multipart ([], [])
       pure currentBody
 
--- | Parse request body as JSON
-bodyJSON :: (Aeson.FromJSON a, MonadBody m) => m a
-bodyJSON = do
-  body' <- body
-  case body' of
+-- | Parse request use as JSON
+json :: (Aeson.FromJSON a, Parser m) => m a
+json = do
+  use' <- use
+  case use' of
     Raw lbs -> maybe Error.next pure (Aeson.decode lbs)
     Multipart _ -> Error.next
 
--- | Parse URLEncoded form parameters from request body
-bodyURLEncoded :: (Web.FromForm a, MonadBody m) => m a
-bodyURLEncoded = do
-  body' <- body
-  case body' of
+-- | Parse URLEncoded form parameters from request use
+urlEncoded :: (Web.FromForm a, Parser m) => m a
+urlEncoded = do
+  use' <- use
+  case use' of
     Raw lbs -> maybe Error.next pure (eitherToMaybe $ Web.urlDecodeAsForm lbs)
     Multipart _ -> Error.next
   where
@@ -101,20 +74,20 @@ bodyURLEncoded = do
       Left _ -> Nothing
       Right value -> Just value
 
--- | Parse multipart form data from request body
-bodyMultipart :: MonadBody m => m ([WAI.Param], [WAI.File LBS.ByteString])
-bodyMultipart = do
-  body' <- body
-  case body' of
+-- | Parse multipart form data from request use
+multipart :: Parser m => m ([WAI.Param], [WAI.File LBS.ByteString])
+multipart = do
+  use' <- use
+  case use' of
     Raw _ -> Error.next
     Multipart formData -> pure formData
 
 -- | Parse a single form parameter
-formParam :: forall a m. (Web.FromHttpApiData a, MonadBody m) => BS.ByteString -> m a
+formParam :: forall a m. (Web.FromHttpApiData a, Parser m) => BS.ByteString -> m a
 formParam paramName = do
-  Log.logIt "Getting form param"
-  body' <- body
-  case body' of
+  Log.logIt "Getting form formParam"
+  use' <- use
+  case use' of
     Raw lbs -> do
       case Web.urlDecodeParams lbs of
         Left _ -> Error.next
@@ -125,7 +98,7 @@ formParam paramName = do
               paramValue' <- maybe Error.next pure (Web.parseQueryParamMaybe paramValue)
               let newParams = List.delete (Text.decodeUtf8 paramName, paramValue) params
               put $ Raw $ Web.urlEncodeParams newParams
-              Log.logIt "Got form param"
+              Log.logIt "Got form formParam"
               pure paramValue'
     Multipart (params, files) -> do
       case lookup paramName params of
@@ -134,17 +107,17 @@ formParam paramName = do
           paramValue' <- maybe Error.next pure (Web.parseQueryParamMaybe $ Text.decodeUtf8 paramValue)
           let newParams = List.delete (paramName, paramValue) params
           put $ Multipart (newParams, files)
-          Log.logIt "Got form param"
+          Log.logIt "Got form formParam"
           pure paramValue'
 
-formParamList :: forall a m. (Web.FromHttpApiData a, MonadBody m) => BS.ByteString -> m (NonEmpty.NonEmpty a)
-formParamList = Combinators.NonEmpty.some . formParam
+formParams :: forall a m. (Web.FromHttpApiData a, Parser m) => BS.ByteString -> m (NonEmpty.NonEmpty a)
+formParams = Combinators.NonEmpty.some . formParam
 
 -- | Parse a single form file
-formFile :: MonadBody m => BS.ByteString -> m (WAI.FileInfo LBS.ByteString)
-formFile paramName = do
-  body' <- body
-  case body' of
+file :: Parser m => BS.ByteString -> m (WAI.FileInfo LBS.ByteString)
+file paramName = do
+  use' <- use
+  case use' of
     Raw _ -> Error.next
     Multipart (params, files) -> do
       case lookup paramName files of
@@ -161,9 +134,9 @@ formFile paramName = do
         then fs
         else f : deleteFile paramName fs
 
-bodyEnd :: MonadBody m => m ()
-bodyEnd = do
-  currentBody <- body
+end :: Parser m => m ()
+end = do
+  currentBody <- use
   case currentBody of
     Raw (LBS.null -> True) -> pure ()
     Multipart ([], []) -> pure ()

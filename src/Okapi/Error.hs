@@ -1,12 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs #-}
 
 module Okapi.Error
-  ( Error (..),
+  ( Body (..),
     Status,
     Headers,
     Header,
-    Body (..),
     next,
     throw,
     (<!>),
@@ -17,36 +15,7 @@ module Okapi.Error
 where
 
 import qualified Control.Monad.Except as Except
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
-import qualified GHC.Natural as Natural
-import qualified Network.HTTP.Types as HTTP
-import qualified Okapi.Event as Event
-
-data Error
-  = Next
-  | Error
-      { status :: Status,
-        headers :: Headers,
-        body :: Body
-      }
-
-instance Show Error where
-  show :: Error -> String
-  show Next = "Using next server"
-  show Error {} = "Error returned"
-
-type Status = Natural.Natural
-
-type Header = (HTTP.HeaderName, BS.ByteString)
-
-type Headers = [Header]
-
--- | Represents the body of an HTTP Error response.
-data Body
-  = Raw LBS.ByteString
-  | File FilePath
-  | EventSource Event.EventSource
+import Okapi.Internal.Error
 
 next :: Except.MonadError Error m => m a
 next = Except.throwError Next

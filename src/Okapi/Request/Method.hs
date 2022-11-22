@@ -1,35 +1,19 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
 
 module Okapi.Request.Method
-  ( MonadMethod (..),
-    State (..),
-    gets,
-    modify,
-    look,
-    Method,
-    pattern GET,
-    pattern POST,
-    pattern PUT,
-    pattern PATCH,
-    pattern DELETE,
-    pattern TRACE,
-    pattern CONNECT,
-    pattern OPTIONS,
-    pattern HEAD,
-    method,
-    methodGET,
-    methodPOST,
-    methodHEAD,
-    methodPUT,
-    methodDELETE,
-    methodTRACE,
-    methodCONNECT,
-    methodOPTIONS,
-    methodPATCH,
-    methodEnd,
+  ( Parser (..),
+    use,
+    Okapi.Request.Method.get,
+    post,
+    Okapi.Request.Method.head,
+    Okapi.Request.Method.put,
+    delete,
+    trace,
+    connect,
+    options,
+    patch,
+    end,
   )
 where
 
@@ -37,106 +21,60 @@ import qualified Control.Monad as Monad
 import qualified Control.Monad.Combinators as Combinators
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.Logger as Logger
-import qualified Data.ByteString as BS
 import qualified Okapi.Error as Error
+import qualified Okapi.Internal.Error as Error
+import Okapi.Internal.Request.Method
 import qualified Okapi.Log as Log
 
-type MonadMethod m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
-
-class Monad m => State m where
-  get :: m Method
-  put :: Method -> m ()
-
-gets :: State m => (Method -> a) -> m a
-gets projection = projection <$> get
-
-modify :: State m => (Method -> Method) -> m ()
-modify modifier = do
-  request <- get
-  put $ modifier request
-
-look :: State m => m a -> m a
-look action = do
-  request <- get
-  result <- action
-  put request
-  pure result
-
-type Method = Maybe BS.ByteString
-
-pattern GET :: Method
-pattern GET = Just "GET"
-
-pattern POST :: Method
-pattern POST = Just "POST"
-
-pattern PUT :: Method
-pattern PUT = Just "PUT"
-
-pattern PATCH :: Method
-pattern PATCH = Just "PATCH"
-
-pattern DELETE :: Method
-pattern DELETE = Just "DELETE"
-
-pattern TRACE :: Method
-pattern TRACE = Just "TRACE"
-
-pattern CONNECT :: Method
-pattern CONNECT = Just "CONNECT"
-
-pattern OPTIONS :: Method
-pattern OPTIONS = Just "OPTIONS"
-
-pattern HEAD :: Method
-pattern HEAD = Just "HEAD"
+type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
 
 -- $ methodParsers
 --
--- These are parsers for parsing the HTTP request method.
+-- These are parsers for parsing the HTTP request use.
 
 -- | TODO: Should it return (Maybe?) Or store methodParsed :: Bool in
 -- extra field like before and fail when "Nothing" is there?
-method :: MonadMethod m => m Method
-method = do
-  Log.logIt "Parsing method"
-  method <- get
-  Log.logIt $ "Parsed method: " <> show method
-  pure method
+use :: Parser m => m Method
+use = do
+  Log.logIt "Parsing use"
+  use <- Okapi.Internal.Request.Method.get
+  Log.logIt $ "Parsed use: " <> show use
+  pure use
 
-methodGET :: MonadMethod m => m ()
-methodGET = Error.is method GET -- put patterns in Types
+-- | TODO: Add match function and use that for all HTTP method parsers
+get :: Parser m => m ()
+get = Error.is use GET -- put patterns in Types
 
-methodPOST :: MonadMethod m => m ()
-methodPOST = Error.is method POST
+post :: Parser m => m ()
+post = Error.is use POST
 
-methodHEAD :: MonadMethod m => m ()
-methodHEAD = Error.is method HEAD
+head :: Parser m => m ()
+head = Error.is use HEAD
 
-methodPUT :: MonadMethod m => m ()
-methodPUT = Error.is method PUT
+put :: Parser m => m ()
+put = Error.is use PUT
 
-methodDELETE :: MonadMethod m => m ()
-methodDELETE = Error.is method DELETE
+delete :: Parser m => m ()
+delete = Error.is use DELETE
 
-methodTRACE :: MonadMethod m => m ()
-methodTRACE = Error.is method TRACE
+trace :: Parser m => m ()
+trace = Error.is use TRACE
 
-methodCONNECT :: MonadMethod m => m ()
-methodCONNECT = Error.is method CONNECT
+connect :: Parser m => m ()
+connect = Error.is use CONNECT
 
-methodOPTIONS :: MonadMethod m => m ()
-methodOPTIONS = Error.is method OPTIONS
+options :: Parser m => m ()
+options = Error.is use OPTIONS
 
-methodPATCH :: MonadMethod m => m ()
-methodPATCH = Error.is method PATCH
+patch :: Parser m => m ()
+patch = Error.is use PATCH
 
-methodEnd :: MonadMethod m => m ()
-methodEnd = do
-  Log.logIt "Checking if method has been parsed"
-  maybeMethod <- Combinators.optional method
+end :: Parser m => m ()
+end = do
+  Log.logIt "Checking if use has been parsed"
+  maybeMethod <- Combinators.optional use
   case maybeMethod of
-    Nothing -> Log.logIt "The method is Nothing"
+    Nothing -> Log.logIt "The use is Nothing"
     Just _ -> do
-      Log.logIt "There is still a method"
+      Log.logIt "There is still a use"
       Error.next

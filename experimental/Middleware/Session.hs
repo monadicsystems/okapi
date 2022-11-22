@@ -10,7 +10,7 @@
 
 module Okapi.Middleware.Session
   ( SessionID (..),
-    MonadSession (..),
+    Session (..),
     withSession,
     session,
     sessionID,
@@ -29,19 +29,24 @@ import qualified Data.ByteString.Base64 as BS
 import qualified Data.Either as Either
 import qualified Okapi.Error as Error
 import qualified Okapi.HTTP as HTTP
+import qualified Okapi.Internal.Error as Error
+import qualified Okapi.Internal.HTTP as HTTP
+import qualified Okapi.Internal.Request as Request
+import qualified Okapi.Internal.Request.Body as Body
+import qualified Okapi.Internal.Request.Headers as Headers
+import qualified Okapi.Internal.Request.Method as Method
+import qualified Okapi.Internal.Request.Path as Path
+import qualified Okapi.Internal.Request.Query as Query
+import qualified Okapi.Internal.Request.Vault as Vault
+import qualified Okapi.Internal.Response as Response
 import qualified Okapi.Request as Request
-import qualified Okapi.Request.Body as Body
-import qualified Okapi.Request.Headers as Headers
-import qualified Okapi.Request.Method as Method
-import qualified Okapi.Request.Path as Path
-import qualified Okapi.Request.Query as Query
-import qualified Okapi.Request.Vault as Vault
+import qualified Okapi.Request.Cookie as Cookie
 import qualified Okapi.Response as Response
 
 newtype SessionID = SessionID {unSessionID :: BS.ByteString}
   deriving (Eq, Show)
 
-class Monad m => MonadSession m s | m -> s where
+class Monad m => Session m s | m -> s where
   -- | A secret used for encrypting and decrypting
   -- the session id. This function should return the same value each time it's called.
   sessionSecret :: m BS.ByteString
@@ -68,25 +73,25 @@ class Monad m => MonadSession m s | m -> s where
     newSessionID <- generateSessionID
     putSession newSessionID newSession
 
-instance MonadSession m s => MonadSession (HTTP.HTTPT m) s where
-  sessionSecret :: MonadSession m s => HTTP.HTTPT m BS.ByteString
+instance Session m s => Session (HTTP.HTTPT m) s where
+  sessionSecret :: Session m s => HTTP.HTTPT m BS.ByteString
   sessionSecret = Morph.lift sessionSecret
-  generateSessionID :: MonadSession m s => HTTP.HTTPT m SessionID
+  generateSessionID :: Session m s => HTTP.HTTPT m SessionID
   generateSessionID = Morph.lift generateSessionID
-  getSession :: MonadSession m s => SessionID -> HTTP.HTTPT m (Maybe s)
+  getSession :: Session m s => SessionID -> HTTP.HTTPT m (Maybe s)
   getSession = Morph.lift . getSession
-  putSession :: MonadSession m s => SessionID -> s -> HTTP.HTTPT m ()
+  putSession :: Session m s => SessionID -> s -> HTTP.HTTPT m ()
   putSession sessionID = Morph.lift . putSession sessionID
-  clearSession :: MonadSession m s => SessionID -> HTTP.HTTPT m ()
+  clearSession :: Session m s => SessionID -> HTTP.HTTPT m ()
   clearSession = Morph.lift . clearSession
 
-sessionID :: (Request.MonadRequest m, MonadSession m s) => m SessionID
+sessionID :: (Request.Parser m, Session m s) => m SessionID
 sessionID = do
-  encodedSessionID <- Headers.crumb "session_id"
+  encodedSessionID <- Cookie.crumb "session_id"
   secret <- sessionSecret
   maybe Error.next pure (decodeSessionID secret encodedSessionID)
 
-session :: (Request.MonadRequest m, MonadSession m s) => m s
+session :: (Request.Parser m, Session m s) => m s
 session = do
   sessionID' <- sessionID
   maybeSession <- getSession sessionID'
@@ -110,7 +115,7 @@ encodeSessionID secret (SessionID sessionID) =
       b64 = BS.encodeBase64' $ Memory.convert digest
    in b64 <> serial
 
-withSession :: (HTTP.MonadHTTP m, MonadSession m s) => m () -> m ()
+withSession :: (HTTP.Parser m, Session m s) => m () -> m ()
 withSession handler = do
   mbSessionID <- HTTP.look $ Combinators.optional sessionID
   secret <- sessionSecret

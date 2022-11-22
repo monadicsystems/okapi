@@ -3,16 +3,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Okapi.Request.Path
-  ( MonadPath (..),
-    State (..),
-    gets,
-    modify,
-    look,
-    Path,
-    path,
-    pathPart,
-    pathParam,
-    pathEnd,
+  ( Parser (..),
+    use,
+    match,
+    param,
+    end,
   )
 where
 
@@ -23,61 +18,44 @@ import qualified Control.Monad.Logger as Logger
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Okapi.Error as Error
+import qualified Okapi.Internal.Error as Error
+import Okapi.Internal.Request.Path
 import qualified Okapi.Log as Log
 import qualified Web.HttpApiData as Web
 
-type MonadPath m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
-
-class Monad m => State m where
-  get :: m Path
-  put :: Path -> m ()
-
-gets :: State m => (Path -> a) -> m a
-gets projection = projection <$> get
-
-modify :: State m => (Path -> Path) -> m ()
-modify modifier = do
-  request <- get
-  put $ modifier request
-
-look :: State m => m a -> m a
-look action = do
-  request <- get
-  result <- action
-  put request
-  pure result
-
-type Path = [Text.Text]
+type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
 
 -- $pathParsers
 --
--- These are the path parsers.
+-- These are the use parsers.
 
--- | Parses and discards mutiple path segments matching the values and order of the given @[Text]@ value
-path :: MonadPath m => m [Text.Text]
-path = Combinators.many pathParam
+-- | Parses and discards mutiple use segments matching the values and order of the given @[Text]@ value
+use :: Parser m => m Path
+use = Combinators.many param
 
-pathPart :: MonadPath m => Text.Text -> m ()
-pathPart part = pathParam `Error.is` part
+match :: Parser m => Text.Text -> m ()
+match match = param `Error.is` match
 
--- | Parses and discards a single path segment matching the given @Text@ value
-pathParam :: (Web.FromHttpApiData a, MonadPath m) => m a
-pathParam = do
-  Log.logIt "Parsing path parameter"
+-- TODO: Add matchAll :: [Text.Text] -> m ()
+
+-- | Parses and discards a single use segment matching the given @Text@ value
+param :: (Web.FromHttpApiData a, Parser m) => m a
+param = do
+  Log.logIt "Parsing use parameter"
   maybePathSeg <- gets safeHead
   case maybePathSeg of
     Nothing -> do
-      Log.logIt "There are no more path parameters left"
+      Log.logIt "There are no more use parameters left"
       Error.next
     Just pathSeg -> do
-      Log.logIt $ "Got path segment: " <> pathSeg
+      Log.logIt $ "Got use segment: " <> pathSeg
       modify $ Prelude.drop 1
       case Web.parseUrlPieceMaybe pathSeg of
         Nothing -> do
-          Log.logIt "Couldn't parse path parameter as Type"
+          Log.logIt "Couldn't parse use parameter as Type"
           Error.next
         Just value -> do
-          Log.logIt "Parsed path parameter"
+          Log.logIt "Parsed use parameter"
           pure value
   where
     safeHead :: [a] -> Maybe a
@@ -85,14 +63,14 @@ pathParam = do
     safeHead (x : _) = Just x
 
 -- | Similar to `end` function in <https://github.com/purescript-contrib/purescript-routing/blob/main/GUIDE.md>
-pathEnd :: MonadPath m => m ()
-pathEnd = do
-  Log.logIt "Checking if there are any more path parameters"
-  currentPath <- path
+end :: Parser m => m ()
+end = do
+  Log.logIt "Checking if there are any more use parameters"
+  currentPath <- use
   if List.null currentPath
     then do
-      Log.logIt "There are path parameters"
+      Log.logIt "There are use parameters"
       pure ()
     else do
-      Log.logIt "There are no more path parameters"
+      Log.logIt "There are no more use parameters"
       Error.next
