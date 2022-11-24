@@ -5,13 +5,12 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.Response
+module Okapi.HTTP.Response
   ( Parser (..),
-    Body (..),
+    Body,
     Status,
     Headers,
     Header,
-    Writeable (..),
     ok,
     noContent,
     notFound,

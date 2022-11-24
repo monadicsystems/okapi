@@ -2,9 +2,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.Request.Headers
+module Okapi.HTTP.Request.Headers
   ( Parser (..),
-    use,
+    Headers,
+    Header,
+    parse,
     value,
     end,
     basicAuth,
@@ -21,7 +23,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
 import qualified Network.HTTP.Types as HTTP
-import qualified Okapi.Error as Error
+import qualified Okapi.HTTP.Error as Error
 import qualified Okapi.Internal.Error as Error
 import Okapi.Internal.Request.Headers
 
@@ -31,8 +33,8 @@ type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.Mona
 --
 -- These are lookup parsers.
 
-use :: Parser m => m Headers
-use = do
+parse :: Parser m => m Headers
+parse = do
   header <- get
   put []
   pure header
@@ -48,7 +50,7 @@ value headerName = do
 
 end :: Parser m => m ()
 end = do
-  currentHeaders <- use
+  currentHeaders <- parse
   if List.null currentHeaders
     then pure ()
     else Error.next

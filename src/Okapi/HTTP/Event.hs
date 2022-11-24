@@ -1,4 +1,4 @@
-module Okapi.Event
+module Okapi.HTTP.Event
   ( newEventSource,
     sendValue,
     sendEvent,

@@ -84,9 +84,19 @@ import qualified Network.Wai.Middleware.Gzip as WAI
 import qualified Network.Wai.Parse as WAI
 import qualified Network.Wai.Test as WAI
 import qualified Network.WebSockets as WebSockets
-import qualified Okapi.Error as Error
-import qualified Okapi.Event as Event
 import qualified Okapi.HTTP as HTTP
+import qualified Okapi.HTTP.Error as Error
+import qualified Okapi.HTTP.Error.Body as Error.Body
+import qualified Okapi.HTTP.Event as Event
+import qualified Okapi.HTTP.Request as Request
+import qualified Okapi.HTTP.Request.Body as Body
+import qualified Okapi.HTTP.Request.Body as Request.Body
+import qualified Okapi.HTTP.Request.Headers as Headers
+import qualified Okapi.HTTP.Request.Method as Method
+import qualified Okapi.HTTP.Request.Path as Path
+import qualified Okapi.HTTP.Request.Query as Query
+import qualified Okapi.HTTP.Request.Vault as Vault
+import qualified Okapi.HTTP.Response as Response
 import qualified Okapi.Internal.Event as Event
 import qualified Okapi.Internal.HTTP as HTTP
 import qualified Okapi.Internal.Request.Body as Body
@@ -96,14 +106,6 @@ import qualified Okapi.Internal.Request.Path as Path
 import qualified Okapi.Internal.Request.Query as Query
 import qualified Okapi.Internal.Request.Vault as Vault
 import qualified Okapi.Internal.Response as Response
-import qualified Okapi.Request as Request
-import qualified Okapi.Request.Body as Body
-import qualified Okapi.Request.Headers as Headers
-import qualified Okapi.Request.Method as Method
-import qualified Okapi.Request.Path as Path
-import qualified Okapi.Request.Query as Query
-import qualified Okapi.Request.Vault as Vault
-import qualified Okapi.Response as Response
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
@@ -125,7 +127,7 @@ applyMiddlewares middlewares handler =
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
 scope :: HTTP.Parser m => Request.Path -> [m () -> m ()] -> (m () -> m ())
-scope prefix middlewares handler = Path.use `Error.is` prefix >> applyMiddlewares middlewares handler
+scope prefix middlewares handler = Path.match prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: Response.Parser m => m () -> m ()
 clearHeadersMiddleware handler = do
@@ -133,7 +135,7 @@ clearHeadersMiddleware handler = do
   handler
 
 prefixPathMiddleware :: Request.Parser m => Request.Path -> (m () -> m ())
-prefixPathMiddleware prefix handler = Path.use `Error.is` prefix >> handler
+prefixPathMiddleware prefix handler = Path.match prefix >> handler
 
 -- $wai
 --
@@ -213,16 +215,16 @@ app defaultResponse hoister serverT waiRequest respond = do
 
     errorToWaiApp :: HTTP.Response -> HTTP.Error -> WAI.Application
     errorToWaiApp _ HTTP.Error {..} waiRequest respond = case body of
-      Error.Raw raw -> respond $ WAI.responseLBS (toEnum $ fromEnum status) headers raw
-      Error.File filePath -> respond $ WAI.responseFile (toEnum $ fromEnum status) headers filePath Nothing
-      Error.EventSource eventSource -> (WAI.gzip WAI.def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
+      Error.Body.Raw raw -> respond $ WAI.responseLBS (toEnum $ fromEnum status) headers raw
+      Error.Body.File filePath -> respond $ WAI.responseFile (toEnum $ fromEnum status) headers filePath Nothing
+      Error.Body.EventSource eventSource -> (WAI.gzip WAI.def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
     errorToWaiApp defaultResponse HTTP.Next waiRequest respond = responseToWaiApp defaultResponse waiRequest respond
 
     waiRequestToState :: WAI.Request -> IO (HTTP.Request, HTTP.Response)
     waiRequestToState waiRequest = do
       body <- case lookup "Content-Type" $ WAI.requestHeaders waiRequest of
-        Just "multipart/form-data" -> Request.Multipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
-        _ -> Request.Raw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
+        Just "multipart/form-data" -> Request.Body.Multipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
+        _ -> Request.Body.Raw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
       let method = Just $ WAI.requestMethod waiRequest
           path = WAI.pathInfo waiRequest
           query = map (\case (name, Nothing) -> (name, Query.Flag); (name, Just txt) -> (name, Query.Param txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest

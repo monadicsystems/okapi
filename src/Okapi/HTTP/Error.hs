@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Okapi.Error
-  ( Body (..),
+module Okapi.HTTP.Error
+  ( Error (..),
+    Body,
     Status,
     Headers,
     Header,
@@ -14,6 +15,7 @@ module Okapi.Error
   )
 where
 
+import qualified Control.Monad as Monad
 import qualified Control.Monad.Except as Except
 import Okapi.Internal.Error
 
@@ -36,6 +38,4 @@ is action desired = satisfies action (desired ==)
 satisfies :: Except.MonadError Error m => m a -> (a -> Bool) -> m ()
 satisfies action predicate = do
   value <- action
-  if predicate value
-    then pure ()
-    else next
+  Monad.unless (predicate value) next

@@ -27,7 +27,7 @@ import qualified Data.ByteArray as Memory
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as BS
 import qualified Data.Either as Either
-import qualified Okapi.Error as Error
+import qualified Okapi.HTTP.Error as Error
 import qualified Okapi.HTTP as HTTP
 import qualified Okapi.Internal.Error as Error
 import qualified Okapi.Internal.HTTP as HTTP
@@ -39,8 +39,8 @@ import qualified Okapi.Internal.Request.Path as Path
 import qualified Okapi.Internal.Request.Query as Query
 import qualified Okapi.Internal.Request.Vault as Vault
 import qualified Okapi.Internal.Response as Response
-import qualified Okapi.Request as Request
-import qualified Okapi.Request.Cookie as Cookie
+import qualified Okapi.HTTP.Request as Request
+import qualified Okapi.HTTP.Request.Cookie as Cookie
 import qualified Okapi.Response as Response
 
 newtype SessionID = SessionID {unSessionID :: BS.ByteString}
