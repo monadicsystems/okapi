@@ -17,6 +17,8 @@ you can embed your Okapi application into Servant easily. Here's how.
     servantHandler = pure MyData
     ```
 
+    {% endpoint_tester baseURL="hello" /%}
+
 2. Turn your Okapi API into an `Application` using `makeOkapiApp`:
 
     ```haskell

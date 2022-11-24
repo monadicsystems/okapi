@@ -1,5 +1,6 @@
 import { Callout } from '@/components/Callout'
 import { QuickLink, QuickLinks } from '@/components/QuickLinks'
+import { endpoint_tester } from '@/tags/EndpointTester.markdoc'
 
 const tags = {
   callout: {
@@ -42,6 +43,7 @@ const tags = {
       href: { type: String },
     },
   },
+  endpoint_tester
 }
 
 export default tags

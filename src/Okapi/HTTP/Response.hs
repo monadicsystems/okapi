@@ -7,7 +7,7 @@
 
 module Okapi.HTTP.Response
   ( Parser (..),
-    Body,
+    Response (..),
     Status,
     Headers,
     Header,

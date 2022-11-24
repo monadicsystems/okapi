@@ -2,10 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Okapi.HTTP
-  ( Parser (..),
-    Request.Request (..),
-    Response.Response (..),
-    Error.Error (..),
+  ( Parser (..)
   )
 where
 

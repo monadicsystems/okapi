@@ -2,7 +2,6 @@
 
 module Okapi.HTTP.Error
   ( Error (..),
-    Body,
     Status,
     Headers,
     Header,

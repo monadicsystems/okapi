@@ -89,7 +89,6 @@ import qualified Okapi.HTTP.Error as Error
 import qualified Okapi.HTTP.Error.Body as Error.Body
 import qualified Okapi.HTTP.Event as Event
 import qualified Okapi.HTTP.Request as Request
-import qualified Okapi.HTTP.Request.Body as Body
 import qualified Okapi.HTTP.Request.Body as Request.Body
 import qualified Okapi.HTTP.Request.Headers as Headers
 import qualified Okapi.HTTP.Request.Method as Method
@@ -126,7 +125,7 @@ applyMiddlewares middlewares handler =
 
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
-scope :: HTTP.Parser m => Request.Path -> [m () -> m ()] -> (m () -> m ())
+scope :: HTTP.Parser m => Path.Path -> [m () -> m ()] -> (m () -> m ())
 scope prefix middlewares handler = Path.match prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: Response.Parser m => m () -> m ()
@@ -134,7 +133,7 @@ clearHeadersMiddleware handler = do
   Response.setHeaders []
   handler
 
-prefixPathMiddleware :: Request.Parser m => Request.Path -> (m () -> m ())
+prefixPathMiddleware :: Request.Parser m => Path.Path -> (m () -> m ())
 prefixPathMiddleware prefix handler = Path.match prefix >> handler
 
 -- $wai
@@ -149,7 +148,7 @@ serve ::
   -- | Port
   Int ->
   -- | Default Response
-  HTTP.Response ->
+  Response.Response ->
   -- | Monad unlift function
   (forall a. m a -> IO a) ->
   -- | Parser
@@ -161,7 +160,7 @@ serveTLS ::
   Monad m =>
   WAI.TLSSettings ->
   WAI.Settings ->
-  HTTP.Response ->
+  Response.Response ->
   (forall a. m a -> IO a) ->
   HTTPT m () ->
   IO ()
@@ -172,7 +171,7 @@ serveWebsockets ::
   WebSockets.ConnectionOptions ->
   WebSockets.ServerApp ->
   Int ->
-  HTTP.Response ->
+  Response.Response ->
   (forall a. m a -> IO a) ->
   HTTPT m () ->
   IO ()
@@ -184,7 +183,7 @@ serveWebsocketsTLS ::
   WAI.Settings ->
   WebSockets.ConnectionOptions ->
   WebSockets.ServerApp ->
-  HTTP.Response ->
+  Response.Response ->
   (forall a. m a -> IO a) ->
   HTTPT m () ->
   IO ()
@@ -194,7 +193,7 @@ serveWebsocketsTLS tlsSettings settings connSettings serverApp defaultResponse h
 app ::
   Monad m =>
   -- | The default response to pure if parser fails
-  HTTP.Response ->
+  Response.Response ->
   -- | Function for "unlifting" monad inside @HTTPT@ to @IO@ monad
   (forall a. m a -> IO a) ->
   -- | The parser used to equals the request
@@ -207,20 +206,20 @@ app defaultResponse hoister serverT waiRequest respond = do
     Left error -> errorToWaiApp defaultResponse error waiRequest respond
     Right () -> responseToWaiApp response waiRequest respond
   where
-    responseToWaiApp :: HTTP.Response -> WAI.Application
-    responseToWaiApp HTTP.Response {..} waiRequest respond = case body of
+    responseToWaiApp :: Response.Response -> WAI.Application
+    responseToWaiApp Response.Response {..} waiRequest respond = case body of
       Response.Raw raw -> respond $ WAI.responseLBS (toEnum $ fromEnum status) headers raw
       Response.File filePath -> respond $ WAI.responseFile (toEnum $ fromEnum status) headers filePath Nothing
       Response.EventSource eventSource -> (WAI.gzip WAI.def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
 
-    errorToWaiApp :: HTTP.Response -> HTTP.Error -> WAI.Application
-    errorToWaiApp _ HTTP.Error {..} waiRequest respond = case body of
+    errorToWaiApp :: Response.Response -> Error.Error -> WAI.Application
+    errorToWaiApp _ Error.Error {..} waiRequest respond = case body of
       Error.Body.Raw raw -> respond $ WAI.responseLBS (toEnum $ fromEnum status) headers raw
       Error.Body.File filePath -> respond $ WAI.responseFile (toEnum $ fromEnum status) headers filePath Nothing
       Error.Body.EventSource eventSource -> (WAI.gzip WAI.def $ Event.eventSourceAppUnagiChan eventSource) waiRequest respond
-    errorToWaiApp defaultResponse HTTP.Next waiRequest respond = responseToWaiApp defaultResponse waiRequest respond
+    errorToWaiApp defaultResponse Error.Next waiRequest respond = responseToWaiApp defaultResponse waiRequest respond
 
-    waiRequestToState :: WAI.Request -> IO (HTTP.Request, HTTP.Response)
+    waiRequestToState :: WAI.Request -> IO (Request.Request, Response.Response)
     waiRequestToState waiRequest = do
       body <- case lookup "Content-Type" $ WAI.requestHeaders waiRequest of
         Just "multipart/form-data" -> Request.Body.Multipart <$> WAI.parseRequestBody WAI.lbsBackEnd waiRequest
@@ -230,7 +229,7 @@ app defaultResponse hoister serverT waiRequest respond = do
           query = map (\case (name, Nothing) -> (name, Query.Flag); (name, Just txt) -> (name, Query.Param txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
           headers = WAI.requestHeaders waiRequest
           vault = WAI.vault waiRequest
-          request = HTTP.Request {..}
+          request = Request.Request {..}
       pure (request, Response.ok)
 
 -- | Turns a parsers into a WAI application with WebSocket functionality
@@ -241,7 +240,7 @@ websocketsApp ::
   WebSockets.ConnectionOptions ->
   -- | The server to use for handling WebSocket connections
   WebSockets.ServerApp ->
-  HTTP.Response ->
+  Response.Response ->
   (forall a. m a -> IO a) ->
   HTTPT m () ->
   WAI.Application
@@ -258,12 +257,12 @@ websocketsApp connSettings serverApp defaultResponse hoister serverT =
 route :: Request.Parser m => m a -> (a -> m ()) -> m ()
 route parser dispatcher = parser >>= dispatcher
 
-viewQuery :: Text.Text -> Request.Query -> (Maybe Query.Value, Request.Query)
+viewQuery :: Text.Text -> Query.Query -> (Maybe Query.Value, Query.Query)
 viewQuery name query = case List.lookup name query of
   Nothing -> (Nothing, query)
   Just value -> (Just value, List.delete (name, value) query)
 
-viewQueryParam :: Web.FromHttpApiData a => Text.Text -> Request.Query -> (Maybe a, Request.Query)
+viewQueryParam :: Web.FromHttpApiData a => Text.Text -> Query.Query -> (Maybe a, Query.Query)
 viewQueryParam name query = case List.lookup name query of
   Just (Query.Param param) -> case Web.parseQueryParamMaybe param of
     Nothing -> (Nothing, query)
@@ -276,7 +275,7 @@ viewQueryParam name query = case List.lookup name query of
 -- Thanks to bidirectional patterns, we can use the same pattern to deconstruct an incoming request
 -- AND construct the relative URL that leads to itself.
 
-data RelURL = RelURL Request.Path Request.Query
+data RelURL = RelURL Path.Path Query.Query
 
 -- TODO: Use ToURL typeclass for Path and Query, then combine for RelURL??
 renderRelURL :: RelURL -> Text.Text
@@ -286,15 +285,15 @@ renderRelURL (RelURL path query) = case (path, query) of
   (p, []) -> renderPath p
   (p, q) -> renderPath p <> "?" <> renderQuery q
 
-renderPath :: Request.Path -> Text.Text
+renderPath :: Path.Path -> Text.Text
 renderPath [] = "/"
 renderPath (pathSeg : path) = "/" <> pathSeg <> loop path
   where
-    loop :: Request.Path -> Text.Text
+    loop :: Path.Path -> Text.Text
     loop [] = ""
     loop (pathSeg : path) = "/" <> pathSeg <> loop path
 
-renderQuery :: Request.Query -> Text.Text
+renderQuery :: Query.Query -> Text.Text
 renderQuery [] = ""
 renderQuery ((name, Query.Flag) : query) = name <> "&" <> renderQuery query
 renderQuery ((name, Query.Param value) : query) = name <> "=" <> value <> "&" <> renderQuery query
@@ -326,9 +325,9 @@ parseRelURL possibleRelURL = Either.eitherToMaybe $
           pure (queryParamName, Query.Param queryParamValue)
 
 -- | A concrete implementation of the @MonadHTTP@ type constraint.
-newtype HTTPT m a = HTTPT {runServerT :: Except.ExceptT HTTP.Error (State.StateT (HTTP.Request, HTTP.Response) m) a}
+newtype HTTPT m a = HTTPT {runServerT :: Except.ExceptT Error.Error (State.StateT (Request.Request, Response.Response) m) a}
   deriving newtype
-    ( Except.MonadError HTTP.Error
+    ( Except.MonadError Error.Error
     )
 
 instance Functor m => Functor (HTTPT m) where
@@ -360,19 +359,19 @@ instance Monad m => Applicative (HTTPT m) where
 
 instance Monad m => Applicative.Alternative (HTTPT m) where
   empty :: Monad m => HTTPT m a
-  empty = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Left HTTP.Next, s)
+  empty = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Left Error.Next, s)
   {-# INLINE empty #-}
   (<|>) :: Monad m => HTTPT m a -> HTTPT m a -> HTTPT m a
   (HTTPT (Except.ExceptT (State.StateT mx))) <|> (HTTPT (Except.ExceptT (State.StateT my))) = HTTPT . Except.ExceptT . State.StateT $ \s -> do
     (eitherX, stateX) <- mx s
     case eitherX of
-      Left HTTP.Next -> do
+      Left Error.Next -> do
         (eitherY, stateY) <- my s
         case eitherY of
-          Left HTTP.Next -> pure (Left HTTP.Next, s)
-          Left error@HTTP.Error {} -> pure (Left error, s)
+          Left Error.Next -> pure (Left Error.Next, s)
+          Left error@Error.Error {} -> pure (Left error, s)
           Right y -> pure (Right y, stateY)
-      Left error@HTTP.Error {} -> pure (Left error, s)
+      Left error@Error.Error {} -> pure (Left error, s)
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE (<|>) #-}
 
@@ -394,19 +393,19 @@ instance Monad m => Monad (HTTPT m) where
 
 instance Monad m => Monad.MonadPlus (HTTPT m) where
   mzero :: Monad m => HTTPT m a
-  mzero = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Left HTTP.Next, s)
+  mzero = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Left Error.Next, s)
   {-# INLINE mzero #-}
   mplus :: Monad m => HTTPT m a -> HTTPT m a -> HTTPT m a
   (HTTPT (Except.ExceptT (State.StateT mx))) `mplus` (HTTPT (Except.ExceptT (State.StateT my))) = HTTPT . Except.ExceptT . State.StateT $ \s -> do
     (eitherX, stateX) <- mx s
     case eitherX of
-      Left HTTP.Next -> do
+      Left Error.Next -> do
         (eitherY, stateY) <- my s
         case eitherY of
-          Left HTTP.Next -> pure (Left HTTP.Next, s)
-          Left error@HTTP.Error {} -> pure (Left error, s)
+          Left Error.Next -> pure (Left Error.Next, s)
+          Left error@Error.Error {} -> pure (Left error, s)
           Right y -> pure (Right y, stateY)
-      Left error@HTTP.Error {} -> pure (Left error, s)
+      Left error@Error.Error {} -> pure (Left error, s)
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE mplus #-}
 
@@ -416,7 +415,7 @@ instance Reader.MonadReader r m => Reader.MonadReader r (HTTPT m) where
   local :: Reader.MonadReader r m => (r -> r) -> HTTPT m a -> HTTPT m a
   local = mapOkapiT . Reader.local
     where
-      mapOkapiT :: (m (Either HTTP.Error a, (HTTP.Request, HTTP.Response)) -> n (Either HTTP.Error b, (HTTP.Request, HTTP.Response))) -> HTTPT m a -> HTTPT n b
+      mapOkapiT :: (m (Either Error.Error a, (Request.Request, Response.Response)) -> n (Either Error.Error b, (Request.Request, Response.Response))) -> HTTPT m a -> HTTPT n b
       mapOkapiT f okapiT = HTTPT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ runServerT okapiT)
   reader :: Reader.MonadReader r m => (r -> a) -> HTTPT m a
   reader = Morph.lift . Reader.reader
@@ -440,49 +439,49 @@ instance Morph.MFunctor HTTPT where
   hoist nat okapiT = HTTPT . Except.ExceptT . State.StateT $ nat . State.runStateT (Except.runExceptT $ runServerT okapiT)
 
 instance Monad m => Method.State (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Method
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ HTTP.method req, s)
-  put :: Monad m => Request.Method -> HTTPT m ()
-  put method' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {HTTP.method = method'}, res))
+  get :: Monad m => HTTPT m Method.Method
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.method req, s)
+  put :: Monad m => Method.Method -> HTTPT m ()
+  put method' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.method = method'}, res))
 
 instance Monad m => Path.State (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Path
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ HTTP.path req, s)
-  put :: Monad m => Request.Path -> HTTPT m ()
-  put path' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {HTTP.path = path'}, res))
+  get :: Monad m => HTTPT m Path.Path
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.path req, s)
+  put :: Monad m => Path.Path -> HTTPT m ()
+  put path' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.path = path'}, res))
 
 instance Monad m => Headers.State (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Headers
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ HTTP.headers (req :: HTTP.Request), s)
-  put :: Monad m => Request.Headers -> HTTPT m ()
-  put headers' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {HTTP.headers = headers'} :: HTTP.Request, res))
+  get :: Monad m => HTTPT m Headers.Headers
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.headers (req :: Request.Request), s)
+  put :: Monad m => Headers.Headers -> HTTPT m ()
+  put headers' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.headers = headers'} :: Request.Request, res))
 
 instance Monad m => Query.State (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Query
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ HTTP.query req, s)
-  put :: Monad m => Request.Query -> HTTPT m ()
-  put query' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {HTTP.query = query'}, res))
+  get :: Monad m => HTTPT m Query.Query
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.query req, s)
+  put :: Monad m => Query.Query -> HTTPT m ()
+  put query' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.query = query'}, res))
 
 instance Monad m => Body.State (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Body
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ HTTP.body (req :: HTTP.Request), s)
-  put :: Monad m => Request.Body -> HTTPT m ()
-  put body' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {HTTP.body = body'} :: HTTP.Request, res))
+  get :: Monad m => HTTPT m Body.Body
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.body (req :: Request.Request), s)
+  put :: Monad m => Body.Body -> HTTPT m ()
+  put body' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.body = body'} :: Request.Request, res))
 
 instance Monad m => Vault.State (HTTPT m) where
   get :: Monad m => HTTPT m Vault.Vault
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ HTTP.vault req, s)
+  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.vault req, s)
   put :: Monad m => Vault.Vault -> HTTPT m ()
-  put vault = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {HTTP.vault = vault}, res))
+  put vault = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.vault = vault}, res))
 
 instance Monad m => Response.State (HTTPT m) where
-  get :: Monad m => HTTPT m HTTP.Response
+  get :: Monad m => HTTPT m Response.Response
   get =
     HTTPT
       . Except.ExceptT
       . State.StateT
       $ \state@(_, res) -> pure (Right res, state)
-  put :: Monad m => HTTP.Response -> HTTPT m ()
+  put :: Monad m => Response.Response -> HTTPT m ()
   put newRes =
     HTTPT
       . Except.ExceptT

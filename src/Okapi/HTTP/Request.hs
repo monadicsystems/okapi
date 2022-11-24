@@ -3,13 +3,7 @@
 
 module Okapi.HTTP.Request
   ( Parser (..),
-    Body.Body,
-    Method.Method,
-    Headers.Headers,
-    Headers.Header,
-    Query.Query,
-    Path.Path,
-    Vault.Vault,
+    Request (..),
     end,
     parse,
   )
