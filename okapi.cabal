@@ -28,20 +28,18 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.HTTP.Event
-      Okapi.HTTP.Error
-      Okapi.HTTP.Error.Body
-      Okapi.Log
-      Okapi.HTTP.Request
-      Okapi.HTTP.Request.Method
-      Okapi.HTTP.Request.Path
-      Okapi.HTTP.Request.Query
-      Okapi.HTTP.Request.Headers
-      Okapi.HTTP.Request.Body
-      Okapi.HTTP.Request.Vault
-      Okapi.HTTP.Response
-      Okapi.HTTP.Response.Body
-      Okapi.HTTP
+      Okapi.Event
+      Okapi.Error
+      Okapi.Error.Body
+      Okapi.Request
+      Okapi.Request.Method
+      Okapi.Request.Path
+      Okapi.Request.Query
+      Okapi.Request.Headers
+      Okapi.Request.Body
+      Okapi.Request.Vault
+      Okapi.Response
+      Okapi.Response.Body
       Okapi.Internal.Error
       Okapi.Internal.Request
       Okapi.Internal.Request.Method

@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.HTTP.Request.Cookie
+module Okapi.Request.Cookie
   ( Cookie,
     Crumb,
     parse,
@@ -14,10 +14,11 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List as List
-import qualified Okapi.HTTP.Error as Error
+import qualified Okapi.Error as Error
 import Okapi.Internal.Request.Headers
-import qualified Okapi.HTTP.Request.Headers as Headers
+import qualified Okapi.Request.Headers as Headers
 import qualified Web.Cookie as Web
+import qualified Control.Monad as Monad
 
 parse :: Headers.Parser m => m Cookie
 parse = do
@@ -38,6 +39,4 @@ crumb name = do
 end :: Headers.Parser m => m ()
 end = do
   currentCookie <- parse
-  if List.null currentCookie
-    then pure ()
-    else Error.next
+  Monad.unless (List.null currentCookie) Error.next

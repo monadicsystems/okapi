@@ -1,9 +1,9 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Okapi.HTTP.Request
+module Okapi.Request
   ( Parser (..),
-    Request (..),
+    Request,
     end,
     parse,
   )
@@ -12,12 +12,12 @@ where
 import qualified Control.Monad as Monad
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.Logger as Logger
-import qualified Okapi.HTTP.Request.Body as Body
-import qualified Okapi.HTTP.Request.Headers as Headers
-import qualified Okapi.HTTP.Request.Method as Method
-import qualified Okapi.HTTP.Request.Path as Path
-import qualified Okapi.HTTP.Request.Query as Query
-import qualified Okapi.HTTP.Request.Vault as Vault
+import qualified Okapi.Request.Body as Body
+import qualified Okapi.Request.Headers as Headers
+import qualified Okapi.Request.Method as Method
+import qualified Okapi.Request.Path as Path
+import qualified Okapi.Request.Query as Query
+import qualified Okapi.Request.Vault as Vault
 import qualified Okapi.Internal.Error as Error
 import Okapi.Internal.Request
 import qualified Okapi.Internal.Request.Body as Internal.Body

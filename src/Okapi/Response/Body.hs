@@ -1,4 +1,4 @@
-module Okapi.HTTP.Response.Body
+module Okapi.Response.Body
   ( Body (..),
   )
 where

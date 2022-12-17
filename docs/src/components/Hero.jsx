@@ -11,22 +11,19 @@ const codeLanguage = 'haskell'
 const code =
 `module Main where
 
-import Okapi.HTTP.Request.Method as Req.Method
-import Okapi.HTTP.Request.Path as Req.Path
-import Okapi.HTTP.Request.Query as Req.Query
-import Okapi.HTTP.Response.Body as Res.Body
+import Okapi
 
 -- | Run a web server on port 3000 that responds to GET requests of the form:
 --   /greet/<name> OR /greet?name=<name> OR /greet
 main :: IO ()
 main = run id do
-  Req.Method.get
-  Req.Path.slash "greet"
-  maybeName <- optional $ Req.Path.param <|> Req.Query.param "name"
-  pathEnd
+  methodGET
+  matches pathHead "greet"
+  maybeName <- optional $ pathParam <|> queryParam "name"
+  pathIsEmpty
   let greeting = case maybeName :: Maybe Text of
-        Nothing   -> Res.Body.write "Hello there."
-        Just name -> Res.Body.write $ "Hello, " <> name <> "."
+        Nothing   -> write "Hello there."
+        Just name -> write $ "Hello, " <> name <> "."
 `
 
 const tabs = [

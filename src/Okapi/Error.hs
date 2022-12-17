@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Okapi.HTTP.Error
+module Okapi.Error
   ( Error (..),
     Status,
     Headers,

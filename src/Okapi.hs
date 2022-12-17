@@ -26,6 +26,51 @@ module Okapi
     serveWebsocketsTLS,
     app,
     websocketsApp,
+    -- * Method parsers
+    MethodParser (..),
+    method,
+    methodGET,
+    methodPOST,
+    methodPUT,
+    methodDELETE,
+    -- * Path parsers
+    PathParser (..),
+    path,
+    pathParam,
+    pathIsEmpty,
+    -- * Query parsers
+    QueryParser (..),
+    query,
+    queryParam,
+    queryFlag,
+    queryList,
+    queryIsEmpty,
+    -- * Header parsers
+    HeadersParser (..),
+    headers,
+    header,
+    basicAuth,
+    cookie,
+    crumb,
+    headersIsEmpty,
+    -- * Body parsers
+    BodyParser (..),
+    body,
+    bodyJSON,
+    bodyURLEncoded,
+    bodyMultipart,
+    formParam,
+    formList,
+    formFile,
+    bodyIsEmpty,
+    -- * Vault parsers
+    VaultParser (..),
+    vault,
+    vaultInsert,
+    vaultDelete,
+    vaultAdjust,
+    vaultWipe,
+    vaultLookup
   )
 where
 
@@ -84,20 +129,13 @@ import qualified Network.Wai.Middleware.Gzip as WAI
 import qualified Network.Wai.Parse as WAI
 import qualified Network.Wai.Test as WAI
 import qualified Network.WebSockets as WebSockets
-import qualified Okapi.HTTP as HTTP
-import qualified Okapi.HTTP.Error as Error
-import qualified Okapi.HTTP.Error.Body as Error.Body
-import qualified Okapi.HTTP.Event as Event
-import qualified Okapi.HTTP.Request as Request
-import qualified Okapi.HTTP.Request.Body as Request.Body
-import qualified Okapi.HTTP.Request.Headers as Headers
-import qualified Okapi.HTTP.Request.Method as Method
-import qualified Okapi.HTTP.Request.Path as Path
-import qualified Okapi.HTTP.Request.Query as Query
-import qualified Okapi.HTTP.Request.Vault as Vault
-import qualified Okapi.HTTP.Response as Response
+import qualified Okapi.Error as Error
+import qualified Okapi.Error.Body as Error.Body
+import qualified Okapi.Event as Event
 import qualified Okapi.Internal.Event as Event
+import Okapi.Internal.HTTP (State)
 import qualified Okapi.Internal.HTTP as HTTP
+import qualified Okapi.Internal.Request as Request
 import qualified Okapi.Internal.Request.Body as Body
 import qualified Okapi.Internal.Request.Headers as Headers
 import qualified Okapi.Internal.Request.Method as Method
@@ -105,6 +143,15 @@ import qualified Okapi.Internal.Request.Path as Path
 import qualified Okapi.Internal.Request.Query as Query
 import qualified Okapi.Internal.Request.Vault as Vault
 import qualified Okapi.Internal.Response as Response
+import qualified Okapi.Request as Request
+import qualified Okapi.Request.Body as Request.Body
+import qualified Okapi.Request.Headers as Headers
+import qualified Okapi.Request.Method as Method
+import qualified Okapi.Request.Path as Path
+import qualified Okapi.Request.Query as Query
+import qualified Okapi.Request.Vault as Vault
+import qualified Okapi.Response
+import qualified Okapi.Response as Response
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
@@ -119,18 +166,18 @@ import qualified Web.HttpApiData as Web
 --  clearHeadersMiddleware >=> pathPrefix ["jello"] :: forall m. Middleware m
 -- @
 
-applyMiddlewares :: HTTP.Parser m => [m () -> m ()] -> (m () -> m ())
+applyMiddlewares :: Parser m => [m () -> m ()] -> (m () -> m ())
 applyMiddlewares middlewares handler =
   List.foldl (\handler middleware -> middleware handler) handler middlewares
 
 -- TODO: Is this needed? Idea taken from OCaml Dream framework
 
-scope :: HTTP.Parser m => Path.Path -> [m () -> m ()] -> (m () -> m ())
+scope :: Parser m => Path.Path -> [m () -> m ()] -> (m () -> m ())
 scope prefix middlewares handler = Path.match prefix >> applyMiddlewares middlewares handler
 
 clearHeadersMiddleware :: Response.Parser m => m () -> m ()
 clearHeadersMiddleware handler = do
-  Response.setHeaders []
+  Okapi.Response.headers []
   handler
 
 prefixPathMiddleware :: Request.Parser m => Path.Path -> (m () -> m ())
@@ -487,3 +534,5 @@ instance Monad m => Response.State (HTTPT m) where
       . Except.ExceptT
       . State.StateT
       $ \(req, _) -> pure (Right (), (req, newRes))
+
+type Parser m = (Except.MonadError Error.Error m, Logger.MonadLogger m, Monad.MonadPlus m, State m)

@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.HTTP.Request.Headers
+module Okapi.Request.Headers
   ( Parser (..),
     Headers,
     Header,
@@ -23,7 +23,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
 import qualified Network.HTTP.Types as HTTP
-import qualified Okapi.HTTP.Error as Error
+import qualified Okapi.Error as Error
 import qualified Okapi.Internal.Error as Error
 import Okapi.Internal.Request.Headers
 

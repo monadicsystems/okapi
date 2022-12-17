@@ -5,9 +5,9 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Okapi.HTTP.Response
+module Okapi.Response
   ( Parser (..),
-    Response (..),
+    Response,
     Status,
     Headers,
     Header,
@@ -16,18 +16,16 @@ module Okapi.HTTP.Response
     notFound,
     forbidden,
     internalServerError,
-    setStatus,
-    setHeaders,
-    setHeader,
-    setBody,
-    setBodyRaw,
-    setBodyFile,
-    setBodyEventSource,
-    setPlaintext,
-    setHTML,
-    setJSON,
+    Okapi.Response.status,
+    Okapi.Response.headers,
+    header,
+    file,
+    eventSource,
+    plaintext,
+    html,
+    json,
     addHeader,
-    addSetCookie,
+    setCookie,
     overwrite,
     write,
     redirect,
@@ -90,15 +88,16 @@ internalServerError =
 
 -- RESPONSE START --
 
-setStatus :: Parser m => Status -> m ()
-setStatus status = modify (\response -> response {status = status})
+status :: Parser m => Status -> m ()
+status status = modify (\response -> response {status = status})
 
-setHeaders :: Parser m => Headers -> m ()
-setHeaders headers = modify (\response -> response {headers = headers})
+headers :: Parser m => Headers -> m ()
+headers headers = modify (\response -> response {headers = headers})
 
-setHeader :: Parser m => Header -> m ()
-setHeader header = do
-  headers' <- gets headers
+-- TODO: If header with same name already exists in the headers list, add it to the value chain
+header :: Parser m => Header -> m ()
+header header = do
+  headers' <- gets Okapi.Internal.Response.headers
   modify (\response -> response {headers = update header headers'})
   where
     update :: forall a b. Eq a => (a, b) -> [(a, b)] -> [(a, b)]
@@ -114,34 +113,34 @@ setBody body = modify (\response -> response {body = body})
 setBodyRaw :: Parser m => LBS.ByteString -> m ()
 setBodyRaw lbs = setBody (Raw lbs)
 
-setBodyFile :: Parser m => FilePath -> m ()
-setBodyFile path = setBody (File path) -- TODO: setHeader???
+file :: Parser m => FilePath -> m ()
+file path = setBody (File path) -- TODO: header???
 
-setBodyEventSource :: Parser m => Event.EventSource -> m ()
-setBodyEventSource source = setBody (EventSource source)
+eventSource :: Parser m => Event.EventSource -> m ()
+eventSource source = setBody (EventSource source)
 
-setPlaintext :: Parser m => Text.Text -> m ()
-setPlaintext text = do
-  setHeader ("Content-Type", "text/plain")
+plaintext :: Parser m => Text.Text -> m ()
+plaintext text = do
+  header ("Content-Type", "text/plain")
   setBodyRaw (LBS.fromStrict . Text.encodeUtf8 $ text)
 
-setHTML :: Parser m => LBS.ByteString -> m ()
-setHTML html = do
-  setHeader ("Content-Type", "text/html")
+html :: Parser m => LBS.ByteString -> m ()
+html html = do
+  header ("Content-Type", "text/html")
   setBody (Raw html)
 
-setJSON :: (Aeson.ToJSON a, Parser m) => a -> m ()
-setJSON value = do
-  setHeader ("Content-Type", "application/json")
+json :: (Aeson.ToJSON a, Parser m) => a -> m ()
+json value = do
+  header ("Content-Type", "application/json")
   setBodyRaw (Aeson.encode value)
 
 addHeader :: Parser m => Header -> m ()
 addHeader header = do
-  headers <- gets headers
+  headers <- gets Okapi.Internal.Response.headers
   modify (\response -> response {headers = header : headers})
 
-addSetCookie :: Parser m => (BS.ByteString, BS.ByteString) -> m ()
-addSetCookie (key, value) = do
+setCookie :: Parser m => (BS.ByteString, BS.ByteString) -> m ()
+setCookie (key, value) = do
   let setCookieValue =
         LBS.toStrict $
           Builder.toLazyByteString $

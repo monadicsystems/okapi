@@ -4,7 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Okapi.HTTP.Request.Body
+module Okapi.Request.Body
   ( Parser (..),
     Body (..),
     parse,
@@ -29,10 +29,9 @@ import qualified Data.List as List
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Text.Encoding as Text
 import qualified Network.Wai.Parse as WAI
-import qualified Okapi.HTTP.Error as Error
+import qualified Okapi.Error as Error
 import qualified Okapi.Internal.Error as Error
 import Okapi.Internal.Request.Body
-import qualified Okapi.Log as Log
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
 
@@ -86,7 +85,6 @@ multipart = do
 -- | Parse a single form parameter
 formParam :: forall a m. (Web.FromHttpApiData a, Parser m) => BS.ByteString -> m a
 formParam paramName = do
-  Log.logIt "Getting form formParam"
   parse' <- parse
   case parse' of
     Raw lbs -> do
@@ -99,7 +97,6 @@ formParam paramName = do
               paramValue' <- maybe Error.next pure (Web.parseQueryParamMaybe paramValue)
               let newParams = List.delete (Text.decodeUtf8 paramName, paramValue) params
               put $ Raw $ Web.urlEncodeParams newParams
-              Log.logIt "Got form formParam"
               pure paramValue'
     Multipart (params, files) -> do
       case lookup paramName params of
@@ -108,7 +105,6 @@ formParam paramName = do
           paramValue' <- maybe Error.next pure (Web.parseQueryParamMaybe $ Text.decodeUtf8 paramValue)
           let newParams = List.delete (paramName, paramValue) params
           put $ Multipart (newParams, files)
-          Log.logIt "Got form formParam"
           pure paramValue'
 
 formParams :: forall a m. (Web.FromHttpApiData a, Parser m) => BS.ByteString -> m (NonEmpty.NonEmpty a)

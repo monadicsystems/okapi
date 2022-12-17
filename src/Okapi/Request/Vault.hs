@@ -1,7 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Okapi.HTTP.Request.Vault
+module Okapi.Request.Vault
   ( Parser (..),
     Vault.Vault,
     parse,
@@ -9,7 +9,7 @@ module Okapi.HTTP.Request.Vault
     delete,
     adjust,
     wipe,
-    Okapi.HTTP.Request.Vault.lookup,
+    Okapi.Request.Vault.lookup,
   )
 where
 
@@ -17,7 +17,7 @@ import qualified Control.Monad as Monad
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.Logger as Logger
 import qualified Data.Vault.Lazy as Vault
-import qualified Okapi.HTTP.Error as Error
+import qualified Okapi.Error as Error
 import qualified Okapi.Internal.Error as Error
 import Okapi.Internal.Request.Vault
 

@@ -17,8 +17,6 @@ you can embed your Okapi application into Servant easily. Here's how.
     servantHandler = pure MyData
     ```
 
-    {% endpoint_tester baseURL="hello" /%}
-
 2. Turn your Okapi API into an `Application` using `makeOkapiApp`:
 
     ```haskell
@@ -30,14 +28,14 @@ you can embed your Okapi application into Servant easily. Here's how.
       ...
     ```
 
-2. Wrap your Okapi app with the `Tagged` data constructor from `Data.Tagged` and annotate it with the type `Tagged Handler Application`:
+3. Wrap your Okapi app with the `Tagged` data constructor from `Data.Tagged` and annotate it with the type `Tagged Handler Application`:
 
     ```haskell
     taggedOkapiApp :: Tagged Handler Application
     taggedOkapiApp = Tagged okapiApp
     ```
 
-3. Add the `Raw` type from `Servant.API.Raw` to your Servant API type and create a `Proxy` value for it:
+4. Add the `Raw` type from `Servant.API.Raw` to your Servant API type and create a `Proxy` value for it:
 
     ```haskell
     type API = ServantAPI :<|> Raw
@@ -46,14 +44,14 @@ you can embed your Okapi application into Servant easily. Here's how.
     apiProxy = Proxy
     ```
 
-4. Add your tagged Okapi app to the Servant handler in the same spot where `Raw` is in the API type:
+5. Add your tagged Okapi app to the Servant handler in the same spot where `Raw` is in the API type:
 
     ```haskell
     apiHandler :: Server API
     apiHandler = servantHandler :<|> taggedOkapiApp
     ```
 
-5. Serve your Servant app as usual:
+6. Serve your Servant app as usual:
 
     ```haskell
     main :: IO ()

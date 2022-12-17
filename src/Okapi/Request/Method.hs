@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module Okapi.HTTP.Request.Method
+module Okapi.Request.Method
   ( Parser (..),
     Method,
     pattern GET,
@@ -18,10 +18,10 @@ module Okapi.HTTP.Request.Method
     pattern HEAD,
     parse,
     match,
-    Okapi.HTTP.Request.Method.get,
+    Okapi.Request.Method.get,
     post,
-    Okapi.HTTP.Request.Method.head,
-    Okapi.HTTP.Request.Method.put,
+    Okapi.Request.Method.head,
+    Okapi.Request.Method.put,
     delete,
     trace,
     connect,
@@ -35,10 +35,10 @@ import qualified Control.Monad as Monad
 import qualified Control.Monad.Combinators as Combinators
 import qualified Control.Monad.Except as Except
 import qualified Control.Monad.Logger as Logger
-import qualified Okapi.HTTP.Error as Error
+import qualified Okapi.Error as Error
 import qualified Okapi.Internal.Error as Error
 import Okapi.Internal.Request.Method
-import qualified Okapi.Log as Log
+
 
 type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.MonadLogger m, State m)
 
@@ -49,11 +49,7 @@ type Parser m = (Monad.MonadPlus m, Except.MonadError Error.Error m, Logger.Mona
 -- | TODO: Should it return (Maybe?) Or store methodParsed :: Bool in
 -- extra field like before and fail when "Nothing" is there?
 parse :: Parser m => m Method
-parse = do
-  Log.logIt "Parsing parse"
-  parse <- Okapi.Internal.Request.Method.get
-  Log.logIt $ "Parsed parse: " <> show parse
-  pure parse
+parse = Okapi.Internal.Request.Method.get
 
 match :: Parser m => Method -> m ()
 match method = do
