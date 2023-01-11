@@ -273,7 +273,7 @@ app defaultResponse hoister serverT waiRequest respond = do
         _ -> Request.Body.Raw <$> WAI.strictRequestBody waiRequest -- TODO: Use lazy request body???
       let method = Just $ WAI.requestMethod waiRequest
           path = WAI.pathInfo waiRequest
-          query = map (\case (name, Nothing) -> (name, Query.Flag); (name, Just txt) -> (name, Query.Param txt)) $ HTTP.queryToQueryText $ WAI.queryString waiRequest
+          query = WAI.queryString waiRequest
           headers = WAI.requestHeaders waiRequest
           vault = WAI.vault waiRequest
           request = Request.Request {..}
