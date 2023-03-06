@@ -6,7 +6,7 @@ module OkapiAPI (okapiApplication) where
 import Control.Applicative ((<|>))
 import Control.Monad.Combinators (optional)
 import Lucid (ToHtml (..), renderBS)
-import Network.HTTP.Types (Header)
+import Network.Server.Types (Header)
 import Network.Wai (Application)
 import Okapi
 import Template

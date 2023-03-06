@@ -28,7 +28,7 @@ import qualified Data.Text as Text
 import Data.Text.Encoding
 import qualified Data.Text.Encoding as Text
 import qualified GHC.Natural as Natural
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import qualified Okapi.Event as Event
 import Okapi.Types
 

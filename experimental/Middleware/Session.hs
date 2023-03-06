@@ -28,9 +28,9 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base64 as BS
 import qualified Data.Either as Either
 import qualified Okapi.Error as Error
-import qualified Okapi.HTTP as HTTP
+import qualified Okapi.Server as Server
 import qualified Okapi.Internal.Error as Error
-import qualified Okapi.Internal.HTTP as HTTP
+import qualified Okapi.Internal.Server as Server
 import qualified Okapi.Internal.Request as Request
 import qualified Okapi.Internal.Request.Body as Body
 import qualified Okapi.Internal.Request.Headers as Headers
@@ -73,16 +73,16 @@ class Monad m => Session m s | m -> s where
     newSessionID <- generateSessionID
     putSession newSessionID newSession
 
-instance Session m s => Session (HTTP.HTTPT m) s where
-  sessionSecret :: Session m s => HTTP.HTTPT m BS.ByteString
+instance Session m s => Session (Server.ServerT m) s where
+  sessionSecret :: Session m s => Server.ServerT m BS.ByteString
   sessionSecret = Morph.lift sessionSecret
-  generateSessionID :: Session m s => HTTP.HTTPT m SessionID
+  generateSessionID :: Session m s => Server.ServerT m SessionID
   generateSessionID = Morph.lift generateSessionID
-  getSession :: Session m s => SessionID -> HTTP.HTTPT m (Maybe s)
+  getSession :: Session m s => SessionID -> Server.ServerT m (Maybe s)
   getSession = Morph.lift . getSession
-  putSession :: Session m s => SessionID -> s -> HTTP.HTTPT m ()
+  putSession :: Session m s => SessionID -> s -> Server.ServerT m ()
   putSession sessionID = Morph.lift . putSession sessionID
-  clearSession :: Session m s => SessionID -> HTTP.HTTPT m ()
+  clearSession :: Session m s => SessionID -> Server.ServerT m ()
   clearSession = Morph.lift . clearSession
 
 sessionID :: (Request.Parser m, Session m s) => m SessionID
@@ -115,9 +115,9 @@ encodeSessionID secret (SessionID sessionID) =
       b64 = BS.encodeBase64' $ Memory.convert digest
    in b64 <> serial
 
-withSession :: (HTTP.Parser m, Session m s) => m () -> m ()
+withSession :: (Server.Parser m, Session m s) => m () -> m ()
 withSession handler = do
-  mbSessionID <- HTTP.look $ Combinators.optional sessionID
+  mbSessionID <- Server.look $ Combinators.optional sessionID
   secret <- sessionSecret
   case mbSessionID of
     Nothing -> do

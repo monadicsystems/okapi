@@ -28,30 +28,6 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Event
-      Okapi.Error
-      Okapi.Error.Body
-      Okapi.Request
-      Okapi.Request.Method
-      Okapi.Request.Path
-      Okapi.Request.Query
-      Okapi.Request.Headers
-      Okapi.Request.Body
-      Okapi.Request.Vault
-      Okapi.Response
-      Okapi.Response.Body
-      Okapi.Internal.Error
-      Okapi.Internal.Request
-      Okapi.Internal.Request.Method
-      Okapi.Internal.Request.Path
-      Okapi.Internal.Request.Query
-      Okapi.Internal.Request.Headers
-      Okapi.Internal.Request.Body
-      Okapi.Internal.Request.Vault
-      Okapi.Internal.Response
-      Okapi.Internal.HTTP
-      Okapi.Test
-  other-modules:
       Paths_okapi
   hs-source-dirs:
       src

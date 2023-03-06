@@ -37,8 +37,8 @@ import Data.Function
 import qualified Data.Map as Map
 import Data.Text
 import Data.Text.Encoding (encodeUtf8)
-import Network.HTTP.Types (decodePath, queryToQueryText)
-import qualified Network.HTTP.Types as HTTP
+import Network.Server.Types (decodePath, queryToQueryText)
+import qualified Network.Server.Types as Server
 import Network.Wai (defaultRequest)
 import qualified Network.Wai as Wai
 import Network.Wai.Test (SRequest (..), setRawPathInfo)

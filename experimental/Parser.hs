@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | This module exports parsers for verifying the existance of and extracting data from incoming HTTP requests.
+-- | This module exports parsers for verifying the existance of and extracting data from incoming Server requests.
 module Okapi.Parser
   ( -- * Method Parsers
 
@@ -109,8 +109,8 @@ import Data.Text
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Text.Encoding.Base64
-import Network.HTTP.Types (parseQuery)
-import qualified Network.HTTP.Types as HTTP
+import Network.Server.Types (parseQuery)
+import qualified Network.Server.Types as Server
 import Okapi.Types
 import qualified Web.Cookie as Cookie
 import qualified Web.FormUrlEncoded as Web
@@ -129,7 +129,7 @@ import Prelude hiding (head)
 -- >>> assertResponse is200 result
 -- True
 get :: forall m. MonadHTTP m => m ()
-get = method HTTP.methodGet
+get = method Server.methodGet
 
 -- |
 -- >>> let parser = post >> respond ok
@@ -137,7 +137,7 @@ get = method HTTP.methodGet
 -- >>> assertResponse is200 result
 -- True
 post :: forall m. MonadHTTP m => m ()
-post = method HTTP.methodPost
+post = method Server.methodPost
 
 -- |
 -- >>> let parser = Okapi.Parser.head >> respond ok
@@ -145,7 +145,7 @@ post = method HTTP.methodPost
 -- >>> assertResponse is200 result
 -- True
 head :: forall m. MonadHTTP m => m ()
-head = method HTTP.methodHead
+head = method Server.methodHead
 
 -- |
 -- >>> let parser = put >> respond ok
@@ -153,7 +153,7 @@ head = method HTTP.methodHead
 -- >>> assertResponse is200 result
 -- True
 put :: forall m. MonadHTTP m => m ()
-put = method HTTP.methodPut
+put = method Server.methodPut
 
 -- |
 -- >>> let parser = delete >> respond ok
@@ -161,7 +161,7 @@ put = method HTTP.methodPut
 -- >>> assertResponse is200 result
 -- True
 delete :: forall m. MonadHTTP m => m ()
-delete = method HTTP.methodDelete
+delete = method Server.methodDelete
 
 -- |
 -- >>> let parser = trace >> respond ok
@@ -169,7 +169,7 @@ delete = method HTTP.methodDelete
 -- >>> assertResponse is200 result
 -- True
 trace :: forall m. MonadHTTP m => m ()
-trace = method HTTP.methodTrace
+trace = method Server.methodTrace
 
 -- |
 -- >>> let parser = connect >> respond ok
@@ -177,7 +177,7 @@ trace = method HTTP.methodTrace
 -- >>> assertResponse is200 result
 -- True
 connect :: forall m. MonadHTTP m => m ()
-connect = method HTTP.methodConnect
+connect = method Server.methodConnect
 
 -- |
 -- >>> let parser = options >> respond ok
@@ -185,7 +185,7 @@ connect = method HTTP.methodConnect
 -- >>> assertResponse is200 result
 -- True
 options :: forall m. MonadHTTP m => m ()
-options = method HTTP.methodOptions
+options = method Server.methodOptions
 
 -- |
 -- >>> let parser = patch >> respond ok
@@ -193,7 +193,7 @@ options = method HTTP.methodOptions
 -- >>> assertResponse is200 result
 -- True
 patch :: forall m. MonadHTTP m => m ()
-patch = method HTTP.methodPatch
+patch = method Server.methodPatch
 
 -- |
 -- >>> let parser = anyMethod >> respond ok
@@ -208,7 +208,7 @@ anyMethod = parseMethod >> pure ()
 -- >>> result <- testIO parser (TestRequest "CUSTOM" [] "" "")
 -- >>> assertResponse is200 result
 -- True
-method :: forall m. MonadHTTP m => HTTP.Method -> m ()
+method :: forall m. MonadHTTP m => Server.Method -> m ()
 method method = do
   method' <- parseMethod
   if method == method'
@@ -431,7 +431,7 @@ cookies = do
   pure $ Cookie.parseCookiesText cookiesValue
 
 -- TODO: Any checks required??
-header :: forall m. MonadHTTP m => HTTP.HeaderName -> m Char8.ByteString
+header :: forall m. MonadHTTP m => Server.HeaderName -> m Char8.ByteString
 header headerName = do
   (_headerName, headerValue) <- parseHeader headerName
   pure headerValue
@@ -441,7 +441,7 @@ header headerName = do
 -- BODY HELPERS
 
 -- TODO: Check HEADERS for correct content type?
--- TODO: Check METHOD for correct HTTP method?
+-- TODO: Check METHOD for correct Server method?
 
 bodyJSON :: forall a m. (MonadHTTP m, Aeson.FromJSON a) => m a
 bodyJSON = do
@@ -517,7 +517,7 @@ bodyParsed = State.gets stateRequestBodyParsed
 
 -- PRIMITIVE PARSERS (BELOW IS INTERNAL)
 
-parseMethod :: MonadHTTP m => m HTTP.Method
+parseMethod :: MonadHTTP m => m Server.Method
 parseMethod = do
   isMethodParsed <- methodParsed
   if isMethodParsed
@@ -564,7 +564,7 @@ parseHeaders = do
   State.modify (\state -> state {stateRequest = (stateRequest state) {requestHeaders = []}})
   pure headers
 
-parseHeader :: MonadHTTP m => HTTP.HeaderName -> m Header
+parseHeader :: MonadHTTP m => Server.HeaderName -> m Header
 parseHeader headerName = do
   maybeHeader <- State.gets (Foldable.find (\(headerName', _) -> headerName == headerName') . requestHeaders . stateRequest)
   case maybeHeader of

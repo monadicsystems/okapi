@@ -17,7 +17,7 @@ type  MonadMethod m = (Monad.MonadPlus m, Except.MonadError Failure.Failure m, L
 
 -- $ methodParsers
 --
--- These are parsers for parsing the HTTP request method.
+-- These are parsers for parsing the Server request method.
 
 -- | TODO: Should it return (Maybe?) Or store methodParsed :: Bool in
 -- extra field like before and fail when "Nothing" is there?

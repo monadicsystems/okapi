@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Type.HTTP where
+module Okapi.Type.Server where
 
 import qualified Control.Applicative as Applicative
 import qualified Control.Monad as Monad
@@ -28,25 +28,25 @@ import qualified Okapi.State.Request.Vault as Vault
 import qualified Data.Vault.Lazy as Vault
 
 -- | A concrete implementation of the @MonadHTTP@ type constraint.
-newtype HTTPT m a = HTTPT {runServerT :: Except.ExceptT Failure.Failure (State.StateT (Request.Request, Response.Response) m) a}
+newtype ServerT m a = ServerT {runServerT :: Except.ExceptT Failure.Failure (State.StateT (Request.Request, Response.Response) m) a}
   deriving newtype
     ( Except.MonadError Failure.Failure
     )
 
-instance Functor m => Functor (HTTPT m) where
-  fmap :: (a -> b) -> HTTPT m a -> HTTPT m b
+instance Functor m => Functor (ServerT m) where
+  fmap :: (a -> b) -> ServerT m a -> ServerT m b
   fmap f okapiT =
-    HTTPT . Except.ExceptT . State.StateT $
+    ServerT . Except.ExceptT . State.StateT $
       fmap (\ ~(a, s') -> (f <$> a, s'))
         . State.runStateT (Except.runExceptT $ runServerT okapiT)
   {-# INLINE fmap #-}
 
-instance Monad m => Applicative (HTTPT m) where
-  pure :: Monad m => a -> HTTPT m a
-  pure x = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Right x, s)
+instance Monad m => Applicative (ServerT m) where
+  pure :: Monad m => a -> ServerT m a
+  pure x = ServerT . Except.ExceptT . State.StateT $ \s -> pure (Right x, s)
   {-# INLINEABLE pure #-}
-  (<*>) :: Monad m => HTTPT m (a -> b) -> HTTPT m a -> HTTPT m b
-  (HTTPT (Except.ExceptT (State.StateT mf))) <*> (HTTPT (Except.ExceptT (State.StateT mx))) = HTTPT . Except.ExceptT . State.StateT $ \s -> do
+  (<*>) :: Monad m => ServerT m (a -> b) -> ServerT m a -> ServerT m b
+  (ServerT (Except.ExceptT (State.StateT mf))) <*> (ServerT (Except.ExceptT (State.StateT mx))) = ServerT . Except.ExceptT . State.StateT $ \s -> do
     ~(eitherF, s') <- mf s
     case eitherF of
       Left error -> pure (Left error, s)
@@ -56,16 +56,16 @@ instance Monad m => Applicative (HTTPT m) where
           Left error' -> pure (Left error', s')
           Right x -> pure (Right $ f x, s'')
   {-# INLINEABLE (<*>) #-}
-  (*>) :: Monad m => HTTPT m a -> HTTPT m b -> HTTPT m b
+  (*>) :: Monad m => ServerT m a -> ServerT m b -> ServerT m b
   m *> k = m >> k
   {-# INLINE (*>) #-}
 
-instance Monad m => Applicative.Alternative (HTTPT m) where
-  empty :: Monad m => HTTPT m a
-  empty = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Left Failure.Next, s)
+instance Monad m => Applicative.Alternative (ServerT m) where
+  empty :: Monad m => ServerT m a
+  empty = ServerT . Except.ExceptT . State.StateT $ \s -> pure (Left Failure.Next, s)
   {-# INLINE empty #-}
-  (<|>) :: Monad m => HTTPT m a -> HTTPT m a -> HTTPT m a
-  (HTTPT (Except.ExceptT (State.StateT mx))) <|> (HTTPT (Except.ExceptT (State.StateT my))) = HTTPT . Except.ExceptT . State.StateT $ \s -> do
+  (<|>) :: Monad m => ServerT m a -> ServerT m a -> ServerT m a
+  (ServerT (Except.ExceptT (State.StateT mx))) <|> (ServerT (Except.ExceptT (State.StateT my))) = ServerT . Except.ExceptT . State.StateT $ \s -> do
     (eitherX, stateX) <- mx s
     case eitherX of
       Left Failure.Next -> do
@@ -78,12 +78,12 @@ instance Monad m => Applicative.Alternative (HTTPT m) where
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE (<|>) #-}
 
-instance Monad m => Monad (HTTPT m) where
-  return :: Monad m => a -> HTTPT m a
+instance Monad m => Monad (ServerT m) where
+  return :: Monad m => a -> ServerT m a
   return = pure
   {-# INLINEABLE return #-}
-  (>>=) :: Monad m => HTTPT m a -> (a -> HTTPT m b) -> HTTPT m b
-  (HTTPT (Except.ExceptT (State.StateT mx))) >>= f = HTTPT . Except.ExceptT . State.StateT $ \s -> do
+  (>>=) :: Monad m => ServerT m a -> (a -> ServerT m b) -> ServerT m b
+  (ServerT (Except.ExceptT (State.StateT mx))) >>= f = ServerT . Except.ExceptT . State.StateT $ \s -> do
     ~(eitherX, s') <- mx s
     case eitherX of
       Left error -> pure (Left error, s)
@@ -94,12 +94,12 @@ instance Monad m => Monad (HTTPT m) where
           Right res -> pure (Right res, s'')
   {-# INLINEABLE (>>=) #-}
 
-instance Monad m => Monad.MonadPlus (HTTPT m) where
-  mzero :: Monad m => HTTPT m a
-  mzero = HTTPT . Except.ExceptT . State.StateT $ \s -> pure (Left Failure.Next, s)
+instance Monad m => Monad.MonadPlus (ServerT m) where
+  mzero :: Monad m => ServerT m a
+  mzero = ServerT . Except.ExceptT . State.StateT $ \s -> pure (Left Failure.Next, s)
   {-# INLINE mzero #-}
-  mplus :: Monad m => HTTPT m a -> HTTPT m a -> HTTPT m a
-  (HTTPT (Except.ExceptT (State.StateT mx))) `mplus` (HTTPT (Except.ExceptT (State.StateT my))) = HTTPT . Except.ExceptT . State.StateT $ \s -> do
+  mplus :: Monad m => ServerT m a -> ServerT m a -> ServerT m a
+  (ServerT (Except.ExceptT (State.StateT mx))) `mplus` (ServerT (Except.ExceptT (State.StateT my))) = ServerT . Except.ExceptT . State.StateT $ \s -> do
     (eitherX, stateX) <- mx s
     case eitherX of
       Left Failure.Next -> do
@@ -112,67 +112,67 @@ instance Monad m => Monad.MonadPlus (HTTPT m) where
       Right x -> pure (Right x, stateX)
   {-# INLINEABLE mplus #-}
 
-instance Reader.MonadReader r m => Reader.MonadReader r (HTTPT m) where
-  ask :: Reader.MonadReader r m => HTTPT m r
+instance Reader.MonadReader r m => Reader.MonadReader r (ServerT m) where
+  ask :: Reader.MonadReader r m => ServerT m r
   ask = Morph.lift Reader.ask
-  local :: Reader.MonadReader r m => (r -> r) -> HTTPT m a -> HTTPT m a
+  local :: Reader.MonadReader r m => (r -> r) -> ServerT m a -> ServerT m a
   local = mapOkapiT . Reader.local
     where
-      mapOkapiT :: (m (Either Failure.Failure a, (Request.Request, Response.Response)) -> n (Either Failure.Failure b, (Request.Request, Response.Response))) -> HTTPT m a -> HTTPT n b
-      mapOkapiT f okapiT = HTTPT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ runServerT okapiT)
-  reader :: Reader.MonadReader r m => (r -> a) -> HTTPT m a
+      mapOkapiT :: (m (Either Failure.Failure a, (Request.Request, Response.Response)) -> n (Either Failure.Failure b, (Request.Request, Response.Response))) -> ServerT m a -> ServerT n b
+      mapOkapiT f okapiT = ServerT . Except.ExceptT . State.StateT $ f . State.runStateT (Except.runExceptT $ runServerT okapiT)
+  reader :: Reader.MonadReader r m => (r -> a) -> ServerT m a
   reader = Morph.lift . Reader.reader
 
-instance Logger.MonadLogger m => Logger.MonadLogger (HTTPT m) where
-  monadLoggerLog :: Logger.ToLogStr msg => Logger.Loc -> Logger.LogSource -> Logger.LogLevel -> msg -> HTTPT m ()
+instance Logger.MonadLogger m => Logger.MonadLogger (ServerT m) where
+  monadLoggerLog :: Logger.ToLogStr msg => Logger.Loc -> Logger.LogSource -> Logger.LogLevel -> msg -> ServerT m ()
   monadLoggerLog loc logSrc logLvl msg = Morph.lift $ Logger.monadLoggerLog loc logSrc logLvl msg
 
-instance IO.MonadIO m => IO.MonadIO (HTTPT m) where
-  liftIO :: IO.MonadIO m => IO a -> HTTPT m a
+instance IO.MonadIO m => IO.MonadIO (ServerT m) where
+  liftIO :: IO.MonadIO m => IO a -> ServerT m a
   liftIO = Morph.lift . IO.liftIO
 
-instance Morph.MonadTrans HTTPT where
-  lift :: Monad m => m a -> HTTPT m a
-  lift action = HTTPT . Except.ExceptT . State.StateT $ \s -> do
+instance Morph.MonadTrans ServerT where
+  lift :: Monad m => m a -> ServerT m a
+  lift action = ServerT . Except.ExceptT . State.StateT $ \s -> do
     result <- action
     pure (Right result, s)
 
-instance Morph.MFunctor HTTPT where
-  hoist :: Monad m => (forall a. m a -> n a) -> HTTPT m b -> HTTPT n b
-  hoist nat okapiT = HTTPT . Except.ExceptT . State.StateT $ nat . State.runStateT (Except.runExceptT $ runServerT okapiT)
+instance Morph.MFunctor ServerT where
+  hoist :: Monad m => (forall a. m a -> n a) -> ServerT m b -> ServerT n b
+  hoist nat okapiT = ServerT . Except.ExceptT . State.StateT $ nat . State.runStateT (Except.runExceptT $ runServerT okapiT)
 
-instance Monad m => Method.MonadState (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Method
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.method req, s)
-  put :: Monad m => Request.Method -> HTTPT m ()
-  put method' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.method = method'}, res))
+instance Monad m => Method.MonadState (ServerT m) where
+  get :: Monad m => ServerT m Request.Method
+  get = ServerT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.method req, s)
+  put :: Monad m => Request.Method -> ServerT m ()
+  put method' = ServerT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.method = method'}, res))
 
-instance Monad m => Path.MonadState (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Path
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.path req, s)
-  put :: Monad m => Request.Path -> HTTPT m ()
-  put path' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.path = path'}, res))
+instance Monad m => Path.MonadState (ServerT m) where
+  get :: Monad m => ServerT m Request.Path
+  get = ServerT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.path req, s)
+  put :: Monad m => Request.Path -> ServerT m ()
+  put path' = ServerT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.path = path'}, res))
 
-instance Monad m => Headers.MonadState (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Headers
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.headers req, s)
-  put :: Monad m => Request.Headers -> HTTPT m ()
-  put headers' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.headers = headers'}, res))
+instance Monad m => Headers.MonadState (ServerT m) where
+  get :: Monad m => ServerT m Request.Headers
+  get = ServerT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.headers req, s)
+  put :: Monad m => Request.Headers -> ServerT m ()
+  put headers' = ServerT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.headers = headers'}, res))
 
-instance Monad m => Query.MonadState (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Query
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.query req, s)
-  put :: Monad m => Request.Query -> HTTPT m ()
-  put query' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.query = query'}, res))
+instance Monad m => Query.MonadState (ServerT m) where
+  get :: Monad m => ServerT m Request.Query
+  get = ServerT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.query req, s)
+  put :: Monad m => Request.Query -> ServerT m ()
+  put query' = ServerT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.query = query'}, res))
 
-instance Monad m => Body.MonadState (HTTPT m) where
-  get :: Monad m => HTTPT m Request.Body
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.body req, s)
-  put :: Monad m => Request.Body -> HTTPT m ()
-  put body' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.body = body'}, res))
+instance Monad m => Body.MonadState (ServerT m) where
+  get :: Monad m => ServerT m Request.Body
+  get = ServerT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.body req, s)
+  put :: Monad m => Request.Body -> ServerT m ()
+  put body' = ServerT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.body = body'}, res))
 
-instance Monad m => Vault.MonadState (HTTPT m) where
-  get :: Monad m => HTTPT m Vault.Vault
-  get = HTTPT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.vault req, s)
-  put :: Monad m => Vault.Vault -> HTTPT m ()
-  put vault' = HTTPT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.vault = vault'}, res))
+instance Monad m => Vault.MonadState (ServerT m) where
+  get :: Monad m => ServerT m Vault.Vault
+  get = ServerT . Except.ExceptT . State.StateT $ \s@(req, res) -> pure (Right $ Request.vault req, s)
+  put :: Monad m => Vault.Vault -> ServerT m ()
+  put vault' = ServerT . Except.ExceptT . State.StateT $ \(req, res) -> pure (Right (), (req {Request.vault = vault'}, res))

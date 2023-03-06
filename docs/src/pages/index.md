@@ -119,7 +119,7 @@ module Main where
 
 import Okapi
 
-type Server = ServerT IO -- Can parse HTTP requests + perform I/O
+type Server = ServerT IO -- Can parse Server requests + perform I/O
 
 main :: IO ()
 main =
@@ -149,16 +149,16 @@ this library.
 
 ### Parsers
 
-Okapi provides **parsers** to extract data from or verify properties of HTTP requests. They all have a
+Okapi provides **parsers** to extract data from or verify properties of Server requests. They all have a
 return type of `MonadHTTP m => m a`, where `a` is some value.
 
 Parsers can either **succeed** or **fail**.
 
-For example, the `methodGET` parser succeeds if the HTTP request has the GET method, otherwise it fails.
+For example, the `methodGET` parser succeeds if the Server request has the GET method, otherwise it fails.
 
 Parsers in Okapi are analagous to what most other web frameworks would call *routes*, but parsers are more granular and modular.
 
-There is a category of parsers for each component of an HTTP request:
+There is a category of parsers for each component of an Server request:
 
 1. Method parsers
    
@@ -216,7 +216,7 @@ There are two ways to combine parsers and create more complex ones:
 
    A parser composed of a sequence of other parsers ONLY succeeds if all of the parsers in the sequence succeed. If any one of the parsers in the sequence fails, the entire parser fails.
 
-   For example, the `getUser` parser defined above would fail if the HTTP request was `POST /users/5`, because the `methodGET` parser would fail. If the HTTP request was `GET /guests/9`, `getUser` would fail because the ``pathParam `is` "users"`` parser would fail.
+   For example, the `getUser` parser defined above would fail if the Server request was `POST /users/5`, because the `methodGET` parser would fail. If the Server request was `GET /guests/9`, `getUser` would fail because the ``pathParam `is` "users"`` parser would fail.
 
    In summary, given parsers `p1` and `p2`, the parser `p3` defined as:
 
@@ -250,7 +250,7 @@ There are two ways to combine parsers and create more complex ones:
 
     If all of the parsers in the composition fail, the entire parser fails.
 
-    Using the `pingpong` parser as an example, if the incoming HTTP request was `GET /ping`, `pingpong` would succeed because the `ping` parser in `ping <|> pong` succeeds. If the incoming request was `GET /pong`, `pingpong` would still succeed. Eventhough `ping` in `ping <|> pong` would fail, `pong` would succeed, so `pingpong = ping <|> pong` succeeds.
+    Using the `pingpong` parser as an example, if the incoming Server request was `GET /ping`, `pingpong` would succeed because the `ping` parser in `ping <|> pong` succeeds. If the incoming request was `GET /pong`, `pingpong` would still succeed. Eventhough `ping` in `ping <|> pong` would fail, `pong` would succeed, so `pingpong = ping <|> pong` succeeds.
 
     In summary, given parsers `p1` and `p2`, the parser `p3` defined as:
 

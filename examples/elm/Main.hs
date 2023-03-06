@@ -19,7 +19,7 @@ import qualified Lucid.Htmx as Htmx
 import qualified Network.WebSockets as WS
 import qualified Okapi
 import qualified Okapi.Effect.Failure as Failure
-import qualified Okapi.Effect.HTTP as HTTP
+import qualified Okapi.Effect.Server as Server
 import qualified Okapi.Effect.Request.Body as Body
 import qualified Okapi.Effect.Request.Headers as Headers
 import qualified Okapi.Effect.Request.Method as Method
@@ -29,7 +29,7 @@ import qualified Okapi.Effect.Request.Path as Request.Effect
 import qualified Okapi.Effect.Request.Query as Query
 import qualified Okapi.Effect.Response as Response
 import qualified Okapi.Pattern as Pattern
-import Okapi.Type.HTTP (HTTPT (..))
+import Okapi.Type.Server (ServerT (..))
 import qualified Okapi.Type.Request as Request
 import qualified Okapi.Type.Response as Response
 
@@ -249,7 +249,7 @@ exampleTEA3 =
     }
 
 makeTEAParams ::
-  (HTTP.MonadHTTP m, IO.MonadIO m) =>
+  (Server.MonadHTTP m, IO.MonadIO m) =>
   IORef.IORef a ->
   TEAParams a ->
   m ()

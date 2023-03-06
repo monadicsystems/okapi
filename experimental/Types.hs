@@ -27,7 +27,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Vault.Lazy as Vault
 import qualified GHC.Natural as Natural
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 
 {-
 TODO: HTTPDataStore? Not really needed because you can just pass data normally or store in own monad.
@@ -193,7 +193,7 @@ instance Show Failure where
   show Skip = "Skipped"
   show (Error _) = "Error returned"
 
-type Method = HTTP.Method
+type Method = Server.Method
 
 type Path = [Text.Text]
 
@@ -209,7 +209,7 @@ type Headers = [Header]
 
 type Header = (HeaderName, BS.ByteString)
 
-type HeaderName = HTTP.HeaderName
+type HeaderName = Server.HeaderName
 
 type Cookie = (Text.Text, Text.Text)
 

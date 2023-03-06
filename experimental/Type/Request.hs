@@ -11,11 +11,11 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Vault.Lazy as Vault
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import qualified Network.Wai.Parse as WAI
 import qualified Web.HttpApiData as Web
 
--- | Represents the HTTP request being parsed.
+-- | Represents the Server request being parsed.
 data Request = Request
   { method :: Method,
     path :: Path,
@@ -65,7 +65,7 @@ type Headers = [Header]
 
 type Header = (HeaderName, BS.ByteString)
 
-type HeaderName = HTTP.HeaderName
+type HeaderName = Server.HeaderName
 
 type Cookie = [Crumb]
 

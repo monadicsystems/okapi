@@ -12,7 +12,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Okapi.Effect.HTTP where
+module Okapi.Effect.Server where
 
 import qualified Control.Applicative as Applicative
 import qualified Control.Monad as Monad
@@ -35,13 +35,13 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
 import qualified Data.Vault.Lazy as Vault
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import qualified Network.Wai.Parse as WAI
 import qualified Okapi.Effect.Request as Request
 import qualified Okapi.Effect.Request.Path as Path
 import qualified Okapi.Effect.Response as Response
 import qualified Okapi.Event as Event
-import qualified Okapi.State.HTTP as HTTP
+import qualified Okapi.State.Server as Server
 import qualified Okapi.State.Request as Request
 import qualified Okapi.State.Response as Response
 import qualified Okapi.Type.Failure as Failure

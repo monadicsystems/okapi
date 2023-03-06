@@ -9,14 +9,14 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified GHC.Natural as Natural
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import Okapi.Event (EventSource)
 
-type Header = (HTTP.HeaderName, BS.ByteString)
+type Header = (Server.HeaderName, BS.ByteString)
 
 type Headers = [Header]
 
--- | Represents HTTP responses that can be returned by a parser.
+-- | Represents Server responses that can be returned by a parser.
 data Response = Response
   { status :: Status,
     headers :: Headers,
@@ -25,7 +25,7 @@ data Response = Response
 
 type Status = Natural.Natural
 
--- | Represents the body of an HTTP response.
+-- | Represents the body of an Server response.
 data Body
   = Raw LBS.ByteString
   | File FilePath

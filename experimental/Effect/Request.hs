@@ -23,7 +23,7 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
 import qualified Data.Vault.Lazy as Vault
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import qualified Network.Wai.Parse as WAI
 import qualified Okapi.Effect.Failure as Failure
 -- import qualified Okapi.Pattern as Pattern

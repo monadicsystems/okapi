@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- | This module exports functions for turning HTTP request parsers into WAI applications.
+-- | This module exports functions for turning Server request parsers into WAI applications.
 module Okapi.Application
   ( app,
     Okapi.Application.websocketsApp,
@@ -13,7 +13,7 @@ import qualified Control.Monad.Except as Except
 import qualified Control.Monad.Morph as Morph
 import qualified Control.Monad.State.Strict as State
 import qualified Data.Map as Map
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import qualified Network.Wai as Wai
 import Network.Wai.Handler.WebSockets
 import qualified Network.Wai.Handler.WebSockets as WS
@@ -53,7 +53,7 @@ app hoister defaultResponse okapiT waiRequest respond = do
       requestBody <- Wai.strictRequestBody waiRequest
       let requestMethod = Wai.requestMethod waiRequest
           requestPath = Wai.pathInfo waiRequest
-          requestQuery = map (\case (name, Nothing) -> (name, QueryFlag); (name, Just txt) -> (name, QueryParam txt)) $ HTTP.queryToQueryText $ Wai.queryString waiRequest
+          requestQuery = map (\case (name, Nothing) -> (name, QueryFlag); (name, Just txt) -> (name, QueryParam txt)) $ Server.queryToQueryText $ Wai.queryString waiRequest
           requestHeaders = Wai.requestHeaders waiRequest
           stateRequest = Request {..}
           stateRequestMethodParsed = False

@@ -15,8 +15,8 @@ import qualified Data.Text as Text
 import qualified Okapi.Effect.Failure as Failure
 import qualified Okapi.Effect.Request as Request
 import qualified Okapi.Effect.Response as Response
-import qualified Okapi.Effect.HTTP as HTTP
-import qualified Okapi.Type.HTTP as HTTP
+import qualified Okapi.Effect.Server as Server
+import qualified Okapi.Type.Server as Server
 import qualified Web.HttpApiData as Web
 
 -- class Request.MonadRequest m => SinatraRequestM m where
@@ -25,20 +25,20 @@ import qualified Web.HttpApiData as Web
 -- class Response.MonadResponse m => SinatraResponseM m where
 --   param :: Web.FromHttpApiData a => Text.Text -> m a
 
--- class (SinatraRequestM m, SinatraResponseM m, HTTP.MonadHTTP m) => SinatraM m
+-- class (SinatraRequestM m, SinatraResponseM m, Server.MonadHTTP m) => SinatraM m
 
--- instance SinatraRequestM m => SinatraRequestM (HTTP.ServerT m) where
---   setParam :: (Web.ToHttpApiData a, SinatraRequestM m) => Text.Text -> a -> HTTP.ServerT m ()
+-- instance SinatraRequestM m => SinatraRequestM (Server.ServerT m) where
+--   setParam :: (Web.ToHttpApiData a, SinatraRequestM m) => Text.Text -> a -> Server.ServerT m ()
 --   setParam name = Morph.lift . setParam name
 
--- instance SinatraResponseM m => SinatraResponseM (HTTP.ServerT m) where
---   param :: (Web.FromHttpApiData a, SinatraResponseM m) => Text.Text -> HTTP.ServerT m a
+-- instance SinatraResponseM m => SinatraResponseM (Server.ServerT m) where
+--   param :: (Web.FromHttpApiData a, SinatraResponseM m) => Text.Text -> Server.ServerT m a
 --   param = Morph.lift . param
 {-
 get ::
   (forall l. Request.MonadRequest l => l (Map.Map Text.Text Text.Text)) ->
   (forall m. Response.MonadResponse m => Map.Map Text.Text Text.Text -> m ()) ->
-  (forall n. HTTP.MonadHTTP n => n ())
+  (forall n. Server.MonadHTTP n => n ())
 get setter responder = do
   Request.methodGET
   params <- setter
@@ -47,7 +47,7 @@ get setter responder = do
 post ::
   (forall l. Request.MonadRequest l => l (Map.Map Text.Text Text.Text)) ->
   (forall m. Response.MonadResponse m => Map.Map Text.Text Text.Text -> m ()) ->
-  (forall n. HTTP.MonadHTTP n => n ())
+  (forall n. Server.MonadHTTP n => n ())
 post setter responder = do
   Request.methodPOST
   params <- setter
@@ -55,17 +55,17 @@ post setter responder = do
 -}
 
 {-
-get :: HTTP.MonadHTTP m => m a -> (a -> m ()) -> m ()
+get :: Server.MonadHTTP m => m a -> (a -> m ()) -> m ()
 get handler = do
   Request.methodGET
   handler
 
-post :: HTTP.MonadHTTP m => m a -> (a -> m ()) -> m ()
+post :: Server.MonadHTTP m => m a -> (a -> m ()) -> m ()
 post handler = do
   Request.methodPOST
   handler
 
-example :: HTTP.MonadHTTP m => m ()
+example :: Server.MonadHTTP m => m ()
 example =
   Combinators.choice
     [ get [route|/greet/:Int|] \name -> do

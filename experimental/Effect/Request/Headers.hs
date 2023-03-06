@@ -16,7 +16,7 @@ import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.Encoding.Base64 as Text
-import qualified Network.HTTP.Types.Header as HTTP
+import qualified Network.Server.Types.Header as Server
 import qualified Okapi.Effect.Failure as Failure
 import qualified Okapi.State.Request.Headers as Headers
 import qualified Okapi.Type.Failure as Failure
@@ -35,7 +35,7 @@ headers = do
   Headers.put []
   pure headers
 
-header :: MonadHeaders m => HTTP.HeaderName -> m Char8.ByteString
+header :: MonadHeaders m => Server.HeaderName -> m Char8.ByteString
 header headerName = do
   maybeHeader <- Headers.gets (Foldable.find (\(headerName', _) -> headerName == headerName'))
   case maybeHeader of

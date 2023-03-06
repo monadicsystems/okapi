@@ -14,7 +14,7 @@ import Data.Either.Extra
 import Data.Map
 import qualified Data.Map as Map
 import Data.Text
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import Okapi
 import Okapi.Effect.Response
 import Okapi.Types
@@ -26,18 +26,18 @@ import Web.HttpApiData
 -- >>> import Okapi.Effect.Response
 -- >>> import Okapi.Test
 
-data Pattern = Pattern HTTP.Method [Text] deriving (Eq, Show)
+data Pattern = Pattern Server.Method [Text] deriving (Eq, Show)
 
-pattern GET :: HTTP.Method
+pattern GET :: Server.Method
 pattern GET = "GET"
 
-pattern POST :: HTTP.Method
+pattern POST :: Server.Method
 pattern POST = "POST"
 
-pattern DELETE :: HTTP.Method
+pattern DELETE :: Server.Method
 pattern DELETE = "DELETE"
 
-pattern OTHER :: HTTP.Method -> HTTP.Method
+pattern OTHER :: Server.Method -> Server.Method
 pattern OTHER method <-
   method
   where

@@ -22,7 +22,7 @@ import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Function as Function
 import qualified Data.Text.Encoding as Text
-import qualified Network.HTTP.Types as HTTP
+import qualified Network.Server.Types as Server
 import qualified Network.Wai as Wai
 import qualified Network.Wai.EventSource as Wai
 import Network.WebSockets (send)
@@ -48,8 +48,8 @@ eventSourceAppIO :: IO Wai.ServerEvent -> Wai.Application
 eventSourceAppIO src _ sendResponse =
   sendResponse $
     Wai.responseStream
-      HTTP.status200
-      [(HTTP.hContentType, "text/event-stream")]
+      Server.status200
+      [(Server.hContentType, "text/event-stream")]
       $ \sendChunk flush -> do
         flush
         Function.fix $ \loop -> do
