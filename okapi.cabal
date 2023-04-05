@@ -30,6 +30,7 @@ library
       Okapi
       Okapi.Monad
       Okapi.Applicative
+      -- Okapi.Scratch
   other-modules:
       Paths_okapi
   hs-source-dirs:
@@ -51,6 +52,7 @@ library
     , mtl
     , network
     , parser-combinators
+    , pretty-simple
     , text
     , transformers
     , unagi-chan
