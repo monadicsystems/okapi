@@ -2,9 +2,10 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- {-# LANGUAGE OverloadedRecordDotSyntax #-}
 
-module Okapi.Applicative where
+module Okapi.Extractor where
 
 import Control.Applicative (Alternative(..))
 import qualified Data.Aeson as Aeson
@@ -22,6 +23,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Web.Cookie as Web
 import qualified Web.FormUrlEncoded as Web
 import qualified Web.HttpApiData as Web
+import qualified Data.ByteString.Builder as Builder
 
 data Result e a = Ok a | Error e
 
@@ -49,15 +51,17 @@ data Extractor e a where
   -- | API
   Method :: Monoid e => Extractor e HTTP.Method
   PathParam :: (Monoid e, Web.FromHttpApiData a) => Extractor e a
+  Route :: Monoid e => ((HTTP.Method, [Text.Text]) -> Result e a) -> Extractor e a
   -- Make it so order of PathParam doesn't matter.
-  -- Can do this by adding an arg of Int to specify the index.
+  -- Can do this by adding an arg of Int to specify the index of the path param.
   -- Path :: Web.FromHttpApiData a => Extractor e [a]
   -- Path can be defined in terms of path param
-  QueryParam :: Web.FromHttpApiData a => BS.ByteString -> Extractor e a
-  QueryFlag :: BS.ByteString -> Extractor e ()
-  Query :: Extractor e [(BS.ByteString, Maybe BS.ByteString)] -- ? Use Non-Empty
-  Header :: HTTP.HeaderName -> Extractor e BS.ByteString
-  Headers :: Extractor e [HTTP.Header] -- ? Use Non-Empty
+  QueryParam :: (Web.FromHttpApiData a, Monoid e) => BS.ByteString -> Extractor e a
+  QueryFlag :: Monoid e => BS.ByteString -> Extractor e ()
+  -- Query :: Extractor e [(BS.ByteString, Maybe BS.ByteString)] -- ? Use Non-Empty
+  HeaderParam :: (Monoid e, Web.FromHttpApiData a) => HTTP.HeaderName -> Extractor e a
+  -- Headers :: Extractor e [HTTP.Header] -- ? Use Non-Empty
+  CookieParam :: (Monoid e, Web.FromHttpApiData a) => BS.ByteString -> Extractor e a
   JSON :: Aeson.FromJSON a => Extractor e a
   FormParam :: Web.FromHttpApiData a => BS.ByteString -> Extractor e a
   Form :: Web.FromForm a => Extractor e a
@@ -67,9 +71,9 @@ data Extractor e a where
   -- | Helpers
   Now :: Extractor e RequestInfo
   Abort :: Monoid e => e -> Extractor e a
-  Is :: (Monoid e, Eq a) => a -> Extractor e a -> Extractor e ()
+  Is :: (Monoid e, Eq a) => Extractor e a -> a -> Extractor e ()
   -- TODO: Switch order of args for `Satisfy` and `Is`???
-  Satisfy :: Monoid e => (a -> Bool) -> Extractor e a -> Extractor e ()
+  Satisfies :: Monoid e => Extractor e a -> (a -> Bool) ->  Extractor e ()
   -- Assert :: Monoid e => (RequestInfo -> Bool) -> Extractor e ()
   -- Replace with Is (Now ...)
 
@@ -121,26 +125,79 @@ extract extractor requestInfo = case extractor of
     (h:t) -> case Web.parseUrlPieceMaybe h of
       Nothing -> (Error mempty, requestInfo) -- TODO: CouldntParseParameter Error
       Just v  -> (Ok v, (\(request, requestBody) -> (request { WAI.pathInfo = t }, requestBody)) requestInfo)
-  QueryParam name -> undefined
-  QueryFlag name -> undefined
-  Header name -> undefined
-  JSON -> undefined
+  Route router -> undefined
+  QueryParam name ->
+    let
+      query = WAI.queryString $ fst requestInfo
+    in
+      case lookup name query of
+        Nothing -> (Error mempty, requestInfo) -- TODO: Query parameter with that name not found
+        Just mbValueBS -> case mbValueBS of
+          Nothing -> (Error mempty, requestInfo) -- TODO: Query name exists but doesn't have a value
+          Just valueBS -> case Web.parseUrlPieceMaybe $ Text.decodeUtf8 valueBS of
+            Nothing -> (Error mempty, requestInfo) -- TODO: Couldn't decode parameter value as correct type
+            Just value -> (Ok value, (\(request, requestBody) -> (request { WAI.queryString = List.delete (name, mbValueBS) query }, requestBody)) requestInfo)
+  QueryFlag name ->
+    let
+      query = WAI.queryString $ fst requestInfo
+    in
+      case lookup name query of
+        Nothing -> (Error mempty, requestInfo) -- TODO: Query parameter with that name not found
+        Just mbValueBS -> (Ok (), (\(request, requestBody) -> (request { WAI.queryString = List.delete (name, mbValueBS) query }, requestBody)) requestInfo)
+  -- Query -> (Ok $ WAI.queryString $ fst requestInfo, (\(request, requestBody) -> (request { WAI.queryString = mempty }, requestBody)) requestInfo)
+  HeaderParam name ->
+    let
+      headers = WAI.requestHeaders $ fst requestInfo
+    in
+      case lookup name headers of
+        Nothing -> (Error mempty, requestInfo) -- TODO: Query parameter with that name not found
+        Just bs -> case Web.parseUrlPieceMaybe $ Text.decodeUtf8 bs of
+          Nothing -> (Error mempty, requestInfo) -- TODO: Couldn't decode parameter value as correct type
+          Just value -> (Ok value, (\(request, requestBody) -> (request { WAI.requestHeaders = List.delete (name, bs) headers }, requestBody)) requestInfo)
+  CookieParam name ->
+    let
+      headers = WAI.requestHeaders $ fst requestInfo
+    in
+      case lookup "Cookie" headers of
+        Nothing -> (Error mempty, requestInfo) -- TODO: Cookie not found
+        Just cookieBS -> case Web.parseCookies cookieBS of
+          [] -> (Error mempty, requestInfo) -- TODO: No more cookies
+          cookies -> case lookup name cookies of
+            Nothing -> (Error mempty, requestInfo) -- TODO: Cookie parameter with given name not found
+            Just bs -> case Web.parseUrlPieceMaybe $ Text.decodeUtf8 bs of
+              Nothing -> (Error mempty, requestInfo) -- TODO: Couldn't decode parameter value as correct type
+              Just value ->
+                ( Ok value
+                , (\(request, requestBody) ->
+                      ( request
+                        { WAI.requestHeaders =
+                            let
+                              headersWithoutCookie = List.delete ("Cookie", cookieBS) headers
+                            in
+                              ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete (name, bs) cookies) : headersWithoutCookie {- List.delete (name, bs) headers -}
+                              -- TODO: Order of the cookie in the headers isn't preserved, but maybe this is fine??
+                        }
+                      , requestBody
+                      )
+                  ) requestInfo
+                )
   FormParam name -> undefined
   Form -> undefined
   File name -> undefined
+  JSON -> undefined
   Raw -> undefined
 
   -- | Helpers
   Now -> (Ok requestInfo, requestInfo)
   Abort e -> (Error e, requestInfo)
-  Is x extractor' -> case extract extractor' requestInfo of
+  Is extractor' x -> case extract extractor' requestInfo of
     (Error e, requestInfo') -> (Error e, requestInfo')
     (Ok x', requestInfo') ->
       if x == x'
         then (Ok (), requestInfo')
         else (Error mempty, requestInfo')
         -- TODO: Add error tag for `Is`
-  Satisfy p extractor' -> case extract extractor' requestInfo of
+  Satisfies extractor' p -> case extract extractor' requestInfo of
     (Error e, requestInfo') -> (Error e, requestInfo')
     (Ok x, requestInfo') ->
       if p x

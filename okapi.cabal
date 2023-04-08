@@ -29,7 +29,7 @@ library
   exposed-modules:
       Okapi
       Okapi.Monad
-      Okapi.Applicative
+      Okapi.Extractor
       -- Okapi.Scratch
   other-modules:
       Paths_okapi
