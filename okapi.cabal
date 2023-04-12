@@ -30,7 +30,7 @@ library
       Okapi
       Okapi.Monad
       Okapi.Extractor
-      -- Okapi.Scratch
+      Okapi.Pattern
   other-modules:
       Paths_okapi
   hs-source-dirs:

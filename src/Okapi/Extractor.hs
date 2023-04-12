@@ -51,7 +51,7 @@ data Extractor e a where
   -- | API
   Method :: Monoid e => Extractor e HTTP.Method
   PathParam :: (Monoid e, Web.FromHttpApiData a) => Extractor e a
-  Route :: Monoid e => ((HTTP.Method, [Text.Text]) -> Result e a) -> Extractor e a
+  -- Route :: Monoid e => ((HTTP.Method, [Text.Text]) -> Result e a) -> Extractor e a
   -- Make it so order of PathParam doesn't matter.
   -- Can do this by adding an arg of Int to specify the index of the path param.
   -- Path :: Web.FromHttpApiData a => Extractor e [a]
@@ -125,7 +125,7 @@ extract extractor requestInfo = case extractor of
     (h:t) -> case Web.parseUrlPieceMaybe h of
       Nothing -> (Error mempty, requestInfo) -- TODO: CouldntParseParameter Error
       Just v  -> (Ok v, (\(request, requestBody) -> (request { WAI.pathInfo = t }, requestBody)) requestInfo)
-  Route router -> undefined
+  -- Route router -> undefined
   QueryParam name ->
     let
       query = WAI.queryString $ fst requestInfo
