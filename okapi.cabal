@@ -28,9 +28,14 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Monad
-      Okapi.Extractor
-      Okapi.Pattern
+      Okapi.Endpoint
+      Okapi.Endpoint.Path
+      Okapi.Endpoint.Query
+      Okapi.Endpoint.Headers
+      Okapi.Endpoint.Body
+      Okapi.Endpoint.Responder
+      Okapi.Response
+      Okapi.Controller
   other-modules:
       Paths_okapi
   hs-source-dirs:
@@ -84,6 +89,7 @@ test-suite okapi-test
     , cryptonite
     , doctest-parallel
     , extra
+    , hspec
     , http-api-data
     , http-types
     , memory

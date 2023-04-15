@@ -1,30 +1,70 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
 
-import Control.Monad.Combinators
-import Control.Monad.IO.Class
-import Control.Monad.Identity
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as LBS
-import Data.Function
-import Data.Text
-import Data.Text.Encoding
-import Network.Wai
-import Network.Wai.EventSource (ServerEvent (RetryEvent))
-import Network.Wai.Test
-import Okapi
-import System.Environment (getArgs)
-import Test.DocTest (mainFromCabal)
-import Web.HttpApiData
-
-runDoctests :: IO ()
-runDoctests = mainFromCabal "okapi" =<< getArgs
+import Control.Exception (evaluate)
+import qualified Data.Text as Text
+import qualified Okapi.Endpoint.Path as Path
+import Test.Hspec
+import qualified Web.HttpApiData as Web
 
 main :: IO ()
-main = runDoctests
+main = hspec $ do
+  describe "Path.Path Operations" $ do
+    it "returns the first element of a list" $ do
+      Path.run path1 ["index"] `shouldBe` (Right (), [])
+
+    it "returns the first element of a list" $ do
+      Path.run path1 ["index", "about"] `shouldBe` (Left Path.NotEnoughOperations, ["index", "about"])
+
+    it "returns the first element of a list" $ do
+      Path.run path2 ["item", "5"] `shouldBe` (Right 5, [])
+
+    it "returns the first element of a list" $ do
+      Path.run path2 ["item"] `shouldBe` (Left Path.TooManyOperations, ["item"])
+
+    it "returns the first element of a list" $ do
+      Path.run path3 ["product", "books", "56708"] `shouldBe` (Right (Category "books", ProductID 56708), [])
+
+    it "returns the first element of a list" $ do
+      Path.run path3 ["product", "books", "56708", "info"] `shouldBe` (Left Path.NotEnoughOperations, ["product", "books", "56708", "info"])
+
+    it "returns the first element of a list" $ do
+      Path.run path3 ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
+
+    it "returns the first element of a list" $ do
+      Path.run path3' ["product", "books", "56708"] `shouldBe` (Right (Category "books", ProductID 56708), [])
+
+    it "returns the first element of a list" $ do
+      Path.run path3' ["product", "books", "56708", "info"] `shouldBe` (Left Path.NotEnoughOperations, ["product", "books", "56708", "info"])
+
+    it "returns the first element of a list" $ do
+      Path.run path3' ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
+
+path1 :: Path.Path ()
+path1 = Path.static "index"
+
+path2 :: Path.Path Int
+path2 = do
+  Path.static "item"
+  uuid <- Path.param @Int
+  pure uuid
+
+newtype Category = Category {unwrap :: Text.Text}
+  deriving (Eq, Show, Web.FromHttpApiData)
+
+newtype ProductID = ProductID {unwrap :: Int}
+  deriving (Eq, Show, Web.FromHttpApiData)
+
+path3 :: Path.Path (Category, ProductID)
+path3 = Path.static "product" *> ((,) <$> Path.param @Category <*> Path.param @ProductID)
+
+path3' :: Path.Path (Category, ProductID)
+path3' = do
+  Path.static "product"
+  category <- Path.param @Category
+  productID <- Path.param @ProductID
+  pure (category, productID)
