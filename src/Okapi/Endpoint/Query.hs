@@ -63,20 +63,20 @@ run op state = case op of
     Nothing -> (Left FlagNotFound, state)
     Just found -> (Right (), List.delete (name, found) state)
   Optional op' -> case op' of
-    param@(Param _) -> case run op' state of
+    param@(Param _) -> case run param state of
       (Right result, state') -> (Right $ Just result, state')
       (_, state') -> (Right Nothing, state')
-    flag@(Flag _) -> case run op' state of
+    flag@(Flag _) -> case run flag state of
       (Right result, state') -> (Right $ Just result, state')
       (_, state') -> (Right Nothing, state')
     _ -> case run op' state of
       (Right result, state') -> (Right $ Just result, state')
       (Left err, state') -> (Left err, state')
   Option def op' -> case op' of
-    param@(Param _) -> case run op' state of
+    param@(Param _) -> case run param state of
       (Right result, state') -> (Right result, state')
       (_, state') -> (Right def, state')
-    flag@(Flag _) -> case run op' state of
+    flag@(Flag _) -> case run flag state of
       (Right result, state') -> (Right result, state')
       (_, state') -> (Right def, state')
     _ -> run op' state

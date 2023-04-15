@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -19,20 +20,25 @@ data Error
   | ParamNotFound
   | CookieHeaderNotFound
   | CookieNotFound
+  deriving (Eq, Show)
 
 data Headers a where
   FMap :: (a -> b) -> Headers a -> Headers b
   Pure :: a -> Headers a
   Apply :: Headers (a -> b) -> Headers a -> Headers b
   Param :: Web.FromHttpApiData a => HTTP.HeaderName -> Headers a
-  -- Flag :: BS.ByteString -> Headers ()
   Cookie :: BS.ByteString -> Headers BS.ByteString
+  Optional :: Headers a -> Headers (Maybe a)
+  Option :: a -> Headers a -> Headers a
 
 instance Functor Headers where
+  fmap :: (a -> b) -> Headers a -> Headers b
   fmap = FMap
 
 instance Applicative Headers where
+  pure :: a -> Headers a
   pure = Pure
+  (<*>) :: Headers (a -> b) -> Headers a -> Headers b
   (<*>) = Apply
 
 run ::
@@ -65,3 +71,21 @@ run op state = case op of
            in ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete (name, value) $ Web.parseCookies cookiesBS) : headersWithoutCookie {- List.delete (name, bs) headers -}
           -- TODO: Order of the cookie in the headers isn't preserved, but maybe this is fine??
         )
+  Optional op' -> case op' of
+    param@(Param _) -> case run param state of
+      (Right result, state') -> (Right $ Just result, state')
+      (_, state') -> (Right Nothing, state')
+    cookie@(Cookie _) -> case run cookie state of
+      (Right result, state') -> (Right $ Just result, state')
+      (_, state') -> (Right Nothing, state')
+    _ -> case run op' state of
+      (Right result, state') -> (Right $ Just result, state')
+      (Left err, state') -> (Left err, state')
+  Option def op' -> case op' of
+    param@(Param _) -> case run param state of
+      (Right result, state') -> (Right result, state')
+      (_, state') -> (Right def, state')
+    cookie@(Cookie _) -> case run cookie state of
+      (Right result, state') -> (Right result, state')
+      (_, state') -> (Right def, state')
+    _ -> run op' state
