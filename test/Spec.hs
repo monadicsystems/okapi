@@ -3,17 +3,19 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
 import Control.Exception (evaluate)
 import qualified Data.Text as Text
 import qualified Okapi.Endpoint.Path as Path
+import qualified Okapi.Endpoint.Query as Query
 import Test.Hspec
 import qualified Web.HttpApiData as Web
 
 main :: IO ()
 main = hspec $ do
-  describe "Path.Path Operations" $ do
+  describe "Path Operations" $ do
     it "returns the first element of a list" $ do
       Path.run path1 ["index"] `shouldBe` (Right (), [])
 
@@ -43,6 +45,43 @@ main = hspec $ do
 
     it "returns the first element of a list" $ do
       Path.run path3' ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
+
+  describe "Query Operations" $ do
+    it "returns the first element of a list" $ do
+      Query.run query1 [("score", Just "5"), ("user", Just "Joe")] `shouldBe` (Right $ Filter 5 $ Username "Joe", [])
+
+    it "returns the first element of a list" $ do
+      Query.run query2 [("user", Just "Bob"), ("active", Nothing)] `shouldBe` (Right $ Username "Bob", [])
+
+    it "returns the first element of a list" $ do
+      Query.run query3 [("username", Just "Bob")] `shouldBe` (Right (Username "Anon", Nothing), [("username", Just "Bob")])
+
+newtype Username = Username {unwrap :: Text.Text}
+  deriving (Eq, Show, Web.FromHttpApiData)
+
+data Filter = Filter
+  { score :: Int,
+    byUser :: Username
+  }
+  deriving (Eq, Show)
+
+query1 :: Query.Query Filter
+query1 = do
+  score <- Query.param @Int "score"
+  byUser <- Query.param @Username "user"
+  pure Filter {..}
+
+query2 :: Query.Query Username
+query2 = do
+  username <- Query.param @Username "user"
+  Query.flag "active"
+  pure username
+
+query3 :: Query.Query (Username, Maybe ())
+query3 = do
+  user <- Query.option (Username "Anon") $ Query.param "user"
+  active <- Query.optional $ Query.flag "active"
+  pure (user, active)
 
 path1 :: Path.Path ()
 path1 = Path.static "index"

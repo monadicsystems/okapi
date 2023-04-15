@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Okapi.Endpoint.Query where
@@ -15,6 +16,7 @@ data Error
   | FlagNotFound
   | ParamNotFound
   | ParamNoValue
+  deriving (Eq, Show)
 
 data Query a where
   FMap :: (a -> b) -> Query a -> Query b
@@ -22,12 +24,17 @@ data Query a where
   Apply :: Query (a -> b) -> Query a -> Query b
   Param :: Web.FromHttpApiData a => BS.ByteString -> Query a
   Flag :: BS.ByteString -> Query ()
+  Optional :: Query a -> Query (Maybe a)
+  Option :: a -> Query a -> Query a
 
 instance Functor Query where
+  fmap :: (a -> b) -> Query a -> Query b
   fmap = FMap
 
 instance Applicative Query where
+  pure :: a -> Query a
   pure = Pure
+  (<*>) :: Query (a -> b) -> Query a -> Query b
   (<*>) = Apply
 
 run ::
@@ -55,3 +62,33 @@ run op state = case op of
   Flag name -> case lookup name state of
     Nothing -> (Left FlagNotFound, state)
     Just found -> (Right (), List.delete (name, found) state)
+  Optional op' -> case op' of
+    param@(Param _) -> case run op' state of
+      (Right result, state') -> (Right $ Just result, state')
+      (_, state') -> (Right Nothing, state')
+    flag@(Flag _) -> case run op' state of
+      (Right result, state') -> (Right $ Just result, state')
+      (_, state') -> (Right Nothing, state')
+    _ -> case run op' state of
+      (Right result, state') -> (Right $ Just result, state')
+      (Left err, state') -> (Left err, state')
+  Option def op' -> case op' of
+    param@(Param _) -> case run op' state of
+      (Right result, state') -> (Right result, state')
+      (_, state') -> (Right def, state')
+    flag@(Flag _) -> case run op' state of
+      (Right result, state') -> (Right result, state')
+      (_, state') -> (Right def, state')
+    _ -> run op' state
+
+param :: Web.FromHttpApiData a => BS.ByteString -> Query a
+param = Param
+
+flag :: BS.ByteString -> Query ()
+flag = Flag
+
+optional :: Query a -> Query (Maybe a)
+optional = Optional
+
+option :: a -> Query a -> Query a
+option = Option

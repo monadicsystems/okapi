@@ -34,6 +34,7 @@ library
       Okapi.Endpoint.Headers
       Okapi.Endpoint.Body
       Okapi.Endpoint.Responder
+      Okapi.Params
       Okapi.Response
       Okapi.Controller
   other-modules:
