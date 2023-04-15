@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -20,6 +21,7 @@ data Error
   | FormParamParseFail
   | FormParamNotFound
   | FileNotFound
+  deriving (Eq, Show)
 
 data Body a where
   FMap :: (a -> b) -> Body a -> Body b
@@ -28,24 +30,27 @@ data Body a where
   FormParam :: Web.FromHttpApiData a => HTTP.HeaderName -> Body a
 
 instance Functor Body where
+  fmap :: (a -> b) -> Body a -> Body b
   fmap = FMap
 
 instance Applicative Body where
+  pure :: a -> Body a
   pure = Pure
+  (<*>) :: Body (a -> b) -> Body a -> Body b
   (<*>) = Apply
 
-run ::
+eval ::
   Body a ->
   HTTP.RequestHeaders ->
   (Either Error a, HTTP.RequestHeaders)
-run op state = case op of
+eval op state = case op of
   FMap f opX ->
-    case run opX state of
+    case eval opX state of
       (Left e, state') -> (Left e, state')
       (Right x, state') -> (Right $ f x, state')
   Pure x -> (Right x, state)
-  Apply opF opX -> case run opF state of
-    (Right f, state') -> case run opX state' of
+  Apply opF opX -> case eval opF state of
+    (Right f, state') -> case eval opX state' of
       (Right x, state'') -> (Right $ f x, state'')
       (Left e, state'') -> (Left e, state'')
     (Left e, state') -> (Left e, state')

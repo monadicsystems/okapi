@@ -33,11 +33,11 @@ instance Applicative Path where
   (<*>) :: Path (a -> b) -> Path a -> Path b
   (<*>) = Apply
 
-run ::
+eval ::
   Path a ->
   [Text.Text] ->
   (Either Error a, [Text.Text])
-run path state = case compare (countOps path) (length state) of
+eval path state = case compare (countOps path) (length state) of
   LT -> (Left NotEnoughOperations, state)
   GT -> (Left TooManyOperations, state)
   EQ -> loop path state

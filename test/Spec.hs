@@ -17,44 +17,44 @@ main :: IO ()
 main = hspec $ do
   describe "Path Operations" $ do
     it "returns the first element of a list" $ do
-      Path.run path1 ["index"] `shouldBe` (Right (), [])
+      Path.eval path1 ["index"] `shouldBe` (Right (), [])
 
     it "returns the first element of a list" $ do
-      Path.run path1 ["index", "about"] `shouldBe` (Left Path.NotEnoughOperations, ["index", "about"])
+      Path.eval path1 ["index", "about"] `shouldBe` (Left Path.NotEnoughOperations, ["index", "about"])
 
     it "returns the first element of a list" $ do
-      Path.run path2 ["item", "5"] `shouldBe` (Right 5, [])
+      Path.eval path2 ["item", "5"] `shouldBe` (Right 5, [])
 
     it "returns the first element of a list" $ do
-      Path.run path2 ["item"] `shouldBe` (Left Path.TooManyOperations, ["item"])
+      Path.eval path2 ["item"] `shouldBe` (Left Path.TooManyOperations, ["item"])
 
     it "returns the first element of a list" $ do
-      Path.run path3 ["product", "books", "56708"] `shouldBe` (Right (Category "books", ProductID 56708), [])
+      Path.eval path3 ["product", "books", "56708"] `shouldBe` (Right (Category "books", ProductID 56708), [])
 
     it "returns the first element of a list" $ do
-      Path.run path3 ["product", "books", "56708", "info"] `shouldBe` (Left Path.NotEnoughOperations, ["product", "books", "56708", "info"])
+      Path.eval path3 ["product", "books", "56708", "info"] `shouldBe` (Left Path.NotEnoughOperations, ["product", "books", "56708", "info"])
 
     it "returns the first element of a list" $ do
-      Path.run path3 ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
+      Path.eval path3 ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
 
     it "returns the first element of a list" $ do
-      Path.run path3' ["product", "books", "56708"] `shouldBe` (Right (Category "books", ProductID 56708), [])
+      Path.eval path3' ["product", "books", "56708"] `shouldBe` (Right (Category "books", ProductID 56708), [])
 
     it "returns the first element of a list" $ do
-      Path.run path3' ["product", "books", "56708", "info"] `shouldBe` (Left Path.NotEnoughOperations, ["product", "books", "56708", "info"])
+      Path.eval path3' ["product", "books", "56708", "info"] `shouldBe` (Left Path.NotEnoughOperations, ["product", "books", "56708", "info"])
 
     it "returns the first element of a list" $ do
-      Path.run path3' ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
+      Path.eval path3' ["product", "books"] `shouldBe` (Left Path.TooManyOperations, ["product", "books"])
 
   describe "Query Operations" $ do
     it "returns the first element of a list" $ do
-      Query.run query1 [("score", Just "5"), ("user", Just "Joe")] `shouldBe` (Right $ Filter 5 $ Username "Joe", [])
+      Query.eval query1 [("score", Just "5"), ("user", Just "Joe")] `shouldBe` (Right $ Filter 5 $ Username "Joe", [])
 
     it "returns the first element of a list" $ do
-      Query.run query2 [("user", Just "Bob"), ("active", Nothing)] `shouldBe` (Right $ Username "Bob", [])
+      Query.eval query2 [("user", Just "Bob"), ("active", Nothing)] `shouldBe` (Right $ Username "Bob", [])
 
     it "returns the first element of a list" $ do
-      Query.run query3 [("username", Just "Bob")] `shouldBe` (Right (Username "Anon", Nothing), [("username", Just "Bob")])
+      Query.eval query3 [("username", Just "Bob")] `shouldBe` (Right (Username "Anon", Nothing), [("username", Just "Bob")])
 
 newtype Username = Username {unwrap :: Text.Text}
   deriving (Eq, Show, Web.FromHttpApiData)
