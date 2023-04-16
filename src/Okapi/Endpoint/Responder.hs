@@ -35,8 +35,11 @@ data Responder a where
     Aeson.ToJSON a =>
     HTTP.Status ->
     ResponderHeaders.ResponderHeaders h ->
-    (h %1 -> ResponderHeaders.Response -> ResponderHeaders.Response) ->
-    Responder (a -> ResponderHeaders.Response)
+    Responder
+      ( (h %1 -> (ResponseHeaders.Response -> ResponseHeaders.Response)) ->
+        a ->
+        ResponseHeaders.Response
+      )
 
 instance Functor Responder where
   fmap :: (a -> b) -> Responder a -> Responder b
@@ -63,15 +66,14 @@ eval op state = case op of
       (Right x, state'') -> (Right $ f x, state'')
       (Left e, state'') -> (Left e, state'')
     (Left e, state') -> (Left e, state')
-  JSON status responderHeaders headerApplicator -> case ResponderHeaders.eval responderHeaders () of
+  JSON status responderHeaders -> case ResponderHeaders.eval responderHeaders () of
     (Right h, _) ->
-      let f payload =
-            headerApplicator h $
-              ResponderHeaders.Response
-                { ResponderHeaders.status = status,
-                  ResponderHeaders.body = Aeson.encode payload,
-                  ResponderHeaders.headers = []
-                }
+      let f headerApplicator payload =
+            ResponderHeaders.Response
+              { ResponderHeaders.status = status,
+                ResponderHeaders.body = Aeson.encode payload,
+                ResponderHeaders.headers = []
+              }
        in (Right f, state)
     (left, _) -> (Left ResponderHeadersError, state)
 
@@ -79,7 +81,9 @@ json ::
   Aeson.ToJSON a =>
   HTTP.Status ->
   ResponseHeaders.ResponderHeaders h ->
-  (h %1 -> ResponseHeaders.Response -> ResponseHeaders.Response) ->
   Responder
-    (a -> ResponseHeaders.Response)
+    ( (h %1 -> (ResponseHeaders.Response -> ResponseHeaders.Response)) ->
+      a ->
+      ResponseHeaders.Response
+    )
 json = JSON

@@ -1,4 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LinearTypes #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
@@ -20,7 +21,7 @@ data Plan m p q h b r = Plan
     -- TODO: Use natural transformation.
     lifter :: forall m a. Monad m => m a -> IO a,
     endpoint :: Endpoint.Endpoint p q h b r,
-    handler :: Monad m => Params.Params p q h b r -> m Response.Response
+    handler :: Monad m => Params.Params p q h b r %1 -> m Response.Response
   }
 
 data Controller = Controller

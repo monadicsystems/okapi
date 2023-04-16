@@ -78,13 +78,27 @@ main = hspec $ do
 
 data AddHeaders = AddHeaders
   { addCookie :: Username -> ResponderHeaders.Response -> ResponderHeaders.Response,
-    addAnotherHeader :: Username -> ResponderHeaders.Response -> ResponderHeaders.Response
+    addAnotherHeader :: Username -> ResponderHeaders.Response -> ResponderHeaders.Response,
+    cacheHeader :: Int -> ResponderHeaders.Response -> ResponderHeaders.Response
   }
 
 responder1 ::
   Responder.Responder
-    ( Aeson.Value -> ResponderHeaders.Response,
-      Aeson.Value -> ResponderHeaders.Response
+    ( ( ( Username ->
+          ResponderHeaders.Response ->
+          ResponderHeaders.Response
+        ) %1 ->
+        ResponderHeaders.Response ->
+        ResponderHeaders.Response
+      ) ->
+      Aeson.Value ->
+      ResponderHeaders.Response,
+      ( AddHeaders %1 ->
+        ResponderHeaders.Response ->
+        ResponderHeaders.Response
+      ) ->
+      Aeson.Value ->
+      ResponderHeaders.Response
     )
 responder1 = do
   itsOk <- Responder.json
@@ -93,19 +107,18 @@ responder1 = do
     do
       addCookie <- ResponderHeaders.has @Username "Cookie"
       pure addCookie
-    \addCookie -> addCookie $ Username "Bob"
   itsNotFound <- Responder.json
     @Aeson.Value
     HTTP.status404
     do
       addCookie <- ResponderHeaders.has @Username "Blob"
       addAnotherHeader <- ResponderHeaders.has @Username "X-Some-Header"
+      cacheHeader <- ResponderHeaders.has @Int "X-Cache-Time"
       pure $ AddHeaders {..}
-    \AddHeaders {..} response -> addAnotherHeader (Username "John") $ addCookie (Username "Bob") response
   pure (itsOk, itsNotFound)
 
--- f :: (Username -> ResponderHeaders.Response -> ResponderHeaders.Response, Username -> ResponderHeaders.Response -> ResponderHeaders.Response) %1 -> ResponderHeaders.Response -> ResponderHeaders.Response
--- f (addCookie, addAnotherCookie) response = addAnotherHeader (Username "John") $ addCookie (Username "Bob") response
+(%.) :: (a -> b) %1 -> (b -> c) %1 -> (a -> c)
+(%.) f g x = g $ f x
 
 responder2 = undefined
 
