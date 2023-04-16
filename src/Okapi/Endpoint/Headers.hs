@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -5,12 +7,14 @@
 
 module Okapi.Endpoint.Headers where
 
+import qualified Control.Monad.Par as Par
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Web.Cookie as Web
 import qualified Web.HttpApiData as Web
@@ -20,7 +24,7 @@ data Error
   | ParamNotFound
   | CookieHeaderNotFound
   | CookieNotFound
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generics.Generic, Par.NFData)
 
 data Headers a where
   FMap :: (a -> b) -> Headers a -> Headers b

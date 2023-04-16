@@ -36,7 +36,6 @@ library
       Okapi.Endpoint.Responder
       Okapi.Endpoint.ResponderHeaders
       Okapi.Params
-      Okapi.Response
       Okapi.Controller
   other-modules:
       Paths_okapi
@@ -57,7 +56,9 @@ library
     , linear-base
     , memory
     , mmorph
+    , monad-par
     , mtl
+    , natural-transformation
     , network
     , parser-combinators
     , pretty-simple
@@ -101,6 +102,7 @@ test-suite okapi-test
     , mtl
     , network
     , okapi
+    , parallel
     , parser-combinators
     , text
     , transformers

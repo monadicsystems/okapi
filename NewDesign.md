@@ -248,52 +248,108 @@ myRoute = Endpoint
 	  useProfile <- flag "profile"
 	  pure useProfile
   , headers = NoHeaders
-  , body = JSON @PersonFilter
+  , body = json @PersonFilter
   }
 
 myRoute' :: Endpoint pd qd hd bd rd
 myRoute' = Endpoint
-  GET
-  do
-    static "profile"
-    pID <- param @ProfileID
-    pure pID
-  do
-    useProfile <- flag "profile"
-	pure useProfile
-  NoHeaders
-  do
-	filter <- json @PersonFilter
-	pure filter
-  do
-	respondOk <- ok
-	respondNotFound <- notFound
-	pure Responders{..}
+  { method = GET :| [PUT, POST]
+  , path = do
+      static "profile"
+      pID <- param @ProfileID
+      pure pID
+  , query = do
+       useProfile <- flag "profile"
+	   pure useProfile
+  , headers = NoHeaders
+  , body = do
+	  filter <- json @PersonFilter
+	  pure filter
+  , responder = do
+	  sendOk <- ok
+	  sendNotFound <- notFound
+	  pure Send{..}
+  }
 
-data EndpointData pd qd hd bd rd = EndpointData
+myRoute'' :: Endpoint pd qd hd bd rd
+myRoute'' = Endpoint
+  GET
+  static "index"
+  NoQuery
+  NoHeaders
+  NoBody
+  ok
+
+data Params pd qd hd bd rd = Params
   { path :: pd
   , query :: qd
   , headers :: hd
   , body :: bd
   , response :: rd %1
+  -- TODO: Have two fields for response ~
+  -- On Error and on Ok
+  -- , responseError :: red %1
   }
+
+-- Use type level function to produce types for both
+-- Endpoint and Params.
 
 myHandler
   :: Monad m
-  => (EndpointData pd qd hd bd rd) %1
-  -> m Response
-myHandler 
+  => (Params pd qd hd bd rd) %1
+  -> m (Action Response)
+myHandler paramsResult = case paramsResult of
+  Error err -> do
+	-- | Do logging or whatever if error
+	liftIO $ print err
+    return Next
+  Ok params -> do
+	let
+      profileID     = path params
+      isProfileView = query params
+      personFilter  = body params
+
+	return $ params.response.respondOk responseValue
 
 makeController
   :: Monad m
   => (m ~> IO)
   -> Endpoint pd qd hd bd rd
-  -> (Result (EndpointData pd qd hd bd rd) -> m Response)
+  -> (Params pd qd hd bd rd -> m Response)
   -> Controller
 makeController lifter endpoint handler = ...
 ```
 
 The above seems to be the best design.
+
+### Combining Controllers
+
+####  Non-Empty List
+
+```haskell
+type Server = NonEmptyList Controller
+-- Use Map instead
+
+myServer = controller1 :| [controller2, controller3]
+
+genApplication
+  :: ServerOptions
+  {-| Control body max size
+	  , default response
+	  , IO error to response
+	  , etc.
+  -}
+  -> Server
+  -> Application
+
+genJSClient :: Server -> FilePath -> IO ()
+
+genOpenAPISpec :: Server -> OpenAPISpec
+```
+
+`genApplication` takes server options and a server definition.
+
+
 
 ## Megalith Web Framework
 
@@ -405,4 +461,98 @@ import Data.Text
 <div>
   
 </div>
+```
+
+```haskell
+Plan.Plan
+  { lifter = id,
+    endpoint =
+      Endpoint.Endpoint
+        { method = GET,
+          path = do
+            Path.static "index"
+            magicNumber <- Path.param @Int
+            pure magicNumber,
+          query = do
+            x <- Query.param @Int "x"
+            y <- Query.option 10 $ Query.param @Int "y"
+            pure (x, y),
+          headers = pure (),
+          body = pure (),
+          Endpoint.responder = do
+            itsOk <- Responder.json
+              @Int
+              HTTP.status200
+              do
+                addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+                pure addSecretNumber
+            pure itsOk
+        },
+    handler = \(Params.Params magicNumber (x, y) () () responder) -> do
+      let newNumber = magicNumber + x * y
+      print newNumber
+      return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
+  }
+```
+
+```haskell
+Plan.Plan
+  { -- Identity function as the lifter.
+    lifter = id,
+
+    -- Define the endpoint for the web service.
+    endpoint =
+      Endpoint.Endpoint
+        { -- HTTP GET method for this endpoint.
+          method = GET,
+
+          -- Path pattern for this endpoint.
+          path = do
+            -- Expect "index" as a static part of the path.
+            Path.static "index"
+
+            -- Capture an integer parameter from the path.
+            magicNumber <- Path.param @Int
+            pure magicNumber,
+
+          -- Query parameters for this endpoint.
+          query = do
+            -- Capture an integer query parameter named "x".
+            x <- Query.param @Int "x"
+
+            -- Capture an optional integer query parameter named "y" with a default value of 10.
+            y <- Query.option 10 $ Query.param @Int "y"
+            pure (x, y),
+
+          -- No specific headers expected for this endpoint.
+          headers = pure (),
+
+          -- No request body expected for this endpoint.
+          body = pure (),
+
+          -- Define the responder for this endpoint.
+          Endpoint.responder = do
+            -- Create a JSON responder with HTTP status 200 and an integer value.
+            itsOk <- Responder.json @Int HTTP.status200
+              do
+                -- Check for the presence of an "X-SECRET" header with an integer value.
+                addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+                pure addSecretNumber
+
+            -- Return the configured responder.
+            pure itsOk
+        },
+
+    -- Define the handler function for the web service.
+    handler = \(Params.Params magicNumber (x, y) () () responder) -> do
+      -- Calculate a new number based on the magicNumber, x, and y.
+      let newNumber = magicNumber + x * y
+
+      -- Print the new number to the console.
+      print newNumber
+
+      -- Return a response with the new number and an additional header based on the new number.
+      return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
+  }
+
 ```

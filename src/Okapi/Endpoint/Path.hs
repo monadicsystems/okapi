@@ -1,11 +1,15 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Okapi.Endpoint.Path where
 
+import qualified Control.Monad.Par as Par
 import qualified Data.Text as Text
 import qualified Debug.Trace as Debug
+import qualified GHC.Generics as Generics
 import qualified Web.HttpApiData as Web
 
 data Error
@@ -14,7 +18,7 @@ data Error
   | EmptyPath
   | TooManyOperations
   | NotEnoughOperations
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generics.Generic, Par.NFData)
 
 data Path a where
   FMap :: (a -> b) -> Path a -> Path b

@@ -1,25 +1,31 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LinearTypes #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
 import Control.Exception (evaluate)
-import qualified Data.Aeson as Aeson
-import qualified Data.Text as Text
-import qualified Network.HTTP.Types as HTTP
-import qualified Okapi.Endpoint.Path as Path
-import qualified Okapi.Endpoint.Query as Query
-import qualified Okapi.Endpoint.Responder as Responder
-import qualified Okapi.Endpoint.ResponderHeaders as ResponderHeaders
-import qualified Prelude.Linear as Linear
+import Data.Aeson qualified as Aeson
+import Data.Text qualified as Text
+import Network.HTTP.Types qualified as HTTP
+import Okapi.Controller qualified as Plan
+import Okapi.Endpoint qualified as Endpoint
+import Okapi.Endpoint.Path qualified as Path
+import Okapi.Endpoint.Query qualified as Query
+import Okapi.Endpoint.Responder qualified as Responder
+import Okapi.Endpoint.ResponderHeaders qualified as ResponderHeaders
+import Okapi.Params qualified as Params
+import Prelude.Linear qualified as L
 import Test.Hspec
-import qualified Web.HttpApiData as Web
+import Web.HttpApiData qualified as Web
 
 main :: IO ()
 main = hspec $ do
@@ -117,9 +123,6 @@ responder1 = do
       pure $ AddHeaders {..}
   pure (itsOk, itsNotFound)
 
-(%.) :: (a -> b) %1 -> (b -> c) %1 -> (a -> c)
-(%.) f g x = g $ f x
-
 responder2 = undefined
 
 newtype Username = Username {unwrap :: Text.Text}
@@ -173,3 +176,37 @@ path3' = do
   category <- Path.param @Category
   productID <- Path.param @ProductID
   pure (category, productID)
+
+pattern GET :: HTTP.Method
+pattern GET = "GET"
+
+testPlan =
+  Plan.Plan
+    { lifter = id,
+      endpoint =
+        Endpoint.Endpoint
+          { method = GET,
+            path = do
+              Path.static "index"
+              magicNumber <- Path.param @Int
+              pure magicNumber,
+            query = do
+              x <- Query.param @Int "x"
+              y <- Query.option 10 $ Query.param @Int "y"
+              pure (x, y),
+            headers = pure (),
+            body = pure (),
+            Endpoint.responder = do
+              itsOk <- Responder.json
+                @Int
+                HTTP.status200
+                do
+                  addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+                  pure addSecretNumber
+              pure itsOk
+          },
+      handler = \(Params.Params magicNumber (x, y) () () responder) -> do
+        let newNumber = magicNumber + x * y
+        print newNumber
+        return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
+    }
