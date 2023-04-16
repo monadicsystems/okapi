@@ -34,6 +34,7 @@ library
       Okapi.Endpoint.Headers
       Okapi.Endpoint.Body
       Okapi.Endpoint.Responder
+      Okapi.Endpoint.ResponderHeaders
       Okapi.Params
       Okapi.Response
       Okapi.Controller
@@ -53,6 +54,7 @@ library
     , extra
     , http-api-data
     , http-types
+    , linear-base
     , memory
     , mmorph
     , mtl
@@ -93,6 +95,7 @@ test-suite okapi-test
     , hspec
     , http-api-data
     , http-types
+    , linear-base
     , memory
     , mmorph
     , mtl

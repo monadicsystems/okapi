@@ -37,7 +37,17 @@ data ResponderHeaders a where
   FMap :: (a -> b) -> ResponderHeaders a -> ResponderHeaders b
   Pure :: a -> ResponderHeaders a
   Apply :: ResponderHeaders (a -> b) -> ResponderHeaders a -> ResponderHeaders b
-  HasHeader :: Web.ToHttpApiData a => HTTP.HeaderName -> ResponderHeaders (a -> (Response -> Response))
+  Has :: Web.ToHttpApiData a => HTTP.HeaderName -> ResponderHeaders (a -> (Response -> Response))
+
+instance Functor ResponderHeaders where
+  fmap :: (a -> b) -> ResponderHeaders a -> ResponderHeaders b
+  fmap = FMap
+
+instance Applicative ResponderHeaders where
+  pure :: a -> ResponderHeaders a
+  pure = Pure
+  (<*>) :: ResponderHeaders (a -> b) -> ResponderHeaders a -> ResponderHeaders b
+  (<*>) = Apply
 
 eval ::
   ResponderHeaders a ->
@@ -54,6 +64,13 @@ eval op state = case op of
       (Right x, state'') -> (Right $ f x, state'')
       (Left e, state'') -> (Left e, state'')
     (Left e, state') -> (Left e, state')
-  HasHeader headerName ->
+  Has headerName ->
     let f value response = response {headers = headers response <> [ResponseHeader headerName $ Web.toHeader value]}
      in (Right f, state)
+
+has ::
+  Web.ToHttpApiData a =>
+  HTTP.HeaderName ->
+  ResponderHeaders
+    (a -> Response -> Response)
+has = Has

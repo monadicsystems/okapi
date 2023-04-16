@@ -74,3 +74,12 @@ eval op state = case op of
                 }
        in (Right f, state)
     (left, _) -> (Left ResponderHeadersError, state)
+
+json ::
+  Aeson.ToJSON a =>
+  HTTP.Status ->
+  ResponseHeaders.ResponderHeaders h ->
+  (h %1 -> ResponseHeaders.Response -> ResponseHeaders.Response) ->
+  Responder
+    (a -> ResponseHeaders.Response)
+json = JSON
