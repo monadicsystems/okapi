@@ -479,7 +479,7 @@ Plan.Plan
             pure (x, y),
           headers = pure (),
           body = pure (),
-          Endpoint.responder = do
+          responder = do
             itsOk <- Responder.json
               @Int
               HTTP.status200
@@ -531,7 +531,7 @@ Plan.Plan
           body = pure (),
 
           -- Define the responder for this endpoint.
-          Endpoint.responder = do
+          responder = do
             -- Create a JSON responder with HTTP status 200 and an integer value.
             itsOk <- Responder.json @Int HTTP.status200
               do
