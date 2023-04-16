@@ -556,3 +556,33 @@ Plan.Plan
   }
 
 ```
+
+
+```haskell
+Plan.Plan
+  { lifter = id,
+    endpoint = Endpoint.Endpoint
+      GET
+      do
+        Path.static "index"
+	magicNumber <- Path.param @Int
+	pure magicNumber
+      do
+        x <- Query.param @Int "x"
+        y <- Query.option 10 $ Query.param @Int "y"
+        pure (x, y)
+      pure ()
+      pure ()
+      do
+        itsOk <- Responder.json @Int HTTP.status200
+          do
+            addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+            pure addSecretNumber
+         pure itsOk
+    handler = \(Params.Params magicNumber (x, y) () () responder) -> do
+      let newNumber = magicNumber + x * y
+      print newNumber
+      return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
+  }
+```
+
