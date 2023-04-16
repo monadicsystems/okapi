@@ -578,7 +578,7 @@ Plan.Plan
           do
             addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
             pure addSecretNumber
-         pure itsOk
+        pure itsOk
     handler = \(Params.Params magicNumber (x, y) () () responder) -> do
       let newNumber = magicNumber + x * y
       print newNumber
