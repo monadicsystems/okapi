@@ -601,9 +601,7 @@ Plan
     Headers.pure ()
     Body.pure ()
     Responder.do
-      itsOk <- Responder.json
-        @Int
-        HTTP.status200
+      itsOk <- Responder.json @Int HTTP.status200
         ResponderHeaders.do
           addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
           ResponderHeaders.pure addSecretNumber
