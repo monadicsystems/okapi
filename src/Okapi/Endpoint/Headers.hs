@@ -18,6 +18,7 @@ import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Web.Cookie as Web
 import qualified Web.HttpApiData as Web
+import Prelude hiding (fmap, pure, return, (>>=))
 
 data Error
   = ParseFail
@@ -30,20 +31,30 @@ data Headers a where
   FMap :: (a -> b) -> Headers a -> Headers b
   Pure :: a -> Headers a
   Apply :: Headers (a -> b) -> Headers a -> Headers b
-  Param :: Web.FromHttpApiData a => HTTP.HeaderName -> Headers a
+  Param :: (Show a, Web.FromHttpApiData a) => HTTP.HeaderName -> Headers a
   Cookie :: BS.ByteString -> Headers BS.ByteString
   Optional :: Headers a -> Headers (Maybe a)
   Option :: a -> Headers a -> Headers a
 
-instance Functor Headers where
-  fmap :: (a -> b) -> Headers a -> Headers b
-  fmap = FMap
+fmap :: (a -> b) -> Headers a -> Headers b
+fmap = FMap
 
-instance Applicative Headers where
-  pure :: a -> Headers a
-  pure = Pure
-  (<*>) :: Headers (a -> b) -> Headers a -> Headers b
-  (<*>) = Apply
+pure :: a -> Headers a
+pure = Pure
+
+return :: a -> Headers a
+return = pure
+
+(<*>) :: Headers (a -> b) -> Headers a -> Headers b
+(<*>) = Apply
+
+optional :: Headers a -> Headers (Maybe a)
+optional = Optional
+
+option :: a -> Headers a -> Headers a
+option = Option
+
+(>>=) = error "Was undefined"
 
 eval ::
   Headers a ->

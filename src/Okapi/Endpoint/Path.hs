@@ -7,10 +7,12 @@
 module Okapi.Endpoint.Path where
 
 import qualified Control.Monad.Par as Par
+import qualified Data.Functor.Classes as Functor
 import qualified Data.Text as Text
 import qualified Debug.Trace as Debug
 import qualified GHC.Generics as Generics
 import qualified Web.HttpApiData as Web
+import Prelude hiding (fmap, pure, return, (>>), (>>=))
 
 data Error
   = ParseFail
@@ -27,15 +29,39 @@ data Path a where
   Static :: Text.Text -> Path ()
   Param :: Web.FromHttpApiData a => Path a
 
-instance Functor Path where
-  fmap :: (a -> b) -> Path a -> Path b
-  fmap = FMap
+fmap :: (a -> b) -> Path a -> Path b
+fmap = FMap
 
-instance Applicative Path where
-  pure :: a -> Path a
-  pure = Pure
-  (<*>) :: Path (a -> b) -> Path a -> Path b
-  (<*>) = Apply
+pure :: a -> Path a
+pure = Pure
+
+return :: a -> Path a
+return = pure
+
+(<*>) :: Path (a -> b) -> Path a -> Path b
+(<*>) = Apply
+
+(>>=) :: Int ~ Char => f a -> (a -> f b) -> f b
+(>>=) = error "Was undefined"
+
+(>>) :: Int ~ Char => f a -> f b -> f b
+(>>) = error "Was undefined"
+
+-- instance Show a => Show (Path a) where
+--   show (FMap _ p) = "FMap (" ++ "<function>" ++ ") " ++ show p
+--   show (Pure a) = "Pure " <> show a
+--   show (Apply _ pa) = "Apply (" ++ "<apply>" ++ ") (" ++ show pa ++ ")"
+--   show (Static t) = "Static \"" ++ Text.unpack t ++ "\""
+--   show Param = "Param"
+
+-- TODO: Try using Rebindable Syntax and QualifiedDo to get rid of
+-- the need for Functor and Applicative instances.
+
+static :: Text.Text -> Path ()
+static = Static
+
+param :: (Show a, Web.FromHttpApiData a) => Path a
+param = Param
 
 eval ::
   Path a ->
@@ -66,7 +92,7 @@ eval path state = case compare (countOps path) (length state) of
         (h : t) ->
           if h == goal
             then (Right (), t)
-            else (Left NoMatch, t)
+            else (Left NoMatch, state)
       Param -> case state of
         [] -> (Left EmptyPath, state)
         (h : t) -> case Web.parseUrlPieceMaybe h of
@@ -80,9 +106,3 @@ countOps path = case path of
   Apply opF opX -> countOps opF + countOps opX
   Static _ -> 1
   Param -> 1
-
-static :: Text.Text -> Path ()
-static = Static
-
-param :: Web.FromHttpApiData a => Path a
-param = Param

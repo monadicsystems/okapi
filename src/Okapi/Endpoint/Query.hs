@@ -14,6 +14,7 @@ import qualified Data.Text.Encoding as Text
 import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Web.HttpApiData as Web
+import Prelude hiding (fmap, pure, return, (>>=))
 
 data Error
   = ParseFail
@@ -31,15 +32,34 @@ data Query a where
   Optional :: Query a -> Query (Maybe a)
   Option :: a -> Query a -> Query a
 
-instance Functor Query where
-  fmap :: (a -> b) -> Query a -> Query b
-  fmap = FMap
+fmap :: (a -> b) -> Query a -> Query b
+fmap = FMap
 
-instance Applicative Query where
-  pure :: a -> Query a
-  pure = Pure
-  (<*>) :: Query (a -> b) -> Query a -> Query b
-  (<*>) = Apply
+pure :: a -> Query a
+pure = Pure
+
+return :: a -> Query a
+return = pure
+
+(<*>) :: Query (a -> b) -> Query a -> Query b
+(<*>) = Apply
+
+(>>=) :: Int ~ Char => f a -> (a -> f b) -> f b
+(>>=) = error "Was undefined"
+
+(>>) = error "Was undefined"
+
+param :: (Show a, Web.FromHttpApiData a) => BS.ByteString -> Query a
+param = Param
+
+flag :: BS.ByteString -> Query ()
+flag = Flag
+
+optional :: Show a => Query a -> Query (Maybe a)
+optional = Optional
+
+option :: Show a => a -> Query a -> Query a
+option = Option
 
 eval ::
   Query a ->
@@ -84,15 +104,3 @@ eval op state = case op of
       (Right result, state') -> (Right result, state')
       (_, state') -> (Right def, state')
     _ -> eval op' state
-
-param :: Web.FromHttpApiData a => BS.ByteString -> Query a
-param = Param
-
-flag :: BS.ByteString -> Query ()
-flag = Flag
-
-optional :: Query a -> Query (Maybe a)
-optional = Optional
-
-option :: a -> Query a -> Query a
-option = Option
