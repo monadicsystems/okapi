@@ -608,7 +608,7 @@ Plan
           addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
           ResponderHeaders.pure addSecretNumber
       Responder.pure itsOk
-  \(Params.Params magicNumber (x, y) () () responder) -> do
+  \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y
     print newNumber
     return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
