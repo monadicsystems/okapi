@@ -587,8 +587,8 @@ Plan.Plan
 ```
 
 ```haskell
-Plan.Plan
-  Endpoint.Endpoint
+Plan
+  Endpoint
     Method.GET
     Path.do
       Path.static "index"
