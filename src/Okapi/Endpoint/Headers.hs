@@ -8,10 +8,12 @@
 module Okapi.Endpoint.Headers where
 
 import qualified Control.Monad.Par as Par
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.List as List
+import qualified Data.OpenApi as OAPI
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified GHC.Generics as Generics
@@ -25,14 +27,16 @@ data Error
   | ParamNotFound
   | CookieHeaderNotFound
   | CookieNotFound
+  | HeaderValueParseFail
+  | CookieValueParseFail
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
 data Headers a where
   FMap :: (a -> b) -> Headers a -> Headers b
   Pure :: a -> Headers a
   Apply :: Headers (a -> b) -> Headers a -> Headers b
-  Param :: (Show a, Web.FromHttpApiData a) => HTTP.HeaderName -> Headers a
-  Cookie :: BS.ByteString -> Headers BS.ByteString
+  Param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.HeaderName -> Headers a
+  Cookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Headers a
   Optional :: Headers a -> Headers (Maybe a)
   Option :: a -> Headers a -> Headers a
 
@@ -47,6 +51,12 @@ return = pure
 
 (<*>) :: Headers (a -> b) -> Headers a -> Headers b
 (<*>) = Apply
+
+param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.HeaderName -> Headers a
+param = Param
+
+cookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Headers a
+cookie = Cookie
 
 optional :: Headers a -> Headers (Maybe a)
 optional = Optional
@@ -74,18 +84,20 @@ eval op state = case op of
   Param name -> case lookup name state of
     Nothing -> (Left ParamNotFound, state)
     Just vBS -> case Web.parseHeaderMaybe vBS of
-      Nothing -> (Left ParseFail, state)
+      Nothing -> (Left HeaderValueParseFail, state)
       Just v -> (Right v, List.delete (name, vBS) state)
   Cookie name -> case lookup "Cookie" state of
     Nothing -> (Left CookieHeaderNotFound, state) -- TODO: Cookie not found
     Just cookiesBS -> case lookup name $ Web.parseCookies cookiesBS of
       Nothing -> (Left CookieNotFound, state) -- TODO: Cookie parameter with given name not found
-      Just value ->
-        ( Right value,
-          let headersWithoutCookie = List.delete ("Cookie", cookiesBS) state
-           in ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete (name, value) $ Web.parseCookies cookiesBS) : headersWithoutCookie {- List.delete (name, bs) headers -}
-          -- TODO: Order of the cookie in the headers isn't preserved, but maybe this is fine??
-        )
+      Just valueBS -> case Web.parseHeaderMaybe valueBS of
+        Nothing -> (Left CookieValueParseFail, state)
+        Just value ->
+          ( Right value,
+            let headersWithoutCookie = List.delete ("Cookie", cookiesBS) state
+             in ("Cookie", LBS.toStrict $ Builder.toLazyByteString $ Web.renderCookies $ List.delete (name, valueBS) $ Web.parseCookies cookiesBS) : headersWithoutCookie {- List.delete (name, bs) headers -}
+            -- TODO: Order of the cookie in the headers isn't preserved, but maybe this is fine??
+          )
   Optional op' -> case op' of
     param@(Param _) -> case eval param state of
       (Right result, state') -> (Right $ Just result, state')

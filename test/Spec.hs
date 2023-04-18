@@ -18,6 +18,7 @@ import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Controller qualified as Plan
 import Okapi.Endpoint qualified as Endpoint
+import Okapi.Endpoint.Body qualified as Body
 import Okapi.Endpoint.Headers qualified as Headers
 import Okapi.Endpoint.Path qualified as Path
 import Okapi.Endpoint.Query qualified as Query
@@ -167,33 +168,51 @@ path3 = Path.do
 pattern GET :: HTTP.Method
 pattern GET = "GET"
 
+data Head = Head Int Int Int
+
+data Neck = Neck Int Int Int
+
+data NestedData a b = NestedData {n1 :: a, n2 :: b}
+
+nd =
+  NestedData
+    ( Head
+        1
+        2
+        3
+    )
+    ( Neck
+        1
+        2
+        3
+    )
+
 testPlan =
   Plan.Plan
-    { lifter = id,
-      endpoint =
-        Endpoint.Endpoint
-          { method = GET,
-            path = Path.do
-              Path.static "index"
-              magicNumber <- Path.param @Int
-              Path.pure magicNumber,
-            query = Query.do
-              x <- Query.param @Int "x"
-              y <- Query.option 10 $ Query.param @Int "y"
-              Query.pure (x, y),
-            headers = Headers.pure (),
-            body = pure (),
-            responder = Responder.do
-              itsOk <- Responder.json
-                @Int
-                HTTP.status200
-                ResponderHeaders.do
-                  addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
-                  ResponderHeaders.pure addSecretNumber
-              Responder.pure itsOk
-          },
-      handler = \(Params.Params magicNumber (x, y) () () responder) -> do
+    id
+    ( Endpoint.Endpoint
+        GET
+        Path.do
+          Path.static "index"
+          magicNumber <- Path.param @Int
+          Path.pure magicNumber
+        Query.do
+          x <- Query.param @Int "x"
+          y <- Query.option 10 $ Query.param @Int "y"
+          Query.pure (x, y)
+        (Headers.pure ())
+        (Body.pure ())
+        Responder.do
+          itsOk <- Responder.json
+            @Int
+            HTTP.status200
+            ResponderHeaders.do
+              addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+              ResponderHeaders.pure addSecretNumber
+          Responder.pure itsOk
+    )
+    \magicNumber (x, y) () () responder ->
+      do
         let newNumber = magicNumber + x * y
         print newNumber
         return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
-    }

@@ -7,8 +7,10 @@
 module Okapi.Endpoint.Query where
 
 import qualified Control.Monad.Par as Par
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.List as List
+import qualified Data.OpenApi as OAPI
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified GHC.Generics as Generics
@@ -27,7 +29,7 @@ data Query a where
   FMap :: (a -> b) -> Query a -> Query b
   Pure :: a -> Query a
   Apply :: Query (a -> b) -> Query a -> Query b
-  Param :: Web.FromHttpApiData a => BS.ByteString -> Query a
+  Param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Query a
   Flag :: BS.ByteString -> Query ()
   Optional :: Query a -> Query (Maybe a)
   Option :: a -> Query a -> Query a
@@ -49,16 +51,16 @@ return = pure
 
 (>>) = error "Was undefined"
 
-param :: (Show a, Web.FromHttpApiData a) => BS.ByteString -> Query a
+param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Query a
 param = Param
 
 flag :: BS.ByteString -> Query ()
 flag = Flag
 
-optional :: Show a => Query a -> Query (Maybe a)
+optional :: (Web.FromHttpApiData a, OAPI.ToSchema a) => Query a -> Query (Maybe a)
 optional = Optional
 
-option :: Show a => a -> Query a -> Query a
+option :: (Web.FromHttpApiData a, OAPI.ToSchema a) => a -> Query a -> Query a
 option = Option
 
 eval ::

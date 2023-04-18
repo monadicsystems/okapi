@@ -47,12 +47,15 @@ library
     , base >=4.7 && <5
     , base64
     , bytestring
+    , case-insensitive
     , containers
     , cookie
     , cryptonite
     , extra
     , http-api-data
     , http-types
+    , kind-generics
+    , kind-generics-th
     , linear-base
     , memory
     , mmorph
@@ -60,6 +63,7 @@ library
     , mtl
     , natural-transformation
     , network
+    , openapi3
     , parser-combinators
     , pretty-simple
     , text

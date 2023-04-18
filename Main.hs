@@ -29,9 +29,12 @@ newtype Category = Category {unwrap :: Text.Text}
 newtype ProductID = ProductID {unwrap :: Int}
   deriving newtype (Eq, Show, Web.FromHttpApiData)
 
-path3 :: Path.Path (Category, ProductID)
+path3 :: Path.Path (Category, ProductID, Bool, Char)
 path3 = Path.do
+  category <- Path.param @Category "category"
+  Path.static "blah"
+  foo <- Path.param @Bool "foo"
+  c <- Path.param @Char "c"
   Path.static "product"
-  category <- Path.param @Category
-  productID <- Path.param @ProductID
-  Path.pure (category, productID)
+  productID <- Path.param @ProductID "productID"
+  Path.pure (category, productID, foo, c)

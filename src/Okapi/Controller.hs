@@ -34,7 +34,7 @@ data Plan m p q h b r = Plan
     -- TODO: Use natural transformation.
     lifter :: m ~> IO,
     endpoint :: Endpoint.Endpoint p q h b r,
-    handler :: Monad m => Params.Params p q h b r -> m ResponderHeaders.Response
+    handler :: Monad m => p -> q -> h -> b -> r %1 -> m ResponderHeaders.Response
   }
 
 data Controller = Run (IO WAI.Response) | NoRun
@@ -55,7 +55,7 @@ make ::
     h
     b
     r ->
-  ( HTTP.Method,
+  ( HTTP.StdMethod,
     [Text.Text],
     HTTP.Query,
     HTTP.RequestHeaders,
@@ -64,9 +64,9 @@ make ::
   Controller
 make plan (method, path, query, headers, body) =
   if method == plan.endpoint.method
-    then case Par.runPar $ parEval plan.endpoint (path, query, headers, body) of
+    then case Par.runPar $ parEval (endpoint plan) (path, query, headers, body) of
       (Right path, Right query, Right headers, Right body, Right responder) ->
-        Run $ okapiResponseToWAIResponse <$> lifter plan (handler plan Params.Params {..})
+        Run $ okapiResponseToWAIResponse <$> lifter plan (handler plan path query headers body responder)
       _ -> NoRun
     else NoRun
 

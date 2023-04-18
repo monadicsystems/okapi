@@ -1,16 +1,30 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Okapi.Endpoint.Path where
 
 import qualified Control.Monad.Par as Par
 import qualified Data.Functor.Classes as Functor
+import qualified Data.OpenApi as OAPI
 import qualified Data.Text as Text
+import qualified Data.Typeable as Typeable
 import qualified Debug.Trace as Debug
 import qualified GHC.Generics as Generics
+import Generics.Kind
+import Generics.Kind.TH
 import qualified Web.HttpApiData as Web
 import Prelude hiding (fmap, pure, return, (>>), (>>=))
 
@@ -27,7 +41,51 @@ data Path a where
   Pure :: a -> Path a
   Apply :: Path (a -> b) -> Path a -> Path b
   Static :: Text.Text -> Path ()
-  Param :: Web.FromHttpApiData a => Path a
+  Param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Path a
+
+$(deriveGenericK ''Path)
+
+{-
+instance GenericK (Path (a_a11LZ :: ghc-prim:GHC.Types.Type) :: ghc-prim:GHC.Types.Type) where
+  type RepK (Path (a_a11LZ :: ghc-prim:GHC.Types.Type) :: ghc-prim:GHC.Types.Type) =
+    Generics.D1
+      ('Generics.MetaData "Path" "Okapi.Endpoint.Path" "okapi-0.2.0.0-inplace" 'False)
+      ((:+:)
+         ((:+:)
+            (Generics.C1 ('Generics.MetaCons "FMap" 'Generics.PrefixI 'False)
+                          (Exists ghc-prim:GHC.Types.Type
+                                  ((:*:)
+                                     (Generics.S1 ('Generics.MetaSel 'Nothing 'Generics.NoSourceUnpackedness 'Generics.NoSourceStrictness 'Generics.DecidedLazy)
+                                                   (Field ('(:@:) ('(:@:) ('Kon (->)) Var0) ('Kon a_a11LZ))))
+                                     (Generics.S1 ('Generics.MetaSel 'Nothing 'Generics.NoSourceUnpackedness 'Generics.NoSourceStrictness 'Generics.DecidedLazy)
+                                                   (Field ('(:@:) ('Kon Path) Var0))))))
+            (Generics.C1 ('Generics.MetaCons "Pure" 'Generics.PrefixI 'False)
+                          (Generics.S1 ('Generics.MetaSel 'Nothing 'Generics.NoSourceUnpackedness 'Generics.NoSourceStrictness 'Generics.DecidedLazy)
+                                        (Field ('Kon a_a11LZ))))))
+      ((:+:)
+         (Generics.C1 ('Generics.MetaCons "Apply" 'Generics.PrefixI 'False)
+                       (Exists ghc-prim:GHC.Types.Type
+                               ((:*:)
+                                  (Generics.S1 ('Generics.MetaSel 'Nothing 'Generics.NoSourceUnpackedness 'Generics.NoSourceStrictness 'Generics.DecidedLazy)
+                                                (Field ('(:@:) ('Kon Path)
+                                                              ('(:@:) ('(:@:) ('Kon (->)) Var0) ('Kon a_a11LZ)))))
+                                  (Generics.S1 ('Generics.MetaSel 'Nothing 'Generics.NoSourceUnpackedness 'Generics.NoSourceStrictness 'Generics.DecidedLazy)
+                                                (Field ('(:@:) ('Kon Path) Var0))))))
+         ((:+:)
+            (Generics.C1 ('Generics.MetaCons "Static" 'Generics.PrefixI 'False)
+                          ((:=>:) ('Kon ((~~) a_a11LZ ()))
+                                   (Generics.S1 ('Generics.MetaSel 'Nothing 'Generics.NoSourceUnpackedness 'Generics.NoSourceStrictness 'Generics.DecidedLazy)
+                                                 (Field ('Kon Text.Text)))))
+            (Generics.C1 ('Generics.MetaCons "Param" 'Generics.PrefixI 'False)
+                          ((:=>:) ('(:&:) ('Kon (Typeable.Typeable a_a11LZ))
+                                          ('Kon (Web.FromHttpApiData a_a11LZ))) U1)))))
+  fromK x_a11V7 =
+    M1
+      (case x_a11V7 of
+         FMap f1_a11V8 f2_a11V9 ->
+           L1 (L1 (M1 (Exists (M1 (Field f1_a11V8) :*: M1 (Field f2_a11V9)))))
+         Pure f1_a11Va -> L1 (R1 (M1 (M1 (Field f1_a11Va...
+-}
 
 fmap :: (a -> b) -> Path a -> Path b
 fmap = FMap
@@ -47,20 +105,13 @@ return = pure
 (>>) :: Int ~ Char => f a -> f b -> f b
 (>>) = error "Was undefined"
 
--- instance Show a => Show (Path a) where
---   show (FMap _ p) = "FMap (" ++ "<function>" ++ ") " ++ show p
---   show (Pure a) = "Pure " <> show a
---   show (Apply _ pa) = "Apply (" ++ "<apply>" ++ ") (" ++ show pa ++ ")"
---   show (Static t) = "Static \"" ++ Text.unpack t ++ "\""
---   show Param = "Param"
-
 -- TODO: Try using Rebindable Syntax and QualifiedDo to get rid of
 -- the need for Functor and Applicative instances.
 
 static :: Text.Text -> Path ()
 static = Static
 
-param :: (Show a, Web.FromHttpApiData a) => Path a
+param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Path a
 param = Param
 
 eval ::
@@ -93,7 +144,7 @@ eval path state = case compare (countOps path) (length state) of
           if h == goal
             then (Right (), t)
             else (Left NoMatch, state)
-      Param -> case state of
+      Param _ -> case state of
         [] -> (Left EmptyPath, state)
         (h : t) -> case Web.parseUrlPieceMaybe h of
           Nothing -> (Left ParseFail, state)
@@ -105,4 +156,12 @@ countOps path = case path of
   Pure _ -> 0
   Apply opF opX -> countOps opF + countOps opX
   Static _ -> 1
-  Param -> 1
+  Param _ -> 1
+
+renderPath :: Path a -> Text.Text
+renderPath path = case path of
+  FMap f p -> renderPath p
+  Pure _ -> mempty
+  Apply pf px -> renderPath pf <> renderPath px
+  Static t -> "/" <> t
+  Param @p name -> "/{" <> name <> ":" <> Text.pack (show $ Typeable.typeOf @p undefined) <> "}"
