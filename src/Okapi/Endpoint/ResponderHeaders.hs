@@ -20,7 +20,6 @@ import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Web.Cookie as Web
 import qualified Web.HttpApiData as Web
-import Prelude hiding (fmap, pure, return, (>>=))
 
 data Error
   = ParseFail
@@ -44,19 +43,12 @@ data ResponderHeaders a where
   Apply :: ResponderHeaders (a -> b) -> ResponderHeaders a -> ResponderHeaders b
   Has :: Web.ToHttpApiData a => HTTP.HeaderName -> ResponderHeaders (a -> (Response -> Response))
 
-fmap :: (a -> b) -> ResponderHeaders a -> ResponderHeaders b
-fmap = FMap
+instance Functor ResponderHeaders where
+  fmap = FMap
 
-pure :: a -> ResponderHeaders a
-pure = Pure
-
-return :: a -> ResponderHeaders a
-return = pure
-
-(<*>) :: ResponderHeaders (a -> b) -> ResponderHeaders a -> ResponderHeaders b
-(<*>) = Apply
-
-(>>=) = error "Was undefined"
+instance Applicative ResponderHeaders where
+  pure = Pure
+  (<*>) = Apply
 
 eval ::
   ResponderHeaders a ->

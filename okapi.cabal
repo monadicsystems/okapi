@@ -106,6 +106,7 @@ test-suite okapi-test
     , mtl
     , network
     , okapi
+    , openapi3
     , parallel
     , parser-combinators
     , text

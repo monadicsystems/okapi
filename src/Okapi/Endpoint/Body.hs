@@ -18,7 +18,6 @@ import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Web.Cookie as Web
 import qualified Web.HttpApiData as Web
-import Prelude hiding (fmap, pure, return, (>>), (>>=))
 
 data Error
   = JSONParseFail
@@ -35,20 +34,12 @@ data Body a where
 
 -- FormParam :: Web.FromHttpApiData a => HTTP.HeaderName -> Body a
 
-fmap :: (a -> b) -> Body a -> Body b
-fmap = FMap
+instance Functor Body where
+  fmap = FMap
 
-pure :: a -> Body a
-pure = Pure
-
-(<*>) :: Body (a -> b) -> Body a -> Body b
-(<*>) = Apply
-
-(>>=) :: Int ~ Char => f a -> (a -> f b) -> f b
-(>>=) = error "Was undefined"
-
-(>>) :: Int ~ Char => f a -> f b -> f b
-(>>) = error "Was undefined"
+instance Applicative Body where
+  pure = Pure
+  (<*>) = Apply
 
 eval ::
   Body a ->

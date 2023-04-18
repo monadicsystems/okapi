@@ -22,7 +22,6 @@ import qualified Okapi.Endpoint.ResponderHeaders as ResponderHeaders
 import qualified Okapi.Endpoint.ResponderHeaders as ResponseHeaders
 import qualified Web.Cookie as Web
 import qualified Web.HttpApiData as Web
-import Prelude hiding (fmap, pure, return, (>>=))
 
 data Error
   = ParseFail
@@ -46,18 +45,12 @@ data Responder a where
         ResponseHeaders.Response
       )
 
-fmap :: (a -> b) -> Responder a -> Responder b
-fmap = FMap
+instance Functor Responder where
+  fmap = FMap
 
-pure :: a -> Responder a
-pure = Pure
-
-return = pure
-
-(<*>) :: Responder (a -> b) -> Responder a -> Responder b
-(<*>) = Apply
-
-(>>=) = error "Was undefined"
+instance Applicative Responder where
+  pure = Pure
+  (<*>) = Apply
 
 eval ::
   Responder a ->

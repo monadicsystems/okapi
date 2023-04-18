@@ -16,7 +16,6 @@ import qualified Data.Text.Encoding as Text
 import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Web.HttpApiData as Web
-import Prelude hiding (fmap, pure, return, (>>=))
 
 data Error
   = ParseFail
@@ -34,22 +33,12 @@ data Query a where
   Optional :: Query a -> Query (Maybe a)
   Option :: a -> Query a -> Query a
 
-fmap :: (a -> b) -> Query a -> Query b
-fmap = FMap
+instance Functor Query where
+  fmap = FMap
 
-pure :: a -> Query a
-pure = Pure
-
-return :: a -> Query a
-return = pure
-
-(<*>) :: Query (a -> b) -> Query a -> Query b
-(<*>) = Apply
-
-(>>=) :: Int ~ Char => f a -> (a -> f b) -> f b
-(>>=) = error "Was undefined"
-
-(>>) = error "Was undefined"
+instance Applicative Query where
+  pure = Pure
+  (<*>) = Apply
 
 param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Query a
 param = Param

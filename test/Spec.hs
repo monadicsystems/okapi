@@ -14,6 +14,7 @@
 
 import Control.Exception (evaluate)
 import Data.Aeson qualified as Aeson
+import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Controller qualified as Plan
@@ -79,45 +80,27 @@ data AddHeaders = AddHeaders
     cacheHeader :: Int -> ResponderHeaders.Response -> ResponderHeaders.Response
   }
 
-responder1 ::
-  Responder.Responder
-    ( ( ( Username ->
-          ResponderHeaders.Response ->
-          ResponderHeaders.Response
-        ) %1 ->
-        ResponderHeaders.Response ->
-        ResponderHeaders.Response
-      ) ->
-      Aeson.Value ->
-      ResponderHeaders.Response,
-      ( AddHeaders %1 ->
-        ResponderHeaders.Response ->
-        ResponderHeaders.Response
-      ) ->
-      Aeson.Value ->
-      ResponderHeaders.Response
-    )
-responder1 = Responder.do
+responder1 = do
   itsOk <- Responder.json
     @Aeson.Value
     HTTP.status200
-    ResponderHeaders.do
+    do
       addCookie <- ResponderHeaders.has @Username "Cookie"
-      ResponderHeaders.pure addCookie
+      pure addCookie
   itsNotFound <- Responder.json
     @Aeson.Value
     HTTP.status404
-    ResponderHeaders.do
+    do
       addCookie <- ResponderHeaders.has @Username "Blob"
       addAnotherHeader <- ResponderHeaders.has @Username "X-Some-Header"
       cacheHeader <- ResponderHeaders.has @Int "X-Cache-Time"
-      ResponderHeaders.pure $ AddHeaders {..}
-  Responder.pure (itsOk, itsNotFound)
+      pure $ AddHeaders {..}
+  pure (itsOk, itsNotFound)
 
 responder2 = undefined
 
 newtype Username = Username {unwrap :: Text.Text}
-  deriving newtype (Eq, Show, Web.FromHttpApiData, Web.ToHttpApiData)
+  deriving newtype (Eq, Show, Web.FromHttpApiData, Web.ToHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
 data Filter = Filter
   { score :: Int,
@@ -126,90 +109,68 @@ data Filter = Filter
   deriving (Eq, Show)
 
 query1 :: Query.Query Filter
-query1 = Query.do
+query1 = do
   score <- Query.param @Int "score"
   byUser <- Query.param @Username "user"
-  Query.pure Filter {..}
+  pure Filter {..}
 
 query2 :: Query.Query Username
-query2 = Query.do
+query2 = do
   username <- Query.param @Username "user"
   Query.flag "active"
-  Query.pure username
+  pure username
 
 query3 :: Query.Query (Username, Maybe ())
-query3 = Query.do
+query3 = do
   user <- Query.option (Username "Anon") $ Query.param "user"
   active <- Query.optional $ Query.flag "active"
-  Query.pure (user, active)
+  pure (user, active)
 
 path1 :: Path.Path ()
 path1 = Path.static "index"
 
 path2 :: Path.Path Int
-path2 = Path.do
+path2 = do
   Path.static "item"
-  uuid <- Path.param @Int
-  Path.pure uuid
+  uuid <- Path.param @Int "uuid"
+  pure uuid
 
 newtype Category = Category {unwrap :: Text.Text}
-  deriving newtype (Eq, Show, Web.FromHttpApiData)
+  deriving newtype (Eq, Show, Web.FromHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
 newtype ProductID = ProductID {unwrap :: Int}
-  deriving newtype (Eq, Show, Web.FromHttpApiData)
+  deriving newtype (Eq, Show, Web.FromHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
 path3 :: Path.Path (Category, ProductID)
-path3 = Path.do
+path3 = do
   Path.static "product"
-  category <- Path.param @Category
-  productID <- Path.param @ProductID
-  Path.pure (category, productID)
-
-pattern GET :: HTTP.Method
-pattern GET = "GET"
-
-data Head = Head Int Int Int
-
-data Neck = Neck Int Int Int
-
-data NestedData a b = NestedData {n1 :: a, n2 :: b}
-
-nd =
-  NestedData
-    ( Head
-        1
-        2
-        3
-    )
-    ( Neck
-        1
-        2
-        3
-    )
+  category <- Path.param @Category "category"
+  productID <- Path.param @ProductID "productID"
+  pure (category, productID)
 
 testPlan =
   Plan.Plan
     id
     ( Endpoint.Endpoint
-        GET
-        Path.do
+        HTTP.GET
+        do
           Path.static "index"
-          magicNumber <- Path.param @Int
-          Path.pure magicNumber
-        Query.do
+          magicNumber <- Path.param @Int "magicNumber"
+          pure magicNumber
+        do
           x <- Query.param @Int "x"
           y <- Query.option 10 $ Query.param @Int "y"
-          Query.pure (x, y)
-        (Headers.pure ())
-        (Body.pure ())
-        Responder.do
+          pure (x, y)
+        do pure ()
+        do pure ()
+        do
           itsOk <- Responder.json
             @Int
             HTTP.status200
-            ResponderHeaders.do
+            do
               addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
-              ResponderHeaders.pure addSecretNumber
-          Responder.pure itsOk
+              pure addSecretNumber
+          pure itsOk
     )
     \magicNumber (x, y) () () responder ->
       do

@@ -26,7 +26,6 @@ import qualified GHC.Generics as Generics
 import Generics.Kind
 import Generics.Kind.TH
 import qualified Web.HttpApiData as Web
-import Prelude hiding (fmap, pure, return, (>>), (>>=))
 
 data Error
   = ParseFail
@@ -87,23 +86,12 @@ instance GenericK (Path (a_a11LZ :: ghc-prim:GHC.Types.Type) :: ghc-prim:GHC.Typ
          Pure f1_a11Va -> L1 (R1 (M1 (M1 (Field f1_a11Va...
 -}
 
-fmap :: (a -> b) -> Path a -> Path b
-fmap = FMap
+instance Functor Path where
+  fmap = FMap
 
-pure :: a -> Path a
-pure = Pure
-
-return :: a -> Path a
-return = pure
-
-(<*>) :: Path (a -> b) -> Path a -> Path b
-(<*>) = Apply
-
-(>>=) :: Int ~ Char => f a -> (a -> f b) -> f b
-(>>=) = error "Was undefined"
-
-(>>) :: Int ~ Char => f a -> f b -> f b
-(>>) = error "Was undefined"
+instance Applicative Path where
+  pure = Pure
+  (<*>) = Apply
 
 -- TODO: Try using Rebindable Syntax and QualifiedDo to get rid of
 -- the need for Functor and Applicative instances.
