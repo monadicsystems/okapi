@@ -666,4 +666,57 @@ Plan $$
     return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
   id
 ```
+
+### Endpoint Patterns
+
+```haskell
+data Request = Request StdMethod [Text] Query BS.ByteString RequestHeaders
+data Server m r = Server
+  { responder :: Responder r
+  , handler :: Request -> r -> m Response
+  }
+
+pattern GetUsers :: Maybe Filter -> Request
+pattern GetUsers optFilter <- Request
+  GET
+  ["users"]
+  (Query.eval filterQuery -> Ok filter)
+  ""
+  _
+  
+pattern AddUser :: User -> Request
+pattern AddUser user <- Request
+  POST
+  ["users"]
+  _
+  (Body.eval (json @User) -> Ok user)
+  _
+
+pattern GetUsersByID :: UserID -> MatcherInput
+pattern GetUsersByID userID <- Request
+  GET
+  (Path.eval pathParams -> Ok userID)
+  _
+  ""
+  _
+  where
+    pathParams = do
+      Path.static "users"
+      userID <- Path.param @UserID "userID"
+      pure userID
+
+myMatcher :: MyResponderType -> Request -> IO Response 
+myMatcher res = \case
+  GetUser -> do
+    ...
+  GetUserByID userID -> do
+    ...
+  AddUser user -> do
+    ...
+  _ -> do
+    ...
+
+myServer = Server myResponder myMatcher
+
+spend :: a %1 -> a %m ????
 ```
