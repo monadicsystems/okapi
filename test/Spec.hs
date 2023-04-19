@@ -164,12 +164,9 @@ testPlan =
         do pure ()
         do pure ()
         do
-          itsOk <- Responder.json
-            @Int
-            HTTP.status200
-            do
-              addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
-              pure addSecretNumber
+          itsOk <- Responder.json @Int HTTP.status200 do
+            addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+            pure addSecretNumber
           pure itsOk
     )
     \magicNumber (x, y) () () responder ->

@@ -158,3 +158,73 @@ genOAPIPathItem endpoint = (pathName, pathItem)
       Path.Apply pf px -> renderPath pf <> renderPath px
       Path.Static t -> "/" <> Text.unpack t
       Path.Param @p name -> "/{" <> Text.unpack name <> "}"
+
+{-
+Use Applicative parsers inside view patterns!!!
+
+_pathItemGet :: Maybe Operation
+A definition of a GET operation on this path.
+
+_pathItemPut :: Maybe Operation
+A definition of a PUT operation on this path.
+
+_pathItemPost :: Maybe Operation
+A definition of a POST operation on this path.
+
+_pathItemDelete :: Maybe Operation
+A definition of a DELETE operation on this path.
+
+_pathItemOptions :: Maybe Operation
+A definition of a OPTIONS operation on this path.
+
+_pathItemHead :: Maybe Operation
+A definition of a HEAD operation on this path.
+
+_pathItemPatch :: Maybe Operation
+A definition of a PATCH operation on this path.
+
+_pathItemTrace :: Maybe Operation
+-}
+
+{-
+data Endpoint p q h b r
+  = GET
+      (Path.Path p)
+      (Query.Query q)
+      (Headers.Headers h)
+      (Responder.Responder r)
+  | POST
+      (Path.Path p)
+      (Query.Query q)
+      (Body.Body b)
+      (Headers.Headers h)
+      (Responder.Responder r)
+  | PATCH
+      (Path.Path p)
+      (Query.Query q)
+      (Body.Body b)
+      (Headers.Headers h)
+      (Responder.Responder r)
+  | HEAD
+      (Path.Path p)
+      (Query.Query q)
+      (Headers.Headers h)
+      (Responder.Responder r)
+  | TRACE
+      (Path.Path p)
+      (Query.Query q)
+      (Headers.Headers h)
+      (Responder.Responder r)
+  | PUT
+      (Path.Path p)
+      (Query.Query q)
+      (Body.Body b)
+      (Headers.Headers h)
+      (Responder.Responder r)
+  | OPTIONS
+      (Path.Path p)
+      (Query.Query q)
+      (Body.Body b)
+      (Headers.Headers h)
+      (Responder.Responder r)
+-}
