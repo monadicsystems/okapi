@@ -1,0 +1,307 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Okapi Wiki</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="syntax.css">
+  </head>
+  <body>
+  <div id="content">
+<h1>🦓🦒Okapi</h1>
+<h2>Introduction</h2>
+<p>Okapi is a micro framework for implementing HTTP servers.</p>
+<ul>
+<li>Ergonomic DSL for routing and parsing requests</li>
+<li>Integrate Okapi with ANY monad stack or effect system</li>
+<li>Automatically generate clients and OpenAPI specifications</li>
+</ul>
+<p>The primary way to implement a server in Okapi is via
+<em>Endpoints</em>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;index&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> magicNumber</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> (x, y)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> HTTP.status200 <span class="kw">do</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> ResponderHeaders.has <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Handlers for Endpoints</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>myHandler magicNumber (x, y) foo () responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> newNumber <span class="ot">=</span> magicNumber <span class="op">+</span> x <span class="op">*</span> y</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> newNumber</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> foo</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> responder (\addHeader response <span class="ot">-&gt;</span> addHeader (newNumber <span class="op">*</span> <span class="dv">100</span>) response) newNumber</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Combine Endpoints with Handlers to create Plans</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>myPlan <span class="ot">=</span> <span class="dt">Plan</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  myEndpoint</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  myHandler</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Compose Plans with other Plans to create Servers</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> <span class="dt">Server</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Nothing</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>  default404</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>  [ myPlan</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>  , <span class="dt">Plan</span> myOtherEndpoint myOtherHandler</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>  , anotherPlan</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>  ]</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Run your Servers using Warp</span></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> Warp.run <span class="dv">3000</span> <span class="op">$</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
+<p>An alternative, more concise way of defining a server in Okapi is via
+<em>Matchpoints</em>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Matchpoint patterns using PatternSynonyms,</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">--   ViewPatterns, and the same eDSL used for Endpoints</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUsers</span> optF <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  [<span class="st">&quot;users&quot;</span>]</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  (Body.eval <span class="op">$</span> Body.optional <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Filter</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> optF)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">AddUser</span> user <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  <span class="dt">POST</span>                                     <span class="co">-- Method</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  [<span class="st">&quot;users&quot;</span>]                                <span class="co">-- Path</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  _                                        <span class="co">-- Query</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">User</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> user) <span class="co">-- Body</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  _                                        <span class="co">-- Headers</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUsersByID</span> userID <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>  (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;users&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">UserID</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> userID)</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;&quot;</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Servers are just contextful functions from a Matchpoint to a Response</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Matchpoint</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a><span class="ot">myServer ::</span> <span class="dt">Server</span> <span class="dt">IO</span></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> \<span class="kw">case</span></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GetUser</span> <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GetUserByID</span> userID <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>  <span class="dt">AddUser</span> user <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>  _ <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Run your Server using Warp</span></span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> Warp.run <span class="dv">3000</span> <span class="op">$</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
+<p>The advantadge of using Endpoints over Matchpoints is that Okapi can
+automatically generate specifications and clients for a server
+implemented with Endpoints, but not a server implemented with
+Matchpoints.</p>
+<p>On the flip side, a server implemented with Matchpoints will be more
+concise than a server implemented with Endpoints.</p>
+<h2>Getting Started</h2>
+<ol type="1">
+<li>Use the command <code>stack new &lt;project-name&gt;</code> to
+create a new Haskell project</li>
+<li>Add the <code>okapi</code> library to your project's
+dependencies</li>
+</ol>
+<h2>Endpoint</h2>
+<p>An <em>Endpoint</em> is an <em>executable specification</em> that
+represents a single endpoint of your API.</p>
+<p>An Endpoint has 6 fields:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Endpoint</span> p q h b r <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> method ::</span> <span class="dt">StdMethod</span>,                  <span class="co">-- (1)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    pathScript ::</span> <span class="dt">Path.Script</span> p,          <span class="co">-- (2)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    queryScript ::</span> <span class="dt">Query.Script</span> q,        <span class="co">-- (3)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="ot">    headersScript ::</span> <span class="dt">Headers.Script</span> h,    <span class="co">-- (4)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="ot">    bodyScript ::</span> <span class="dt">Body.Script</span> b,          <span class="co">-- (5)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="ot">    responderScript ::</span> <span class="dt">Responder.Script</span> r <span class="co">-- (6)</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
+<p>The <code>method</code> field is a simple value, but the other fields
+point to a <code>Script</code> that represents their respective HTTP
+request parts.</p>
+<p>The type parameter of a Script represents the type of value it
+returns.</p>
+<p>Therefore, the concrete type of an Endpoint is determined by the
+return types of the Scripts that are used to construct the Endpoint.</p>
+<p>All the different Script types are Applicatives, but not all are
+<em>lawful applicatives</em>.</p>
+<p>Since all Script types are Applicatives, we can use the Applicative
+typeclass methods to write our scripts. Here's an example of a query
+Script:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Filter</span> <span class="ot">=</span> <span class="dt">Filter</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> color ::</span> <span class="dt">Text</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> categoryID ::</span> <span class="dt">Int</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> isOnSale ::</span> <span class="dt">Maybe</span> ()</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="ot">myQueryScript ::</span> <span class="dt">Query.Script</span> <span class="dt">Filter</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>myQueryScript <span class="ot">=</span> <span class="dt">Filter</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="op">&lt;$&gt;</span> Query.param <span class="st">&quot;color&quot;</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="op">&lt;*&gt;</span> Query.param <span class="st">&quot;category&quot;</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="op">&lt;*&gt;</span> (Query.optional <span class="op">$</span> Query.flag <span class="st">&quot;sale&quot;</span>)</span></code></pre></div>
+<p>If you have the <code>-XApplicativeDo</code> language extension
+turned on, you can also write your Scripts using <code>do</code>
+syntax.</p>
+<p>We recommend using <code>-XApplicativeDo</code> in conjuction with
+the <code>-XRecordWildCards</code> language extension if you're not
+comfortable with using the Applicative operators. Here's the same query
+script we defined above, but with these language extensions turned
+on:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeDo #-}</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE RecordWildCards #-}</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="ot">myQueryScript ::</span> <span class="dt">Query.Script</span> <span class="dt">Filter</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>myQueryScript <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  color      <span class="ot">&lt;-</span> Query.param <span class="st">&quot;color&quot;</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  categoryID <span class="ot">&lt;-</span> Query.param <span class="st">&quot;category&quot;</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  isOnSale   <span class="ot">&lt;-</span> Query.optional <span class="op">$</span> Query.flag <span class="st">&quot;sale&quot;</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> <span class="dt">Filter</span> {<span class="op">..</span>}</span></code></pre></div>
+<p>Each Script type has its' own operations suited to parsing its'
+respective part of the request. These are defined in more detail
+below.</p>
+<ol type="1">
+<li><h3>Method</h3>
+<p>The <code>method</code> field represents the HTTP method that the
+Endpoint accepts.</p>
+<p>Its' type is <code>StdMethod</code> from the <code>http-types</code>
+library.</p>
+<p>Only the standard methods mentioned in RFC-1234 are allowed.</p></li>
+<li><h3>Path Script</h3>
+<p>The <code>pathScript</code> field defines the request path that the
+Endpoint accepts, including <em>path parameters</em>.</p>
+<p>Path Scripts have two operations: <code>static</code> and
+<code>param</code>.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>myPathScript <span class="ot">=</span> Path.static <span class="st">&quot;person&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;personID&quot;</span></span></code></pre></div></li>
+<li><h3>Query Script</h3>
+<p>The <code>queryScript</code> field defines the query that the
+Endpoint accepts.</p>
+<p>There are two operations for Query Scripts: <code>param</code> and
+<code>flag</code>.</p>
+<p>There are two modifiers for Query Scripts: <code>optional</code> and
+<code>option</code>.</p>
+<p><code>optional</code> and <code>option</code> are specialized
+versions of the <code>optional</code> and <code>option</code> parser
+combinators found in the <code>parser-combinators</code> library.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myQueryScript ::</span> <span class="dt">Query.Script</span> (<span class="dt">Text</span>, <span class="dt">Maybe</span> <span class="dt">Float</span>, <span class="dt">Int</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>myQueryScript <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  lastName  <span class="ot">&lt;-</span> Query.param <span class="st">&quot;last_name&quot;</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  optSalary <span class="ot">&lt;-</span> Query.optional <span class="op">$</span> Query.param <span class="st">&quot;salary&quot;</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  minAge    <span class="ot">&lt;-</span> Query.option <span class="dv">21</span> <span class="op">$</span> Query.param <span class="st">&quot;min_age&quot;</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (lastName, optSalary, minAge)</span></code></pre></div></li>
+<li><h3>Body Script</h3>
+<p>The <code>bodyScript</code> field defines the request body and it's
+content type that the Endpoint accepts.</p>
+<p>There are four operations for Body Scripts: <code>json</code>,
+<code>form</code>, <code>formParam</code>, <code>file</code>.</p>
+<p>There are two modifiers for Body Scripts: <code>optional</code> and
+<code>option</code>.</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myBodyScript ::</span> <span class="dt">Body.Script</span> (<span class="dt">Maybe</span> <span class="dt">Value</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>myBodyScript <span class="ot">=</span> Body.optional <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span></span></code></pre></div></li>
+<li><h3>Headers Script</h3>
+<p>The <code>headersScript</code> field defines the request headers that
+the Endpoint accepts.</p>
+<p>There are two operations for Headers Scripts: <code>param</code> and
+<code>cookie</code>.</p>
+<p>There are two modifiers for Headers Scripts: <code>optional</code>
+and <code>option</code>.</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myHeadersScript ::</span> <span class="dt">Headers.Script</span> _</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>myHeadersScript <span class="ot">=</span> <span class="fu">undefined</span></span></code></pre></div></li>
+<li><h3>Responder Script</h3>
+<p>The <code>responderScript</code> field defines the responses that the
+Endpoint's handler MUST return.</p>
+<p>Responder Scripts have to be more complex than the other Script types
+in order for the Endpoint to have a contract with the handler that the
+handler will respond with the responses defined in the Responder
+Script.</p>
+<p>This is done using a combination of higher order functions, linear
+types, and smart constructors.</p>
+<p>Responder Script operations have to take a <em>Responder Headers</em>
+Script as an argument to define what headers will be attached to the
+Response.</p>
+<p>For now, there is only one operation for Responder Scripts:
+<code>json</code>.</p>
+<p>Responder Header Scripts also only have one operation:
+<code>has</code>.</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeDo #-}</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE RecordWildCards #-}</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE BlockArguments #-}</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">SecretHeaders</span> <span class="ot">=</span> <span class="dt">SecretHeaders</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> firstSecret ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> secondSecret ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">MyResponders</span> <span class="ot">=</span> <span class="dt">MyResponders</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> allGood ::</span> (<span class="dt">SecretHeaders</span> <span class="op">%</span><span class="dv">1</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span>) <span class="ot">-&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> notGood ::</span> (() <span class="op">%</span><span class="dv">1</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span>) <span class="ot">-&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>myResponderScript <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  allGood <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Text</span> status200 <span class="kw">do</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    addSecret <span class="ot">&lt;-</span> ResponderHeaders.has <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;IntSecret&quot;</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    addAnotherSecret <span class="ot">&lt;-</span> ResponderHeaders.has <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-Another-Secret&quot;</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> <span class="dt">SecretHeaders</span> {<span class="op">..</span>}</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  notGood <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Text</span> status501 <span class="op">$</span> <span class="fu">pure</span> ()</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> <span class="dt">MyResponders</span> {<span class="op">..</span>}</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>myHandler someNumber _ _ _ _ (<span class="dt">MyResponders</span> allGood notGood) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">if</span> someNumber <span class="op">&lt;</span> <span class="dv">100</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">then</span> <span class="kw">do</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span> <span class="op">$</span> allGood</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>        (\(<span class="dt">SecretHeaders</span> firstSecret secondSecret) response <span class="ot">-&gt;</span> secondSecret <span class="dv">0</span> <span class="op">$</span> firstSecret <span class="dv">7</span> response)</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;All Good!&quot;</span></span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>    <span class="kw">else</span> <span class="kw">do</span></span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span> <span class="op">$</span> notGood</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>        (\() response <span class="ot">-&gt;</span> response)</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Not Good!&quot;</span></span></code></pre></div>
+<p>More information about <em>Responders</em> and
+<em>ResponderHeaders</em> is available in the Handler section.</p></li>
+</ol>
+<h2>Handler</h2>
+<p>Handlers are simple: they are contextful functions from the arguments
+provided by an Endpoint, to a Response.</p>
+<p>The type synonym <code>Handler</code> represents the type of Handlers
+in Okapi:</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Handler</span> m p q b h r <span class="ot">=</span> p <span class="ot">-&gt;</span> q <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> h <span class="ot">-&gt;</span> r <span class="ot">-&gt;</span> m <span class="dt">Response</span></span></code></pre></div>
+<p>The type parameter <code>m</code> represents the context in which the
+Handler creates the Response.</p>
+<p>The type parameters <code>p</code>, <code>q</code>, <code>b</code>,
+<code>h</code> and <code>r</code> represent the types of the values
+returned by the Endpoint's Path, Query, Body, Headers and Responder
+Scripts respectively.</p>
+<h2>Plan</h2>
+<p>A Plan</p>
+<h2>Server</h2>
+<h3>Lifter</h3>
+<h3>Execution</h3>
+<h2>Matchpoint</h2>
+<h2>TLDR</h2>
+  </div>
+  </body>
+</html>
