@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -185,14 +186,15 @@ data Artifacts = Artifacts
     openAPIPathItem :: (FilePath, OAPI.PathItem)
   }
 
-artifacts ::
+genArtifacts ::
   forall m p q h b r.
   Monad m =>
   Plan m p q h b r ->
   Artifacts
-artifacts plan = Artifacts {..}
+genArtifacts plan = Artifacts {..}
   where
-    compiler = \(method, path, query, body, headers) ->
+    openAPIPathItem = genOAPIPathItem plan.endpoint
+    compiler (method, path, query, body, headers) =
       if method == plan.endpoint.method
         then
           let pathResult = fst $ Path.eval plan.endpoint.pathScript path
@@ -206,7 +208,6 @@ artifacts plan = Artifacts {..}
                   return $ toWaiResponse response
                 _ -> Null
         else Null
-    openAPIPathItem = genOAPIPathItem plan.endpoint
 
 data Info = Info
   { author :: Text.Text,
@@ -215,7 +216,7 @@ data Info = Info
 
 data Server = Server
   { info :: Maybe Info,
-    compilers :: [Compiler],
+    artifacts :: [Artifacts],
     defaultResponse :: WAI.Response
   }
 
@@ -232,7 +233,7 @@ genApplication _ server request respond = do
       headers = WAI.requestHeaders request
   body <- WAI.strictRequestBody request
   let request = (method, path, query, body, headers)
-      executables = map ($ request) $ compilers server
+      executables = map (($ request) . compiler) (artifacts server)
   case loop executables of
     Nothing -> respond server.defaultResponse
     Just action -> action >>= respond
