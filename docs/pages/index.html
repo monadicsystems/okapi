@@ -92,8 +92,8 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a 
 <span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;&quot;</span></span>
 <span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>  _</span>
 <span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Servers are just contextful functions from a Matchpoint to a Response</span></span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Matchpoint</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Servers are just contextful functions from a Request to a Response</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
 <span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a><span class="ot">myServer ::</span> <span class="dt">Server</span> <span class="dt">IO</span></span>
 <span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> \<span class="kw">case</span></span>
