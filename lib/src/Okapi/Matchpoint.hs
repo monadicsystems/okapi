@@ -2,6 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Okapi.Matchpoint where
 
@@ -12,9 +13,15 @@ import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Okapi.Request (Request)
+import Web.HttpApiData qualified as Web
 
 pattern Matchpoint :: HTTP.StdMethod -> [Text.Text] -> HTTP.Query -> LBS.ByteString -> HTTP.RequestHeaders -> Request
 pattern Matchpoint method path query body headers <- (method, path, query, body, headers)
+
+pattern PathParam :: (Web.ToHttpApiData a, Web.FromHttpApiData a) => a -> Text.Text
+pattern PathParam p <- (Web.parseUrlPieceMaybe -> Just p)
+  where
+    PathParam p = Web.toUrlPiece p
 
 type Server m = Monad m => Request -> m Response
 
