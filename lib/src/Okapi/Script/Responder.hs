@@ -19,10 +19,8 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Response
-import Okapi.Response qualified as Response
-import Okapi.Response qualified as ResponseHeaders
 import Okapi.Script
+import Okapi.Script.ResponderHeaders (Response (..))
 import Okapi.Script.ResponderHeaders qualified as ResponderHeaders
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
@@ -44,9 +42,9 @@ data Script a where
     HTTP.Status ->
     ResponderHeaders.Script h ->
     Script
-      ( (h %1 -> (ResponseHeaders.Response -> ResponseHeaders.Response)) ->
+      ( (h %1 -> (Response -> Response)) ->
         a ->
-        ResponseHeaders.Response
+        Response
       )
 
 instance Functor Script where
@@ -74,10 +72,10 @@ eval op state = case op of
   JSON status responderHeaders -> case ResponderHeaders.eval responderHeaders () of
     (Ok h, _) ->
       let f headerApplicator payload =
-            Response.Response
-              { Response.status = status,
-                Response.body = Aeson.encode payload,
-                Response.headers = []
+            Response
+              { status = status,
+                body = Aeson.encode payload,
+                headers = []
               }
        in (Ok f, state)
     (left, _) -> (Fail ResponderHeadersError, state)
@@ -87,8 +85,8 @@ json ::
   HTTP.Status ->
   ResponderHeaders.Script h ->
   Script
-    ( (h %1 -> (ResponseHeaders.Response -> ResponseHeaders.Response)) ->
+    ( (h %1 -> (Response -> Response)) ->
       a ->
-      ResponseHeaders.Response
+      Response
     )
 json = JSON

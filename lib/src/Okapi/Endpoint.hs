@@ -1,12 +1,17 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Okapi.Endpoint where
 
+import Control.Natural (type (~>))
 import Data.Aeson qualified as Aeson
+import Data.ByteString qualified as BS
 import Data.CaseInsensitive qualified as CI
 import Data.OpenApi qualified as OAPI
 import Data.OpenApi.Declare qualified as OAPI
@@ -14,11 +19,15 @@ import Data.Proxy
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Network.HTTP.Types qualified as HTTP
+import Network.Wai qualified as WAI
+import Okapi.Request (Request)
+import Okapi.Script
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers
 import Okapi.Script.Path qualified as Path
 import Okapi.Script.Query qualified as Query
 import Okapi.Script.Responder qualified as Responder
+import Okapi.Script.ResponderHeaders (Response, toWaiResponse)
 
 data Endpoint p q h b r = Endpoint
   { method :: HTTP.StdMethod,
@@ -159,3 +168,78 @@ genOAPIPathItem endpoint = (pathName, pathItem)
       Path.Apply pf px -> renderPath pf <> renderPath px
       Path.Static t -> "/" <> Text.unpack t
       Path.Param @p name -> "/{" <> Text.unpack name <> "}"
+
+data Plan m p q h b r = Plan
+  { transformer :: m ~> IO,
+    endpoint :: Endpoint p q h b r,
+    handler :: Monad m => p -> q -> b -> h -> r -> m Response
+  }
+
+data Executable = Run (IO WAI.Response) | Null
+
+type Compiler = Request -> Executable
+
+executable ::
+  forall m p q h b r.
+  Monad m =>
+  Plan m p q h b r ->
+  Compiler
+executable plan (method, path, query, body, headers) =
+  if method == plan.endpoint.method
+    then
+      let pathResult = fst $ Path.eval plan.endpoint.pathScript path
+          queryResult = fst $ Query.eval plan.endpoint.queryScript query
+          bodyResult = fst $ Body.eval plan.endpoint.bodyScript body
+          headersResult = fst $ Headers.eval plan.endpoint.headersScript headers
+          responderResult = fst $ Responder.eval plan.endpoint.responderScript ()
+       in case (pathResult, queryResult, bodyResult, headersResult, responderResult) of
+            (Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
+              response <- transformer plan $ handler plan p q b h r
+              return $ toWaiResponse response
+            _ -> Null
+    else Null
+
+data Info = Info
+  { author :: Text.Text,
+    name :: Text.Text
+  }
+
+data Server = Server
+  { info :: Maybe Info,
+    compilers :: [Compiler],
+    defaultResponse :: WAI.Response
+  }
+
+data Options = Options
+
+genApplication ::
+  Options ->
+  Server ->
+  WAI.Application
+genApplication _ server request respond = do
+  let Right method = HTTP.parseMethod $ WAI.requestMethod request
+      path = WAI.pathInfo request
+      query = WAI.queryString request
+      headers = WAI.requestHeaders request
+  body <- WAI.strictRequestBody request
+  let request = (method, path, query, body, headers)
+      executables = map ($ request) $ compilers server
+  case loop executables of
+    Nothing -> respond server.defaultResponse
+    Just action -> action >>= respond
+  where
+    loop :: [Executable] -> Maybe (IO WAI.Response)
+    loop [] = Nothing
+    loop (h : t) = case h of
+      Run action -> Just action
+      Null -> loop t
+
+genOpenAPISpec ::
+  Server ->
+  BS.ByteString
+genOpenAPISpec = undefined
+
+genJSClient ::
+  Server ->
+  BS.ByteString
+genJSClient = undefined

@@ -29,11 +29,9 @@ library
   exposed-modules:
       Okapi
       Okapi.Endpoint
-      Okapi.Executable
       Okapi.Matchpoint
-      Okapi.Response
+      Okapi.Request
       Okapi.Script
-      Okapi.Server
       Okapi.Script.Path
       Okapi.Script.Query
       Okapi.Script.Headers

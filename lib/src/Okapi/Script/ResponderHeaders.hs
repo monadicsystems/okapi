@@ -19,7 +19,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Response
+import Network.Wai qualified as WAI
 import Okapi.Script
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
@@ -44,6 +44,17 @@ instance Functor Script where
 instance Applicative Script where
   pure = Pure
   (<*>) = Apply
+
+data Response = Response
+  { status :: HTTP.Status,
+    headers :: [ResponseHeader],
+    body :: LBS.ByteString
+  }
+
+data ResponseHeader = ResponseHeader HTTP.HeaderName BS.ByteString
+
+toWaiResponse :: Response -> WAI.Response
+toWaiResponse = undefined
 
 eval ::
   Script a ->
