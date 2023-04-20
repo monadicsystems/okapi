@@ -1,7 +1,5 @@
 # 🦓🦒Okapi
 
-## Introduction
-
 Okapi is a micro framework for implementing HTTP servers.
 
 - Ergonomic DSL for routing and parsing requests
