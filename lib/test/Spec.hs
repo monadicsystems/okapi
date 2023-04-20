@@ -18,14 +18,13 @@ import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Endpoint
-import Okapi.Executable
-import Okapi.Response
 import Okapi.Script
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers
 import Okapi.Script.Path qualified as Path
 import Okapi.Script.Query qualified as Query
 import Okapi.Script.Responder qualified as Responder
+import Okapi.Script.ResponderHeaders (Response)
 import Okapi.Script.ResponderHeaders qualified as ResponderHeaders
 import Prelude.Linear qualified as L
 import Test.Hspec
