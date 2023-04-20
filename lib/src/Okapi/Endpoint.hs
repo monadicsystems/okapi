@@ -3,6 +3,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
@@ -179,25 +180,33 @@ data Executable = Run (IO WAI.Response) | Null
 
 type Compiler = Request -> Executable
 
+data Artifacts = Artifacts
+  { compiler :: Compiler,
+    openAPIPathItem :: OAPI.PathItem
+  }
+
 artifacts ::
   forall m p q h b r.
   Monad m =>
   Plan m p q h b r ->
-  Compiler
-artifacts plan (method, path, query, body, headers) =
-  if method == plan.endpoint.method
-    then
-      let pathResult = fst $ Path.eval plan.endpoint.pathScript path
-          queryResult = fst $ Query.eval plan.endpoint.queryScript query
-          bodyResult = fst $ Body.eval plan.endpoint.bodyScript body
-          headersResult = fst $ Headers.eval plan.endpoint.headersScript headers
-          responderResult = fst $ Responder.eval plan.endpoint.responderScript ()
-       in case (pathResult, queryResult, bodyResult, headersResult, responderResult) of
-            (Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
-              response <- transformer plan $ handler plan p q b h r
-              return $ toWaiResponse response
-            _ -> Null
-    else Null
+  Artifacts
+artifacts plan = Artifacts {..}
+  where
+    compiler = \(method, path, query, body, headers) ->
+      if method == plan.endpoint.method
+        then
+          let pathResult = fst $ Path.eval plan.endpoint.pathScript path
+              queryResult = fst $ Query.eval plan.endpoint.queryScript query
+              bodyResult = fst $ Body.eval plan.endpoint.bodyScript body
+              headersResult = fst $ Headers.eval plan.endpoint.headersScript headers
+              responderResult = fst $ Responder.eval plan.endpoint.responderScript ()
+           in case (pathResult, queryResult, bodyResult, headersResult, responderResult) of
+                (Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
+                  response <- transformer plan $ handler plan p q b h r
+                  return $ toWaiResponse response
+                _ -> Null
+        else Null
+    openAPIPathItem = mempty
 
 data Info = Info
   { author :: Text.Text,
