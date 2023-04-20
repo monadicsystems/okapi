@@ -225,28 +225,30 @@ data Options = Options
 genApplication ::
   Options ->
   Server ->
-  WAI.Application
-genApplication _ server request respond = do
-  let Right method = HTTP.parseMethod $ WAI.requestMethod request
-      path = WAI.pathInfo request
-      query = WAI.queryString request
-      headers = WAI.requestHeaders request
-  body <- WAI.strictRequestBody request
-  let request = (method, path, query, body, headers)
-      executables = map (($ request) . compiler) (artifacts server)
-  case loop executables of
-    Nothing -> respond server.defaultResponse
-    Just action -> action >>= respond
+  (WAI.Application, OAPI.OpenApi)
+genApplication _ server = (app, spec)
   where
-    loop :: [Executable] -> Maybe (IO WAI.Response)
-    loop [] = Nothing
-    loop (h : t) = case h of
-      Run action -> Just action
-      Null -> loop t
+    spec = genOpenAPISpec server.artifacts
+    app waiRequest respond = do
+      body <- WAI.strictRequestBody waiRequest
+      let Right method = HTTP.parseMethod $ WAI.requestMethod waiRequest
+          path = WAI.pathInfo waiRequest
+          query = WAI.queryString waiRequest
+          headers = WAI.requestHeaders waiRequest
+          request = (method, path, query, body, headers)
+          executables = map (($ request) . compiler) (artifacts server)
+          loop :: [Executable] -> Executable
+          loop [] = Null
+          loop (h : t) = case h of
+            Null -> loop t
+            runnable -> runnable
+      case loop executables of
+        Null -> respond server.defaultResponse
+        Run action -> action >>= respond
 
 genOpenAPISpec ::
-  Server ->
-  BS.ByteString
+  [Artifacts] ->
+  OAPI.OpenApi
 genOpenAPISpec = undefined
 
 genJSClient ::
