@@ -230,8 +230,10 @@ genApplication _ server = (app, spec)
   where
     spec = genOpenAPISpec server.artifacts
     app waiRequest respond = do
+      -- This is where routing happens. May be ineffecient
       body <- WAI.strictRequestBody waiRequest
       let Right method = HTTP.parseMethod $ WAI.requestMethod waiRequest
+          -- \^ TODO: Fix above. Not complete
           path = WAI.pathInfo waiRequest
           query = WAI.queryString waiRequest
           headers = WAI.requestHeaders waiRequest

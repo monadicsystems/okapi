@@ -271,14 +271,12 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a
 <span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>myHandler someNumber _ _ _ _ (<span class="dt">MyResponders</span> allGood notGood) <span class="ot">=</span> <span class="kw">do</span></span>
 <span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">if</span> someNumber <span class="op">&lt;</span> <span class="dv">100</span></span>
-<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">then</span> <span class="kw">do</span></span>
-<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span> <span class="op">$</span> allGood</span>
-<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>        (\(<span class="dt">SecretHeaders</span> firstSecret secondSecret) response <span class="ot">-&gt;</span> secondSecret <span class="dv">0</span> <span class="op">$</span> firstSecret <span class="dv">7</span> response)</span>
-<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;All Good!&quot;</span></span>
-<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>    <span class="kw">else</span> <span class="kw">do</span></span>
-<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>      <span class="fu">return</span> <span class="op">$</span> notGood</span>
-<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>        (\() response <span class="ot">-&gt;</span> response)</span>
-<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Not Good!&quot;</span></span></code></pre></div>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">then</span> <span class="fu">return</span> <span class="op">$</span> allGood</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>      (\(<span class="dt">SecretHeaders</span> firstSecret secondSecret) response <span class="ot">-&gt;</span> secondSecret <span class="dv">0</span> <span class="op">$</span> firstSecret <span class="dv">7</span> response)</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;All Good!&quot;</span></span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>    <span class="kw">else</span> <span class="fu">return</span> <span class="op">$</span> notGood</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>      (\() response <span class="ot">-&gt;</span> response)</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Not Good!&quot;</span></span></code></pre></div>
 <p>More information about <em>Responders</em> and
 <em>ResponderHeaders</em> is available in the Handler section.</p></li>
 </ol>

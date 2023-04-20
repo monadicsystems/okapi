@@ -278,14 +278,12 @@ request. These are defined in more detail below.
 
    myHandler someNumber _ _ _ _ (MyResponders allGood notGood) = do
      if someNumber < 100
-       then do
-         return $ allGood
-           (\(SecretHeaders firstSecret secondSecret) response -> secondSecret 0 $ firstSecret 7 response)
-           "All Good!"
-       else do
-         return $ notGood
-           (\() response -> response)
-           "Not Good!"
+       then return $ allGood
+         (\(SecretHeaders firstSecret secondSecret) response -> secondSecret 0 $ firstSecret 7 response)
+         "All Good!"
+       else return $ notGood
+         (\() response -> response)
+         "Not Good!"
    ```
 
    More information about *Responders* and *ResponderHeaders* is available in the Handler section.

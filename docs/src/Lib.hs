@@ -57,5 +57,3 @@ someFunc = do
   md <- Text.readFile "index.md"
   html <- mdToHTML md
   Text.writeFile "pages/index.html" (top <> html <> bot)
-  ast <- pureAST md
-  Pretty.pPrint ast
