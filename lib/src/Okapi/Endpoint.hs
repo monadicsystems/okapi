@@ -179,12 +179,12 @@ data Executable = Run (IO WAI.Response) | Null
 
 type Compiler = Request -> Executable
 
-executable ::
+artifacts ::
   forall m p q h b r.
   Monad m =>
   Plan m p q h b r ->
   Compiler
-executable plan (method, path, query, body, headers) =
+artifacts plan (method, path, query, body, headers) =
   if method == plan.endpoint.method
     then
       let pathResult = fst $ Path.eval plan.endpoint.pathScript path
