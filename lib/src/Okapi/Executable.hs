@@ -12,10 +12,7 @@
 
 module Okapi.Executable where
 
-import Control.Monad.Par qualified as Par
--- import Control.Natural ((~>))
-
-import Control.Natural
+import Control.Natural (type (~>))
 import Data.ByteString.Lazy qualified as LBS
 import Data.Text qualified as Text
 import GHC.Generics qualified as Generics
