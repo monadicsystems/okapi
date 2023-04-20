@@ -182,7 +182,7 @@ type Compiler = Request -> Executable
 
 data Artifacts = Artifacts
   { compiler :: Compiler,
-    openAPIPathItem :: OAPI.PathItem
+    openAPIPathItem :: (FilePath, OAPI.PathItem)
   }
 
 artifacts ::
@@ -206,7 +206,7 @@ artifacts plan = Artifacts {..}
                   return $ toWaiResponse response
                 _ -> Null
         else Null
-    openAPIPathItem = mempty
+    openAPIPathItem = genOAPIPathItem plan.endpoint
 
 data Info = Info
   { author :: Text.Text,
