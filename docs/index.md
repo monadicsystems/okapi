@@ -83,8 +83,8 @@ pattern GetUsersByID userID <- Matchpoint
   ""
   _
 
--- | Servers are just contextful functions from a Matchpoint to a Response
-type Server m = Matchpoint -> m Response
+-- | Servers are just contextful functions from a Request to a Response
+type Server m = Request -> m Response
 
 myServer :: Server IO
 myServer = \case
