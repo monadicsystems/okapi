@@ -1,3 +1,4 @@
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeOperators #-}
@@ -5,17 +6,18 @@
 module Okapi.Matchpoint where
 
 import Control.Natural (type (~>))
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text as Text
-import qualified Network.HTTP.Types as HTTP
-import qualified Network.Wai as WAI
+import Data.ByteString.Lazy qualified as LBS
+import Data.Text qualified as Text
+import Network.HTTP.Types qualified as HTTP
+import Network.Wai qualified as WAI
 import Okapi.Request (Request)
 import Okapi.Response (Response)
+import Okapi.Response qualified as Response
 
 pattern Matchpoint :: HTTP.StdMethod -> [Text.Text] -> HTTP.Query -> LBS.ByteString -> HTTP.RequestHeaders -> Request
 pattern Matchpoint method path query body headers <- (method, path, query, body, headers)
 
-type Server m = forall m. Monad m => Request -> m Response
+type Server m = Monad m => Request -> m Response
 
 instantiate :: Monad m => (m ~> IO) -> Server m -> WAI.Application
 instantiate transformer server waiRequest respond = do
@@ -25,4 +27,5 @@ instantiate transformer server waiRequest respond = do
       headers = WAI.requestHeaders waiRequest
   body <- WAI.strictRequestBody waiRequest
   let request = (method, path, query, body, headers)
-  transformer $ server request
+  response <- transformer $ server request
+  respond $ Response.toWaiResponse response

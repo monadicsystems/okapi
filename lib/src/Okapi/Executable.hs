@@ -22,6 +22,7 @@ import Okapi.Endpoint (Endpoint)
 import Okapi.Endpoint qualified as Endpoint
 import Okapi.Request
 import Okapi.Response (Response)
+import Okapi.Response qualified as Response
 import Okapi.Script
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers
@@ -56,9 +57,6 @@ executable plan (method, path, query, body, headers) =
        in case (pathResult, queryResult, bodyResult, headersResult, responderResult) of
             (Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
               response <- transformer plan $ handler plan p q b h r
-              return $ toWAIResponse response
+              return $ Response.toWaiResponse response
             _ -> Null
     else Null
-
-toWAIResponse :: Response -> WAI.Response
-toWAIResponse = undefined
