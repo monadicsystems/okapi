@@ -18,8 +18,6 @@ data Info = Info
     name :: Text.Text
   }
 
-type Compiler = Request -> Executable
-
 data Server = Server
   { info :: Maybe Info,
     compilers :: [Compiler],

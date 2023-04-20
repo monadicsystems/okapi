@@ -23,6 +23,7 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Okapi.Endpoint (Endpoint)
 import Okapi.Endpoint qualified as Endpoint
+import Okapi.Request
 import Okapi.Response (Response)
 import Okapi.Script
 import Okapi.Script.Body qualified as Body
@@ -40,14 +41,13 @@ data Plan m p q h b r = Plan
 
 data Executable = Run (IO WAI.Response) | Null
 
-type Request = (HTTP.StdMethod, [Text.Text], HTTP.Query, LBS.ByteString, HTTP.RequestHeaders)
+type Compiler = Request -> Executable
 
 executable ::
   forall m p q h b r.
   Monad m =>
   Plan m p q h b r ->
-  Request ->
-  Executable
+  Compiler
 executable plan (method, path, query, body, headers) =
   if method == plan.endpoint.method
     then

@@ -30,6 +30,7 @@ library
       Okapi
       Okapi.Endpoint
       Okapi.Executable
+      Okapi.Matchpoint
       Okapi.Response
       Okapi.Script
       Okapi.Server
