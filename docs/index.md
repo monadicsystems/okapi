@@ -7,6 +7,8 @@ Okapi is a micro framework for implementing HTTP servers.
 - Automagically generate OpenAPI specifications (clients coming soon)
 - Lightweight, minimal abstraction built on top of WAI
 
+Okapi is NOT recommended for production use at this time.
+
 ## Getting Started
 
 1. Use the command `stack new <project-name>` to create a new Haskell project
