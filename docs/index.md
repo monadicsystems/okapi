@@ -297,7 +297,7 @@ data Plan m p q h b r = Plan
   }
 ```
 
-The `transformer` field represents a *natural transformation* from your Handler's Monad `m`, to `IO`. This is where you decide how you're custom effects are interpreted in an `IO` context.
+The `transformer` field represents a *natural transformation* from your Handler's Monad `m`, to `IO`. This is where you decide how you custom effects are interpreted in an `IO` context.
 
 The `endpoint` field represents your Endpoint.
 
