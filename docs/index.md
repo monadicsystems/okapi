@@ -403,6 +403,40 @@ apiSpec = genOpenAPISpec myServer
 
 In the future, you should be able to automatically generate API clients as well.
 
+### Not Using A Plan
+
+You can also create Servers with out first creating Plans. If you want to do this, you can just use the `buildWith` function directly.
+
+```haskell
+buildWith ::
+  forall m p q h b r.
+  Monad m =>
+  (m ~> IO) ->
+  Endpoint p q h b r ->
+  Handler m p q h b r
+  Artifact
+buildWith transformer endpoint handler = ...
+```
+
+Assuming all of your handlers for the Server will run in the same context,
+you can just partially apply `buildWith` to a transformation function and use the
+partially applied function on your Endpoints and Handlers to produce Artifacts.
+
+```haskell
+buildWithIO = buildWith id
+
+myServer = Server
+  Nothing
+  default404
+  [ buildWithIO endpoint1 handler1
+  , buildWithIO endpoint2 handler2
+  , buildWithIO endpoint3 \x y z a b -> do
+      doSomethingWith x
+      log a y b
+      ...
+  ]
+```
+
 ## Matchpoint
 
 ## Servant <> Okapi

@@ -401,6 +401,36 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a
 <span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>apiSpec <span class="ot">=</span> genOpenAPISpec myServer</span></code></pre></div>
 <p>In the future, you should be able to automatically generate API
 clients as well.</p>
+<h3>Not Using A Plan</h3>
+<p>You can also create Servers with out first creating Plans. If you
+want to do this, you can just use the <code>buildWith</code> function
+directly.</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ot">buildWith ::</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">forall</span> m p q h b r<span class="op">.</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Monad</span> m <span class="ot">=&gt;</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  (m <span class="op">~&gt;</span> <span class="dt">IO</span>) <span class="ot">-&gt;</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Endpoint</span> p q h b r <span class="ot">-&gt;</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Handler</span> m p q h b r</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Artifact</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>buildWith transformer endpoint handler <span class="ot">=</span> <span class="op">...</span></span></code></pre></div>
+<p>Assuming all of your handlers for the Server will run in the same
+context, you can just partially apply <code>buildWith</code> to a
+transformation function and use the partially applied function on your
+Endpoints and Handlers to produce Artifacts.</p>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>buildWithIO <span class="ot">=</span> buildWith <span class="fu">id</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> <span class="dt">Server</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Nothing</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  default404</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  [ buildWithIO endpoint1 handler1</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  , buildWithIO endpoint2 handler2</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  , buildWithIO endpoint3 \x y z a b <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>      doSomethingWith x</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">log</span> a y b</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>      <span class="op">...</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
 <h2 id="matchpoint">Matchpoint</h2>
 <h2 id="servant&lt;&gt;okapi">Servant &lt;&gt; Okapi</h2>
 <!-- ## TLDR
