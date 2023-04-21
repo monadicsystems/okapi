@@ -472,7 +472,7 @@ This way, we can define the `putUser` Endpoint by simply modifying `getUser` and
 
 #### Applicative Comprehensions?
 
-Since Okapi's Script DSL is an Applicative, it would be possible to use Applicative Comprehensions when defining a Script. The Endpoint definition at the top of this page looks like this when using Applicative Comprehensions.
+Since Okapi's Script DSL is an Applicative, it would be possible to use Applicative Comprehensions when defining a Script. The Endpoint definition at the top of this page would look like this when using Applicative Comprehensions.
 
 ```haskell
 {-# LANGUAGE ApplicativeComprehensions #-}
