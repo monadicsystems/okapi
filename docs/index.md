@@ -9,6 +9,8 @@ Okapi is a micro framework for implementing HTTP servers.
 
 Okapi is NOT recommended for production use at this time.
 
+Please feel free to reach out to me on [GitHub](https://github.com/monadicsystems/okapi) if you have any questions/criticisms/ideas.
+
 ## Getting Started
 
 1. Use the command `stack new <project-name>` to create a new Haskell project
