@@ -387,7 +387,7 @@ myServer = Server
   ]
 ```
 
-Notice, the types of the Plans used to build your Server don't have to be the same. The `build` function erases the types and gives us the end products we need. This allows us to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two Handlers that operate in two different Monads in the same Server.
+The types of the Plans used to build your Server don't have to be the same. The `build` function erases the types and gives us the end products we need. This allows us to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two Handlers that operate in two different Monads in the same Server.
 
 Now that you have you your Server, you can use it to:
 
@@ -609,7 +609,7 @@ api :: Application
 api = instantiate id myServer
 ```
 
-Notice, the Server type for Matchpoints is much simpler than the Server type for Endpoints.
+The Server type for Matchpoints is much simpler than the Server type for Endpoints.
 
 ### Matchpoints vs. Endpoints
 

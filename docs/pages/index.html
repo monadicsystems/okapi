@@ -386,12 +386,12 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a
 <span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>  , build plan3</span>
 <span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>  , <span class="op">...</span></span>
 <span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
-<p>Notice, the types of the Plans used to build your Server don't have
-to be the same. The <code>build</code> function erases the types and
-gives us the end products we need. This allows us to mix and match
-various combinations of Endpoints, Handlers, and Monad transformations
-in the same Server definition. For example, you can have two Handlers
-that operate in two different Monads in the same Server.</p>
+<p>The types of the Plans used to build your Server don't have to be the
+same. The <code>build</code> function erases the types and gives us the
+end products we need. This allows us to mix and match various
+combinations of Endpoints, Handlers, and Monad transformations in the
+same Server definition. For example, you can have two Handlers that
+operate in two different Monads in the same Server.</p>
 <p>Now that you have you your Server, you can use it to:</p>
 <ol type="1">
 <li>Generate a WAI Application</li>
@@ -606,8 +606,8 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a
 <span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a><span class="ot">api ::</span> <span class="dt">Application</span></span>
 <span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>api <span class="ot">=</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
-<p>Notice, the Server type for Matchpoints is much simpler than the
-Server type for Endpoints.</p>
+<p>The Server type for Matchpoints is much simpler than the Server type
+for Endpoints.</p>
 <h3>Matchpoints vs. Endpoints</h3>
 <p>We recommend using Endpoints. Matchpoints are great if you're not
 worried about safety and just want to get something up and running
