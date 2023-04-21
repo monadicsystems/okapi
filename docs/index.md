@@ -446,7 +446,7 @@ myServer = Server
 
 #### DRY Endpoints
 
-When implementing an API you will usually need the same path to have multiple methods, each with different parameters in the query, body and headers. Since Endpoints are records this is easy to deal with. Let's say we have a typical `/users/{userID : UserID}` route that accepts GET and PUT requests for fetching and updating a specific user respectively. The GET variant doesn't need a Body, but the PUT variant will.
+When implementing an API you will usually need the same path to have multiple methods, each with different parameters in the query, body and headers. Since Endpoints are records, this is easy to deal with. Let's say we have a typical `/users/{userID : UserID}` route that accepts GET and PUT requests for fetching and updating a specific user respectively. The GET variant doesn't need a Body, but the PUT variant will.
 
 ```haskell
 getUser = Endpoint

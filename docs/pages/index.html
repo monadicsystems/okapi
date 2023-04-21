@@ -443,7 +443,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a
 <h4>DRY Endpoints</h4>
 <p>When implementing an API you will usually need the same path to have
 multiple methods, each with different parameters in the query, body and
-headers. Since Endpoints are records this is easy to deal with. Let's
+headers. Since Endpoints are records, this is easy to deal with. Let's
 say we have a typical <code>/users/{userID : UserID}</code> route that
 accepts GET and PUT requests for fetching and updating a specific user
 respectively. The GET variant doesn't need a Body, but the PUT variant
