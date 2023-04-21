@@ -26,7 +26,7 @@ myEndpoint = Endpoint
   do pure ()
   do
     itsOk <- Responder.json @Int HTTP.status200 do
-      addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+      addSecretNumber <- AddHeader.using @Int "X-SECRET"
       pure addSecretNumber
     pure itsOk
 

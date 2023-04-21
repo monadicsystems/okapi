@@ -484,7 +484,7 @@ Plan.Plan
               @Int
               HTTP.status200
               do
-                addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+                addSecretNumber <- AddHeader.using @Int "X-SECRET"
                 pure addSecretNumber
             pure itsOk
         },
@@ -536,7 +536,7 @@ Plan.Plan
             itsOk <- Responder.json @Int HTTP.status200
               do
                 -- Check for the presence of an "X-SECRET" header with an integer value.
-                addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+                addSecretNumber <- AddHeader.using @Int "X-SECRET"
                 pure addSecretNumber
 
             -- Return the configured responder.
@@ -576,7 +576,7 @@ Plan.Plan
       do
         itsOk <- Responder.json @Int HTTP.status200
           do
-            addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+            addSecretNumber <- AddHeader.using @Int "X-SECRET"
             pure addSecretNumber
         pure itsOk
     handler = \(Params.Params magicNumber (x, y) () () responder) -> do
@@ -602,9 +602,9 @@ Plan
     Body.pure ()
     Responder.do
       itsOk <- Responder.json @Int HTTP.status200
-        ResponderHeaders.do
-          addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
-          ResponderHeaders.pure addSecretNumber
+        AddHeader.do
+          addSecretNumber <- AddHeader.using @Int "X-SECRET"
+          AddHeader.pure addSecretNumber
       Responder.pure itsOk
   \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y
@@ -629,9 +629,9 @@ Plan $$
     Body.pure ()
     Responder.do
       itsOk <- Responder.json @Int HTTP.status200
-        ResponderHeaders.do
-          addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
-          ResponderHeaders.pure addSecretNumber
+        AddHeader.do
+          addSecretNumber <- AddHeader.using @Int "X-SECRET"
+          AddHeader.pure addSecretNumber
       Responder.pure itsOk
   \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y
@@ -656,8 +656,8 @@ Plan $$
     do pure ()
     do
       itsOk <- Responder.json @Int HTTP.status200 do
-        addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
-        ResponderHeaders.pure addSecretNumber
+        addSecretNumber <- AddHeader.using @Int "X-SECRET"
+        AddHeader.pure addSecretNumber
       pure itsOk
   \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y

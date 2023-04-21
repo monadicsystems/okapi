@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Script.ResponderHeaders where
+module Okapi.Script.AddHeader where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -36,7 +36,7 @@ data Script a where
   FMap :: (a -> b) -> Script a -> Script b
   Pure :: a -> Script a
   Apply :: Script (a -> b) -> Script a -> Script b
-  Has :: Web.ToHttpApiData a => HTTP.HeaderName -> Script (a -> (Response -> Response))
+  Using :: Web.ToHttpApiData a => HTTP.HeaderName -> Script (a -> (Response -> Response))
 
 instance Functor Script where
   fmap = FMap
@@ -71,13 +71,13 @@ eval op state = case op of
       (Ok x, state'') -> (Ok $ f x, state'')
       (Fail e, state'') -> (Fail e, state'')
     (Fail e, state') -> (Fail e, state')
-  Has headerName ->
+  Using headerName ->
     let f value response = response {headers = headers response <> [ResponseHeader headerName $ Web.toHeader value]}
      in (Ok f, state)
 
-has ::
+using ::
   Web.ToHttpApiData a =>
   HTTP.HeaderName ->
   Script
     (a -> Response -> Response)
-has = Has
+using = Using

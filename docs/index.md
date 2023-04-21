@@ -2,9 +2,9 @@
 
 Okapi is a micro framework for implementing HTTP servers.
 
-- Ergonomic DSL for routing and parsing requests
-- Integrate Okapi with ANY monad stack or effect system
-- Automatically generate clients and OpenAPI specifications
+- Ergonomic DSL for parsing requests
+- Integrates with ANY monad stack or effect system
+- Automagically generate OpenAPI specifications (clients coming soon)
 
 ## Getting Started
 
@@ -35,7 +35,7 @@ myEndpoint = Endpoint
   do pure ()
   do
     itsOk <- Responder.json @Int status200 do
-      addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+      addSecretNumber <- AddHeader.using @Int "X-SECRET"
       pure addSecretNumber
     pure itsOk
 ```
@@ -89,7 +89,7 @@ automatically generate specifications and clients for a server implemented
 with Endpoints, but not a server implemented with Matchpoints.
 
 On the flip side, a server implemented with Matchpoints will be more
-concise than a server implemented with Endpoints.
+concise than the same server implemented with Endpoints.
 
 ## Endpoint
 
@@ -248,8 +248,8 @@ request. These are defined in more detail below.
 
    myResponderScript = do
      allGood <- Responder.json @Text status200 do
-       addSecret <- ResponderHeaders.has @Int "IntSecret"
-       addAnotherSecret <- ResponderHeaders.has @Int "X-Another-Secret"
+       addSecret <- AddHeader.using @Int "IntSecret"
+       addAnotherSecret <- AddHeader.using @Int "X-Another-Secret"
        pure SecretHeaders {..}
      notGood <- Responder.json @Text status501 $ pure ()
      pure MyResponders {..}
@@ -264,7 +264,7 @@ request. These are defined in more detail below.
          "Not Good!"
    ```
 
-   More information about *Responders* and *ResponderHeaders* is available in the Handler section.
+   More information about *Responders* and *AddHeader* is available in the Handler section.
 
 ### Handler
 
@@ -322,7 +322,7 @@ myEndpoint = Endpoint
   do pure ()
   do
     itsOk <- Responder.json @Int HTTP.status200 do
-      addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+      addSecretNumber <- AddHeader.using @Int "X-SECRET"
       pure addSecretNumber
     pure itsOk
 
@@ -401,9 +401,13 @@ apiSpec :: OpenApi
 apiSpec = genOpenAPISpec myServer
 ```
 
+In the future, you should be able to automatically generate API clients as well.
+
 ## Matchpoint
 
-## TLDR
+## Servant <> Okapi
+
+<!-- ## TLDR
 
 or even
 
@@ -420,8 +424,8 @@ myEndpoint' = Endpoint
     itsOk <- Responder.json
       @Int
       status200
-      [ addSecretNumber | addSecretNumber <- ResponderHeaders.has @Int "X-SECRET" ]
+      [ addSecretNumber | addSecretNumber <- AddHeader.using @Int "X-SECRET" ]
   ]
 ```
 
-this works when `-XApplicativeComprehensions` is turned on.
+this works when `-XApplicativeComprehensions` is turned on. -->

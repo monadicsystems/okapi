@@ -20,8 +20,8 @@ import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Script
-import Okapi.Script.ResponderHeaders (Response (..))
-import Okapi.Script.ResponderHeaders qualified as ResponderHeaders
+import Okapi.Script.AddHeader (Response (..))
+import Okapi.Script.AddHeader qualified as AddHeader
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -30,7 +30,7 @@ data Error
   | ParamNotFound
   | CookieHeaderNotFound
   | CookieNotFound
-  | ResponderHeadersError -- TODO: ResponderHeaders shouldn't be able to fail...
+  | ResponderHeadersError -- TODO: AddHeader shouldn't be able to fail...
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
 data Script a where
@@ -40,7 +40,7 @@ data Script a where
   JSON ::
     Aeson.ToJSON a =>
     HTTP.Status ->
-    ResponderHeaders.Script h ->
+    AddHeader.Script h ->
     Script
       ( (h %1 -> (Response -> Response)) ->
         a ->
@@ -69,7 +69,7 @@ eval op state = case op of
       (Ok x, state'') -> (Ok $ f x, state'')
       (Fail e, state'') -> (Fail e, state'')
     (Fail e, state') -> (Fail e, state')
-  JSON status responderHeaders -> case ResponderHeaders.eval responderHeaders () of
+  JSON status responderHeaders -> case AddHeader.eval responderHeaders () of
     (Ok h, _) ->
       let f headerApplicator payload =
             Response
@@ -83,7 +83,7 @@ eval op state = case op of
 json ::
   Aeson.ToJSON a =>
   HTTP.Status ->
-  ResponderHeaders.Script h ->
+  AddHeader.Script h ->
   Script
     ( (h %1 -> (Response -> Response)) ->
       a ->

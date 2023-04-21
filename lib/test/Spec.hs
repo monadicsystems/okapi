@@ -19,13 +19,13 @@ import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Endpoint
 import Okapi.Script
+import Okapi.Script.AddHeader (Response)
+import Okapi.Script.AddHeader qualified as AddHeader
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers
 import Okapi.Script.Path qualified as Path
 import Okapi.Script.Query qualified as Query
 import Okapi.Script.Responder qualified as Responder
-import Okapi.Script.ResponderHeaders (Response)
-import Okapi.Script.ResponderHeaders qualified as ResponderHeaders
 import Prelude.Linear qualified as L
 import Test.Hspec
 import Web.HttpApiData qualified as Web
@@ -64,7 +64,7 @@ main = hspec $ do
   it "returns the first element of a list" $ do
     Query.eval query3 [("username", Just "Bob")] `shouldBe` (Ok (Username "Anon", Nothing), [("username", Just "Bob")])
 
-data AddHeaders = AddHeaders
+data AddHeader = AddHeader
   { addCookie :: Username -> Response -> Response,
     addAnotherHeader :: Username -> Response -> Response,
     cacheHeader :: Int -> Response -> Response
@@ -75,16 +75,16 @@ responder1 = do
     @Aeson.Value
     HTTP.status200
     do
-      addCookie <- ResponderHeaders.has @Username "Cookie"
+      addCookie <- AddHeader.using @Username "Cookie"
       pure addCookie
   itsNotFound <- Responder.json
     @Aeson.Value
     HTTP.status404
     do
-      addCookie <- ResponderHeaders.has @Username "Blob"
-      addAnotherHeader <- ResponderHeaders.has @Username "X-Some-Header"
-      cacheHeader <- ResponderHeaders.has @Int "X-Cache-Time"
-      pure $ AddHeaders {..}
+      addCookie <- AddHeader.using @Username "Blob"
+      addAnotherHeader <- AddHeader.using @Username "X-Some-Header"
+      cacheHeader <- AddHeader.using @Int "X-Cache-Time"
+      pure $ AddHeader {..}
   pure (itsOk, itsNotFound)
 
 responder2 = undefined
@@ -155,7 +155,7 @@ testPlan =
         do pure ()
         do
           itsOk <- Responder.json @Int HTTP.status200 do
-            addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+            addSecretNumber <- AddHeader.using @Int "X-SECRET"
             pure addSecretNumber
           pure itsOk
     )

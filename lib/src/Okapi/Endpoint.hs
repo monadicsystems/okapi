@@ -24,12 +24,12 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Okapi.Request (Request)
 import Okapi.Script
+import Okapi.Script.AddHeader (Response, toWaiResponse)
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers
 import Okapi.Script.Path qualified as Path
 import Okapi.Script.Query qualified as Query
 import Okapi.Script.Responder qualified as Responder
-import Okapi.Script.ResponderHeaders (Response, toWaiResponse)
 
 data Endpoint p q h b r = Endpoint
   { method :: HTTP.StdMethod,
@@ -186,12 +186,12 @@ data Artifacts = Artifacts
     openAPIPathItem :: (FilePath, OAPI.PathItem)
   }
 
-genArtifacts ::
+build ::
   forall m p q h b r.
   Monad m =>
   Plan m p q h b r ->
   Artifacts
-genArtifacts plan = Artifacts {..}
+build plan = Artifacts {..}
   where
     openAPIPathItem = genOAPIPathItem plan.endpoint
     compiler (method, path, query, body, headers) =
