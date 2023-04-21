@@ -5,6 +5,7 @@ Okapi is a micro framework for implementing HTTP servers.
 - Ergonomic DSL for parsing requests
 - Integrates with ANY monad stack or effect system
 - Automagically generate OpenAPI specifications (clients coming soon)
+- Lightweight, minimal abstraction built on top of WAI
 
 ## Getting Started
 
