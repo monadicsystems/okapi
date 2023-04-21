@@ -20,7 +20,7 @@ import Network.HTTP.Types qualified as HTTP
 import Okapi.Endpoint
 import Okapi.Script
 import Okapi.Script.AddHeader (Response)
-import Okapi.Script.AddHeader qualified as AddHeader
+import Okapi.Script.AddHeader qualified as AddHeaders
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers
 import Okapi.Script.Path qualified as Path
@@ -64,7 +64,7 @@ main = hspec $ do
   it "returns the first element of a list" $ do
     Query.eval query3 [("username", Just "Bob")] `shouldBe` (Ok (Username "Anon", Nothing), [("username", Just "Bob")])
 
-data AddHeader = AddHeader
+data AddHeaders = AddHeaders
   { addCookie :: Username -> Response -> Response,
     addAnotherHeader :: Username -> Response -> Response,
     cacheHeader :: Int -> Response -> Response
@@ -75,16 +75,16 @@ responder1 = do
     @Aeson.Value
     HTTP.status200
     do
-      addCookie <- AddHeader.using @Username "Cookie"
+      addCookie <- AddHeaders.using @Username "Cookie"
       pure addCookie
   itsNotFound <- Responder.json
     @Aeson.Value
     HTTP.status404
     do
-      addCookie <- AddHeader.using @Username "Blob"
-      addAnotherHeader <- AddHeader.using @Username "X-Some-Header"
-      cacheHeader <- AddHeader.using @Int "X-Cache-Time"
-      pure $ AddHeader {..}
+      addCookie <- AddHeaders.using @Username "Blob"
+      addAnotherHeader <- AddHeaders.using @Username "X-Some-Header"
+      cacheHeader <- AddHeaders.using @Int "X-Cache-Time"
+      pure $ AddHeaders {..}
   pure (itsOk, itsNotFound)
 
 responder2 = undefined
@@ -155,7 +155,7 @@ testPlan =
         do pure ()
         do
           itsOk <- Responder.json @Int HTTP.status200 do
-            addSecretNumber <- AddHeader.using @Int "X-SECRET"
+            addSecretNumber <- AddHeaders.using @Int "X-SECRET"
             pure addSecretNumber
           pure itsOk
     )

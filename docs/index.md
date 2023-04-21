@@ -403,6 +403,8 @@ apiSpec = genOpenAPISpec myServer
 
 In the future, you should be able to automatically generate API clients as well.
 
+### Tips & Ideas
+
 #### Not Using A Plan
 
 You can also create Servers with out first creating Plans. If you want to do this, you can just use the `buildWith` function directly.
@@ -436,6 +438,60 @@ myServer = Server
       ...
   ]
 ```
+
+#### DRY Endpoints
+
+When implementing an API you will usually need the same path to have multiple methods, each with different parameters in the query, body and headers. Since Endpoints are Records, this is easy to deal with. Let's say we have a typical `/users/{userID : UserID}` route that accepts GET and PUT requests for fetching and updating a specific user respectively. The GET variant doesn't need a Body, but the PUT variant will.
+
+```haskell
+getUser = Endpoint
+  GET
+  do
+    Path.static "users"
+    userID <- Path.param @UserID
+    pure userID
+  do pure ()
+  do pure () -- No Body Needed
+  do pure ()
+  do
+    ... -- The appropriate responses for a GET request
+
+putUser = getUser
+  { method = PUT
+  , bodyScript = Body.json @UpdatedUser -- Body Needed
+  , responderScript = do
+      ... -- The appropriate responses for a PUT request
+  }
+```
+
+This way, we can define the `putUser` Endpoint by simply modifying `getUser` and without unecessarily repeating ourself.
+
+#### Applicative Comprehensions?
+
+Since Okapi's Script DSL is an Applicative, it would be possible to use Applicative Comprehensions when defining a Script. The Endpoint definition at the top of this page looks like this when using Applicative Comprehensions.
+
+```haskell
+{-# LANGUAGE ApplicativeComprehensions #-}
+
+myEndpoint' = Endpoint
+  GET
+  [ n | Path.static "index", n <- Path.param @Int ]
+  [ (x, y) | x <- Query.param @Int "x", y <- Query.option 10 $ Query.param @Int "y" ]
+  [ foo | foo <- Body.json @Value ]
+  [ () | ]
+  [ itsOk |
+    itsOk <- Responder.json
+      @Int
+      status200
+      [ addSecretNumber | addSecretNumber <- AddHeader.using @Int "X-SECRET" ]
+  ]
+```
+
+As you can see it's more concise, but could be harder to understand for those who aren't familiar with the `-XApplicativeComprehensions` language extension.
+
+#### Idiom Brackets?
+
+COMING SOON
 
 ## Matchpoint
 
@@ -570,26 +626,3 @@ In short, if you don't care about safety, use Matchpoints.
 ## Servant <> Okapi
 
 Coming Soon
-
-<!-- ## TLDR
-
-or even
-
-```haskell
-{-# LANGUAGE ApplicativeComprehensions #-}
-
-myEndpoint' = Endpoint
-  GET
-  [ n | Path.static "index", n <- Path.param @Int ]
-  [ (x, y) | x <- Query.param @Int "x", y <- Query.option 10 $ Query.param @Int "y" ]
-  [ foo | foo <- Body.json @Value ]
-  [ () | ]
-  [ itsOk |
-    itsOk <- Responder.json
-      @Int
-      status200
-      [ addSecretNumber | addSecretNumber <- AddHeader.using @Int "X-SECRET" ]
-  ]
-```
-
-this works when `-XApplicativeComprehensions` is turned on. -->
