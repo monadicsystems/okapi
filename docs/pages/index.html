@@ -12,8 +12,8 @@
   <body>
   <nav>
       <ul>
-        <li><a href="#introduction">Introduction</a></li>
-<li><a href="#gettingstarted">Getting Started</a></li>
+        <li><a href="#gettingstarted">Getting Started</a></li>
+<li><a href="#introduction">Introduction</a></li>
 <li><a href="#endpoint">Endpoint</a></li>
 <li><a href="#matchpoint">Matchpoint</a></li>
 <li><a href="#tldr">TLDR</a></li>
@@ -21,14 +21,22 @@
   </nav>
   <main>
 <h1>🦓🦒Okapi</h1>
-<h2 id="introduction">Introduction</h2>
 <p>Okapi is a micro framework for implementing HTTP servers.</p>
 <ul>
 <li>Ergonomic DSL for routing and parsing requests</li>
 <li>Integrate Okapi with ANY monad stack or effect system</li>
 <li>Automatically generate clients and OpenAPI specifications</li>
 </ul>
-<p>The primary way to implement a server in Okapi is via
+<h2 id="gettingstarted">Getting Started</h2>
+<ol type="1">
+<li>Use the command <code>stack new &lt;project-name&gt;</code> to
+create a new Haskell project</li>
+<li>Add the <code>okapi</code> library to your project's
+dependencies</li>
+</ol>
+<h2 id="introduction">Introduction</h2>
+<p>There are two ways to implement servers in Okapi.</p>
+<p>The recommended way to implement a server in Okapi is via
 <em>Endpoints</em>:</p>
 <div class="sourceCode" id="cb1"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
@@ -123,13 +131,6 @@ implemented with Endpoints, but not a server implemented with
 Matchpoints.</p>
 <p>On the flip side, a server implemented with Matchpoints will be more
 concise than a server implemented with Endpoints.</p>
-<h2 id="gettingstarted">Getting Started</h2>
-<ol type="1">
-<li>Use the command <code>stack new &lt;project-name&gt;</code> to
-create a new Haskell project</li>
-<li>Add the <code>okapi</code> library to your project's
-dependencies</li>
-</ol>
 <h2 id="endpoint">Endpoint</h2>
 <p>An <em>Endpoint</em> is an <em>executable specification</em> that
 represents a single endpoint of your API.</p>
