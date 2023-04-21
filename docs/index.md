@@ -175,7 +175,7 @@ myQueryScript = do
 Each Script type has its' own operations suited to parsing its' respective part of the
 request. These are defined in more detail below.
 
-1. ### Method
+1. #### Method
    
    The `method` field represents the HTTP method that the Endpoint accepts.
    
@@ -183,7 +183,7 @@ request. These are defined in more detail below.
    
    Only the standard methods mentioned in RFC-1234 are allowed.
 
-2. ### Path Script
+2. #### Path Script
 
    The `pathScript` field defines the request path that the Endpoint accepts, including *path parameters*.
    
@@ -193,7 +193,7 @@ request. These are defined in more detail below.
    myPathScript = Path.static "person" *> Path.param @Int "personID"
    ```
 
-3. ### Query Script
+3. #### Query Script
 
    The `queryScript` field defines the query that the Endpoint accepts.
 
@@ -213,7 +213,7 @@ request. These are defined in more detail below.
      pure (lastName, optSalary, minAge)
    ```
 
-4. ### Body Script
+4. #### Body Script
 
    The `bodyScript` field defines the request body and it's content type that the Endpoint accepts.
 
@@ -226,7 +226,7 @@ request. These are defined in more detail below.
    myBodyScript = Body.optional $ Body.json @Value
    ```
 
-5. ### Headers Script
+5. #### Headers Script
 
    The `headersScript` field defines the request headers that the Endpoint accepts.
 
@@ -239,7 +239,7 @@ request. These are defined in more detail below.
    myHeadersScript = undefined
    ```
 
-6. ### Responder Script
+6. #### Responder Script
 
    The `responderScript` field defines the responses that the Endpoint's handler MUST return.
 
@@ -288,7 +288,7 @@ request. These are defined in more detail below.
 
    More information about *Responders* and *ResponderHeaders* is available in the Handler section.
 
-## Handler
+### Handler
 
 Handlers are simple: they are contextful functions from the arguments provided by an Endpoint, to a Response.
 
@@ -302,11 +302,11 @@ The type parameter `m` represents the context in which the Handler creates the R
 
 The type parameters `p`, `q`, `b`, `h` and `r` represent the types of the values returned by the Endpoint's Path, Query, Body, Headers and Responder Scripts respectively.
 
-## Plan
+### Plan
 
 A Plan
 
-## Server
+### Server
 
 ### Lifter
 

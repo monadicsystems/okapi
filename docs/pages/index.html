@@ -10,9 +10,18 @@
     <link rel="stylesheet" href="syntax.css">
   </head>
   <body>
-  <div id="content">
+  <nav>
+      <ul>
+        <li><a href="#introduction">Introduction</a></li>
+<li><a href="#gettingstarted">Getting Started</a></li>
+<li><a href="#endpoint">Endpoint</a></li>
+<li><a href="#matchpoint">Matchpoint</a></li>
+<li><a href="#tldr">TLDR</a></li>
+      </ul>
+  </nav>
+  <main>
 <h1>🦓🦒Okapi</h1>
-<h2>Introduction</h2>
+<h2 id="introduction">Introduction</h2>
 <p>Okapi is a micro framework for implementing HTTP servers.</p>
 <ul>
 <li>Ergonomic DSL for routing and parsing requests</li>
@@ -114,14 +123,14 @@ implemented with Endpoints, but not a server implemented with
 Matchpoints.</p>
 <p>On the flip side, a server implemented with Matchpoints will be more
 concise than a server implemented with Endpoints.</p>
-<h2>Getting Started</h2>
+<h2 id="gettingstarted">Getting Started</h2>
 <ol type="1">
 <li>Use the command <code>stack new &lt;project-name&gt;</code> to
 create a new Haskell project</li>
 <li>Add the <code>okapi</code> library to your project's
 dependencies</li>
 </ol>
-<h2>Endpoint</h2>
+<h2 id="endpoint">Endpoint</h2>
 <p>An <em>Endpoint</em> is an <em>executable specification</em> that
 represents a single endpoint of your API.</p>
 <p>An Endpoint has 6 fields:</p>
@@ -180,20 +189,20 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a 
 respective part of the request. These are defined in more detail
 below.</p>
 <ol type="1">
-<li><h3>Method</h3>
+<li><h4>Method</h4>
 <p>The <code>method</code> field represents the HTTP method that the
 Endpoint accepts.</p>
 <p>Its' type is <code>StdMethod</code> from the <code>http-types</code>
 library.</p>
 <p>Only the standard methods mentioned in RFC-1234 are allowed.</p></li>
-<li><h3>Path Script</h3>
+<li><h4>Path Script</h4>
 <p>The <code>pathScript</code> field defines the request path that the
 Endpoint accepts, including <em>path parameters</em>.</p>
 <p>Path Scripts have two operations: <code>static</code> and
 <code>param</code>.</p>
 <div class="sourceCode" id="cb6"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>myPathScript <span class="ot">=</span> Path.static <span class="st">&quot;person&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;personID&quot;</span></span></code></pre></div></li>
-<li><h3>Query Script</h3>
+<li><h4>Query Script</h4>
 <p>The <code>queryScript</code> field defines the query that the
 Endpoint accepts.</p>
 <p>There are two operations for Query Scripts: <code>param</code> and
@@ -210,7 +219,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a 
 <span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  optSalary <span class="ot">&lt;-</span> Query.optional <span class="op">$</span> Query.param <span class="st">&quot;salary&quot;</span></span>
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  minAge    <span class="ot">&lt;-</span> Query.option <span class="dv">21</span> <span class="op">$</span> Query.param <span class="st">&quot;min_age&quot;</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (lastName, optSalary, minAge)</span></code></pre></div></li>
-<li><h3>Body Script</h3>
+<li><h4>Body Script</h4>
 <p>The <code>bodyScript</code> field defines the request body and it's
 content type that the Endpoint accepts.</p>
 <p>There are four operations for Body Scripts: <code>json</code>,
@@ -220,7 +229,7 @@ content type that the Endpoint accepts.</p>
 <div class="sourceCode" id="cb8"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myBodyScript ::</span> <span class="dt">Body.Script</span> (<span class="dt">Maybe</span> <span class="dt">Value</span>)</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>myBodyScript <span class="ot">=</span> Body.optional <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span></span></code></pre></div></li>
-<li><h3>Headers Script</h3>
+<li><h4>Headers Script</h4>
 <p>The <code>headersScript</code> field defines the request headers that
 the Endpoint accepts.</p>
 <p>There are two operations for Headers Scripts: <code>param</code> and
@@ -230,7 +239,7 @@ and <code>option</code>.</p>
 <div class="sourceCode" id="cb9"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myHeadersScript ::</span> <span class="dt">Headers.Script</span> _</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>myHeadersScript <span class="ot">=</span> <span class="fu">undefined</span></span></code></pre></div></li>
-<li><h3>Responder Script</h3>
+<li><h4>Responder Script</h4>
 <p>The <code>responderScript</code> field defines the responses that the
 Endpoint's handler MUST return.</p>
 <p>Responder Scripts have to be more complex than the other Script types
@@ -280,7 +289,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a
 <p>More information about <em>Responders</em> and
 <em>ResponderHeaders</em> is available in the Handler section.</p></li>
 </ol>
-<h2>Handler</h2>
+<h3>Handler</h3>
 <p>Handlers are simple: they are contextful functions from the arguments
 provided by an Endpoint, to a Response.</p>
 <p>The type synonym <code>Handler</code> represents the type of Handlers
@@ -293,13 +302,13 @@ Handler creates the Response.</p>
 <code>h</code> and <code>r</code> represent the types of the values
 returned by the Endpoint's Path, Query, Body, Headers and Responder
 Scripts respectively.</p>
-<h2>Plan</h2>
+<h3>Plan</h3>
 <p>A Plan</p>
-<h2>Server</h2>
+<h3>Server</h3>
 <h3>Lifter</h3>
 <h3>Execution</h3>
-<h2>Matchpoint</h2>
-<h2>TLDR</h2>
-  </div>
+<h2 id="matchpoint">Matchpoint</h2>
+<h2 id="tldr">TLDR</h2>
+  </main>
   </body>
 </html>

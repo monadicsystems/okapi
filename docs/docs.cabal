@@ -34,7 +34,7 @@ library
   build-depends:
       base >=4.7 && <5
     , pandoc
-    , pandoc-lua-engine
+    , pandoc-types
     , text
     , pretty-simple
     , interpolatedstring-perl6
