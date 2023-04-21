@@ -36,8 +36,8 @@ create a new Haskell project</li>
 dependencies</li>
 </ol>
 <h2 id="introduction">Introduction</h2>
-<p>There are two ways to implement servers in Okapi.</p>
-<p>The recommended way to implement a server in Okapi is via
+<p>There are two ways to implement <em>Servers</em> in Okapi.</p>
+<p>The recommended way to implement a Server in Okapi is via
 <em>Endpoints</em>:</p>
 <div class="sourceCode" id="cb1"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
@@ -60,7 +60,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a 
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span></code></pre></div>
-<p>An alternative, more concise way of defining a server in Okapi is via
+<p>An alternative, more concise way of defining a Server in Okapi is via
 <em>Matchpoints</em>:</p>
 <div class="sourceCode" id="cb2"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Matchpoint patterns using PatternSynonyms,</span></span>
@@ -103,15 +103,15 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a 
 <span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Run your Server using Warp</span></span>
 <span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> Warp.run <span class="dv">3000</span> <span class="op">$</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
 <p>The advantadge of using Endpoints over Matchpoints is that Okapi can
-automatically generate specifications and clients for a server
-implemented with Endpoints, but not a server implemented with
+automatically generate <em>Specifications</em> and <em>Clients</em> for
+a Server implemented with Endpoints, but not a Server implemented with
 Matchpoints.</p>
-<p>On the flip side, a server implemented with Matchpoints will be more
-concise than the same server implemented with Endpoints.</p>
+<p>On the flip side, a Server implemented with Matchpoints will be more
+concise than the same Server implemented with Endpoints.</p>
 <h2 id="endpoint">Endpoint</h2>
-<p>An <em>Endpoint</em> is an <em>executable specification</em> that
-represents a single endpoint of your API.</p>
-<p>An Endpoint has 6 fields:</p>
+<p>An Endpoint is an <em>executable specification</em> representing a
+single Operation that can be taken against your API.</p>
+<p>An Endpoint has 6 fields.</p>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Endpoint</span> p q h b r <span class="ot">=</span> <span class="dt">Endpoint</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> method ::</span> <span class="dt">StdMethod</span>,                  <span class="co">-- (1)</span></span>
@@ -122,17 +122,18 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a 
 <span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="ot">    responderScript ::</span> <span class="dt">Responder.Script</span> r <span class="co">-- (6)</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>The <code>method</code> field is a simple value, but the other fields
-point to a <code>Script</code> that represents their respective HTTP
-request parts.</p>
+point to what's called a <em>Script</em>. Scripts represent Okapi's DSL
+for extracting and parsing data from Requests. There's a specific type
+of Script for each part of a Request.</p>
 <p>The type parameter of a Script represents the type of value it
 returns.</p>
 <p>Therefore, the concrete type of an Endpoint is determined by the
 return types of the Scripts that are used to construct the Endpoint.</p>
 <p>All the different Script types are Applicatives, but not all are
-<em>lawful applicatives</em>.</p>
+<em>lawful Applicatives</em>.</p>
 <p>Since all Script types are Applicatives, we can use the Applicative
-typeclass methods to write our scripts. Here's an example of a query
-Script:</p>
+typeclass methods to write our Scripts. Here's an example of a Query
+Script.</p>
 <div class="sourceCode" id="cb4"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Filter</span> <span class="ot">=</span> <span class="dt">Filter</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> color ::</span> <span class="dt">Text</span></span>
@@ -150,9 +151,9 @@ turned on, you can also write your Scripts using <code>do</code>
 syntax.</p>
 <p>We recommend using <code>-XApplicativeDo</code> in conjuction with
 the <code>-XRecordWildCards</code> language extension if you're not
-comfortable with using the Applicative operators. Here's the same query
-script we defined above, but with these language extensions turned
-on:</p>
+comfortable with using the Applicative operators. Here's the same Query
+Script we defined above, but with these language extensions turned
+on.</p>
 <div class="sourceCode" id="cb5"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeDo #-}</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE RecordWildCards #-}</span></span>
@@ -163,25 +164,25 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a 
 <span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  categoryID <span class="ot">&lt;-</span> Query.param <span class="st">&quot;category&quot;</span></span>
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  isOnSale   <span class="ot">&lt;-</span> Query.optional <span class="op">$</span> Query.flag <span class="st">&quot;sale&quot;</span></span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> <span class="dt">Filter</span> {<span class="op">..</span>}</span></code></pre></div>
-<p>Each Script type has its' own operations suited to parsing its'
-respective part of the request. These are defined in more detail
-below.</p>
+<p>Each Script type has its own operations suited to parsing its
+respective part of the Request. These operations are covered in more
+detail below.</p>
 <ol type="1">
 <li><h4>Method</h4>
-<p>The <code>method</code> field represents the HTTP method that the
+<p>The <code>method</code> field represents the HTTP Method that the
 Endpoint accepts.</p>
-<p>Its' type is <code>StdMethod</code> from the <code>http-types</code>
+<p>Its type is <code>StdMethod</code> from the <code>http-types</code>
 library.</p>
 <p>Only the standard methods mentioned in RFC-1234 are allowed.</p></li>
 <li><h4>Path Script</h4>
-<p>The <code>pathScript</code> field defines the request path that the
-Endpoint accepts, including <em>path parameters</em>.</p>
+<p>The <code>pathScript</code> field defines the Request Path that the
+Endpoint accepts, including Path parameters.</p>
 <p>Path Scripts have two operations: <code>static</code> and
 <code>param</code>.</p>
 <div class="sourceCode" id="cb6"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>myPathScript <span class="ot">=</span> Path.static <span class="st">&quot;person&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;personID&quot;</span></span></code></pre></div></li>
 <li><h4>Query Script</h4>
-<p>The <code>queryScript</code> field defines the query that the
+<p>The <code>queryScript</code> field defines the Query that the
 Endpoint accepts.</p>
 <p>There are two operations for Query Scripts: <code>param</code> and
 <code>flag</code>.</p>
@@ -198,8 +199,8 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a 
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  minAge    <span class="ot">&lt;-</span> Query.option <span class="dv">21</span> <span class="op">$</span> Query.param <span class="st">&quot;min_age&quot;</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (lastName, optSalary, minAge)</span></code></pre></div></li>
 <li><h4>Body Script</h4>
-<p>The <code>bodyScript</code> field defines the request body and it's
-content type that the Endpoint accepts.</p>
+<p>The <code>bodyScript</code> field defines the Request Body that the
+Endpoint accepts.</p>
 <p>There are four operations for Body Scripts: <code>json</code>,
 <code>form</code>, <code>param</code>, <code>file</code>.</p>
 <p>There are two modifiers for Body Scripts: <code>optional</code> and
@@ -208,7 +209,7 @@ content type that the Endpoint accepts.</p>
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myBodyScript ::</span> <span class="dt">Body.Script</span> (<span class="dt">Maybe</span> <span class="dt">Value</span>)</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>myBodyScript <span class="ot">=</span> Body.optional <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span></span></code></pre></div></li>
 <li><h4>Headers Script</h4>
-<p>The <code>headersScript</code> field defines the request headers that
+<p>The <code>headersScript</code> field defines the Request Headers that
 the Endpoint accepts.</p>
 <p>There are two operations for Headers Scripts: <code>param</code> and
 <code>cookie</code>.</p>
@@ -218,20 +219,20 @@ and <code>option</code>.</p>
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myHeadersScript ::</span> <span class="dt">Headers.Script</span> _</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>myHeadersScript <span class="ot">=</span> <span class="fu">undefined</span></span></code></pre></div></li>
 <li><h4>Responder Script</h4>
-<p>The <code>responderScript</code> field defines the responses that the
+<p>The <code>responderScript</code> field defines the Responses that the
 Endpoint's handler MUST return.</p>
 <p>Responder Scripts have to be more complex than the other Script types
-in order for the Endpoint to have a contract with the handler that the
-handler will respond with the responses defined in the Responder
-Script.</p>
+in order for the Endpoint to have a contract with its Handler. The
+contract ensures that the Handler will respond with the Responses
+defined in the Responder Script.</p>
 <p>This is done using a combination of higher order functions, linear
 types, and smart constructors.</p>
-<p>Responder Script operations have to take an <em>Add Header</em>
-Script as an argument to define what headers will be attached to the
-Response.</p>
+<p>Responder Script operations have to take an <em>Add Header
+Script</em> as an argument to define what Headers will be attached to
+the Response.</p>
 <p>For now, there is only one operation for Responder Scripts:
 <code>json</code>.</p>
-<p>Add Header Scripts also only have one operation:
+<p>Add Header Scripts only have one operation as well:
 <code>using</code>.</p>
 <div class="sourceCode" id="cb10"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeDo #-}</span></span>
@@ -264,14 +265,14 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a
 <span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>    <span class="kw">else</span> <span class="fu">return</span> <span class="op">$</span> notGood</span>
 <span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>      (\() response <span class="ot">-&gt;</span> response)</span>
 <span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Not Good!&quot;</span></span></code></pre></div>
-<p>More information about <em>Responders</em> and <em>AddHeader</em> is
+<p>More information about <em>Responder</em> and <em>AddHeader</em> are
 available in the Handler section.</p></li>
 </ol>
 <h3>Handler</h3>
 <p>Handlers are simple: they are contextful functions from the arguments
 provided by an Endpoint, to a Response.</p>
-<p>The type synonym <code>Handler</code> represents the type of Handlers
-in Okapi:</p>
+<p>The type synonym <code>Handler</code> represents the type of these
+contextful functions.</p>
 <div class="sourceCode" id="cb11"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Handler</span> m p q b h r <span class="ot">=</span> p <span class="ot">-&gt;</span> q <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> h <span class="ot">-&gt;</span> r <span class="ot">-&gt;</span> m <span class="dt">Response</span></span></code></pre></div>
 <p>The type parameter <code>m</code> represents the context in which the
@@ -281,7 +282,7 @@ Handler creates the Response.</p>
 returned by the Endpoint's Path, Query, Body, Headers and Responder
 Scripts respectively.</p>
 <h3>Plan</h3>
-<p>A Plan is how your Endpoint and a compatible Handler come
+<p>A Plan is how your Endpoint and its designated Handler come
 together.</p>
 <div class="sourceCode" id="cb12"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Plan</span> m p q h b r <span class="ot">=</span> <span class="dt">Plan</span></span>
@@ -289,9 +290,9 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a
 <span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    endpoint ::</span> <span class="dt">Endpoint</span> p q h b r,</span>
 <span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    handler ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> p <span class="ot">-&gt;</span> q <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> h <span class="ot">-&gt;</span> r <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
-<p>The <code>transformer</code> field represents a natural
-transformation from your handler's Monad <code>m</code> to
-<code>IO</code>. This is where you handle how you're custom effects are
+<p>The <code>transformer</code> field represents a <em>natural
+transformation</em> from your Handler's Monad <code>m</code>, to
+<code>IO</code>. This is where you decide how you're custom effects are
 interpreted in an <code>IO</code> context.</p>
 <p>The <code>endpoint</code> field represents your Endpoint.</p>
 <p>The <code>handler</code> field represents your Handler. The types
@@ -340,11 +341,10 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a
 <span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    artifacts ::</span> [<span class="dt">Artifact</span>]</span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>The <code>info</code> field represents your Server's metadata. It's
-used in the generation of the Server's specification. It's optional.</p>
+used in the generation of the Server's Specification. It's optional.</p>
 <p>The <code>artifacts</code> field is a list of Artifact. A single
-Artifact is generated from a single Plan, which contains a
-<code>transformer</code>, an Endpoint and a Handler. An Artifact
-contains two values that are generated from a Plan:</p>
+Artifact is generated from a single Plan. An Artifact contains two
+values:</p>
 <ol type="1">
 <li>An IO action that returns a Response. It's only executed if the
 Endpoint used to generate the IO action matches the Request.</li>
@@ -352,8 +352,8 @@ Endpoint used to generate the IO action matches the Request.</li>
 used to build the Artifact.</li>
 </ol>
 <p>These two values, when combined with the Server's other Artifacts,
-are used to generate the final Application and OpenAPI Specification
-respectively.</p>
+are used to generate the final Application and OpenAPI
+Specification.</p>
 <div class="sourceCode" id="cb15"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ot">build ::</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">forall</span> m p q h b r<span class="op">.</span></span>
@@ -379,12 +379,12 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a
 <span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>  , build plan3</span>
 <span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>  , <span class="op">...</span></span>
 <span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
-<p>Notice, the types of the Plans don't have to be the same. The
-<code>build</code> function erases the types and gives us the end
-product we want. This allows us to mix and match various combinations of
-Endpoints, Handlers, and Monad transformations in the same Server
-definition. For example, you can have two handlers that run in two
-different Monads in the same Server.</p>
+<p>Notice, the types of the Plans used to build your Server don't have
+to be the same. The <code>build</code> function erases the types and
+gives us the end products we need. This allows us to mix and match
+various combinations of Endpoints, Handlers, and Monad transformations
+in the same Server definition. For example, you can have two Handlers
+that operate in two different Monads in the same Server.</p>
 <p>Now that you have you your Server, you can use it to:</p>
 <ol type="1">
 <li>Generate a WAI Application</li>
@@ -435,7 +435,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a
 <h4>DRY Endpoints</h4>
 <p>When implementing an API you will usually need the same path to have
 multiple methods, each with different parameters in the query, body and
-headers. Since Endpoints are Records, this is easy to deal with. Let's
+headers. Since Endpoints are records this is easy to deal with. Let's
 say we have a typical <code>/users/{userID : UserID}</code> route that
 accepts GET and PUT requests for fetching and updating a specific user
 respectively. The GET variant doesn't need a Body, but the PUT variant
@@ -488,8 +488,8 @@ for those who aren't familiar with the
 <h4>Idiom Brackets?</h4>
 <p>COMING SOON</p>
 <h2 id="matchpoint">Matchpoint</h2>
-<p>A <em>Matchpoint</em> is a <em>pattern</em> that matches on
-<code>Request</code> values.</p>
+<p>A Matchpoint is a <em>pattern</em> that matches on Request
+values.</p>
 <div class="sourceCode" id="cb21"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">Matchpoint</span><span class="ot"> ::</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> <span class="dt">Matchpoint</span></span></code></pre></div>
 <p>You can use the Matchpoint pattern synonym to create your own pattern
@@ -519,11 +519,11 @@ instances of both <code>ToHttpApiData</code> and
 <code>PathParam</code> is a <em>bidirectional pattern synonym</em>. This
 property of <code>PathParam</code> makes it useful for generating
 URLs.</p>
-<p>If our matching logic is more complicated, pattern synonyms alone may
-not be enough. For more complicated routes, we can use Okapi's DSL
+<p>If your matching logic is more complicated, pattern synonyms alone
+may not be enough. For more complicated routes, we can use Okapi's DSL
 inside our Matchpoints by using <code>-XViewPatterns</code>. As an
 example, let's reimplement the first Endpoint on this page as a
-Matchpoint. Here's the Endpoint version first:</p>
+Matchpoint. Here's the Endpoint version first.</p>
 <div class="sourceCode" id="cb23"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
 <span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
@@ -545,7 +545,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a
 <span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
 <span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
 <span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span></code></pre></div>
-<p>Here's the equivalent Matchpoint version:</p>
+<p>Here's the equivalent Matchpoint version.</p>
 <div class="sourceCode" id="cb24"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Matchpoints using the same DSL</span></span>
 <span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> magicNumber pair foo <span class="ot">=</span> <span class="dt">Matchpoint</span></span>
@@ -560,7 +560,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a
 <span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
 <span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
 <p>We can simplify <code>MyMatchpoint</code> further by using more
-pattern synonyms:</p>
+pattern synonyms.</p>
 <div class="sourceCode" id="cb25"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> n pair bar <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
@@ -582,8 +582,8 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a
 <p>Pattern synonyms like <code>MagicNumber</code> or
 <code>XYQuery</code> in the example above come in handy when we need to
 use the same pattern inside multiple Matchpoints.</p>
-<p>You would use the Matchpoint we defined above like so (using
-<code>-XLambdaCase</code>):</p>
+<p>You can use the Matchpoint we defined above in a case statement with
+other Matchpoints to define a Server.</p>
 <div class="sourceCode" id="cb26"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
 <span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -607,10 +607,10 @@ worried about safety and just want to get something up and running
 quickly. Here are some downsides to using Matchpoints to implement your
 Server:</p>
 <ol type="1">
-<li><p>Can't do any static analysis. This means you can't generate
-OpenAPI specifications for Servers that use Matchpoints or perform any
-optimizations. You can perform static analysis on the Scripts that you
-use in your Matchpoints, if there are any.</p></li>
+<li><p>We can't perform any static analysis on them. This means you
+can't generate OpenAPI specifications for Matchpoint Servers or perform
+any optimizations on them. You can perform static analysis on the
+Scripts that you use in your Matchpoints, if there are any.</p></li>
 <li><p>All Handlers in a Matchpoint Server must operate within the same
 context. For Endpoints, this is not the case.</p></li>
 <li><p>Endpoints are more modular. You can achieve some level of
@@ -618,8 +618,9 @@ moduarity with your Matchpoints by using nested
 <code>-XPatternSynonyms</code> though.</p></li>
 <li><p>Matchpoint Servers have no knowledge of what Responses you will
 return to the Client. Endpoint Servers know every possible Response you
-may return from your Handlers, besides ones caused by <code>IO</code>
-errors (the goal is for Endpoints to know about these as well).</p></li>
+may return from your Handlers, besides the ones returned by
+<code>IO</code> errors (the goal is for Endpoints to know about these as
+well).</p></li>
 <li><p>Requires knowledge of the <code>-XPatternSynonyms</code> and
 <code>-XViewPatterns</code> language extensions.</p></li>
 </ol>

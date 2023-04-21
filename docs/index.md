@@ -13,9 +13,9 @@ Okapi is a micro framework for implementing HTTP servers.
 
 ## Introduction
 
-There are two ways to implement servers in Okapi.
+There are two ways to implement *Servers* in Okapi.
 
-The recommended way to implement a server in Okapi is via *Endpoints*:
+The recommended way to implement a Server in Okapi is via *Endpoints*:
 
 ```haskell
 -- | Define Endpoints using an Applicative eDSL
@@ -40,7 +40,7 @@ myEndpoint = Endpoint
     pure itsOk
 ```
 
-An alternative, more concise way of defining a server in Okapi is via *Matchpoints*:
+An alternative, more concise way of defining a Server in Okapi is via *Matchpoints*:
 
 ```haskell
 -- | Define Matchpoint patterns using PatternSynonyms,
@@ -85,18 +85,17 @@ main = Warp.run 3000 $ instantiate id myServer
 ```
 
 The advantadge of using Endpoints over Matchpoints is that Okapi can
-automatically generate specifications and clients for a server implemented
-with Endpoints, but not a server implemented with Matchpoints.
+automatically generate *Specifications* and *Clients* for a Server implemented
+with Endpoints, but not a Server implemented with Matchpoints.
 
-On the flip side, a server implemented with Matchpoints will be more
-concise than the same server implemented with Endpoints.
+On the flip side, a Server implemented with Matchpoints will be more
+concise than the same Server implemented with Endpoints.
 
 ## Endpoint
 
-An *Endpoint* is an *executable specification* that represents a single endpoint of
-your API.
+An Endpoint is an *executable specification* representing a single Operation that can be taken against your API.
 
-An Endpoint has 6 fields:
+An Endpoint has 6 fields.
 
 ```haskell
 data Endpoint p q h b r = Endpoint
@@ -109,16 +108,16 @@ data Endpoint p q h b r = Endpoint
   }
 ```
 
-The `method` field is a simple value, but the other fields point to a `Script` that represents their respective HTTP request parts.
+The `method` field is a simple value, but the other fields point to what's called a *Script*. Scripts represent Okapi's DSL for extracting and parsing data from Requests. There's a specific type of Script for each part of a Request.
 
 The type parameter of a Script represents the type of value it returns.
 
 Therefore, the concrete type of an Endpoint is determined by the return types of
 the Scripts that are used to construct the Endpoint.
 
-All the different Script types are Applicatives, but not all are *lawful applicatives*.
+All the different Script types are Applicatives, but not all are *lawful Applicatives*.
 
-Since all Script types are Applicatives, we can use the Applicative typeclass methods to write our scripts. Here's an example of a query Script:
+Since all Script types are Applicatives, we can use the Applicative typeclass methods to write our Scripts. Here's an example of a Query Script.
 
 ```haskell
 data Filter = Filter
@@ -136,7 +135,7 @@ myQueryScript = Filter
 
 If you have the `-XApplicativeDo` language extension turned on, you can also write your Scripts using `do` syntax.
 
-We recommend using `-XApplicativeDo` in conjuction with the `-XRecordWildCards` language extension if you're not comfortable with using the Applicative operators. Here's the same query script we defined above, but with these language extensions turned on:
+We recommend using `-XApplicativeDo` in conjuction with the `-XRecordWildCards` language extension if you're not comfortable with using the Applicative operators. Here's the same Query Script we defined above, but with these language extensions turned on.
 
 ```haskell
 {-# LANGUAGE ApplicativeDo #-}
@@ -150,20 +149,20 @@ myQueryScript = do
   pure Filter {..}
 ```
 
-Each Script type has its' own operations suited to parsing its' respective part of the
-request. These are defined in more detail below.
+Each Script type has its own operations suited to parsing its respective part of the
+Request. These operations are covered in more detail below.
 
 1. #### Method
    
-   The `method` field represents the HTTP method that the Endpoint accepts.
+   The `method` field represents the HTTP Method that the Endpoint accepts.
    
-   Its' type is `StdMethod` from the `http-types` library.
+   Its type is `StdMethod` from the `http-types` library.
    
    Only the standard methods mentioned in RFC-1234 are allowed.
 
 2. #### Path Script
 
-   The `pathScript` field defines the request path that the Endpoint accepts, including *path parameters*.
+   The `pathScript` field defines the Request Path that the Endpoint accepts, including Path parameters.
    
    Path Scripts have two operations: `static` and `param`.
 
@@ -173,7 +172,7 @@ request. These are defined in more detail below.
 
 3. #### Query Script
 
-   The `queryScript` field defines the query that the Endpoint accepts.
+   The `queryScript` field defines the Query that the Endpoint accepts.
 
    There are two operations for Query Scripts: `param` and `flag`.
 
@@ -193,7 +192,7 @@ request. These are defined in more detail below.
 
 4. #### Body Script
 
-   The `bodyScript` field defines the request body and it's content type that the Endpoint accepts.
+   The `bodyScript` field defines the Request Body that the Endpoint accepts.
 
    There are four operations for Body Scripts: `json`, `form`, `param`, `file`.
 
@@ -206,7 +205,7 @@ request. These are defined in more detail below.
 
 5. #### Headers Script
 
-   The `headersScript` field defines the request headers that the Endpoint accepts.
+   The `headersScript` field defines the Request Headers that the Endpoint accepts.
 
    There are two operations for Headers Scripts: `param` and `cookie`.
 
@@ -219,17 +218,17 @@ request. These are defined in more detail below.
 
 6. #### Responder Script
 
-   The `responderScript` field defines the responses that the Endpoint's handler MUST return.
+   The `responderScript` field defines the Responses that the Endpoint's handler MUST return.
 
-   Responder Scripts have to be more complex than the other Script types in order for the Endpoint to have a contract with the handler that the handler will respond with the responses defined in the Responder Script.
+   Responder Scripts have to be more complex than the other Script types in order for the Endpoint to have a contract with its Handler. The contract ensures that the Handler will respond with the Responses defined in the Responder Script.
 
    This is done using a combination of higher order functions, linear types, and smart constructors.
 
-   Responder Script operations have to take an *Add Header* Script as an argument to define what headers will be attached to the Response.
+   Responder Script operations have to take an *Add Header Script* as an argument to define what Headers will be attached to the Response.
 
    For now, there is only one operation for Responder Scripts: `json`.
 
-   Add Header Scripts also only have one operation: `using`.
+   Add Header Scripts only have one operation as well: `using`.
 
    ```haskell
    {-# LANGUAGE ApplicativeDo #-}
@@ -264,13 +263,13 @@ request. These are defined in more detail below.
          "Not Good!"
    ```
 
-   More information about *Responders* and *AddHeader* is available in the Handler section.
+   More information about *Responder* and *AddHeader* are available in the Handler section.
 
 ### Handler
 
 Handlers are simple: they are contextful functions from the arguments provided by an Endpoint, to a Response.
 
-The type synonym `Handler` represents the type of Handlers in Okapi:
+The type synonym `Handler` represents the type of these contextful functions.
 
 ```haskell
 type Handler m p q b h r = p -> q -> b -> h -> r -> m Response
@@ -282,7 +281,7 @@ The type parameters `p`, `q`, `b`, `h` and `r` represent the types of the values
 
 ### Plan
 
-A Plan is how your Endpoint and a compatible Handler come together.
+A Plan is how your Endpoint and its designated Handler come together.
 
 ```haskell
 data Plan m p q h b r = Plan
@@ -292,7 +291,7 @@ data Plan m p q h b r = Plan
   }
 ```
 
-The `transformer` field represents a natural transformation from your handler's Monad `m` to `IO`. This is where you handle how you're custom effects are interpreted in an `IO` context.
+The `transformer` field represents a *natural transformation* from your Handler's Monad `m`, to `IO`. This is where you decide how you're custom effects are interpreted in an `IO` context.
 
 The `endpoint` field represents your Endpoint.
 
@@ -347,14 +346,14 @@ data Server = Server
   }
 ```
 
-The `info` field represents your Server's metadata. It's used in the generation of the Server's specification. It's optional.
+The `info` field represents your Server's metadata. It's used in the generation of the Server's Specification. It's optional.
 
-The `artifacts` field is a list of Artifact. A single Artifact is generated from a single Plan, which contains a `transformer`, an Endpoint and a Handler. An Artifact contains two values that are generated from a Plan:
+The `artifacts` field is a list of Artifact. A single Artifact is generated from a single Plan. An Artifact contains two values:
 
 1. An IO action that returns a Response. It's only executed if the Endpoint used to generate the IO action matches the Request.
 2. An OpenAPI PathItem value based on the structure of the Endpoint used to build the Artifact.
 
-These two values, when combined with the Server's other Artifacts, are used to generate the final Application and OpenAPI Specification respectively.
+These two values, when combined with the Server's other Artifacts, are used to generate the final Application and OpenAPI Specification.
 
 ```haskell
 build ::
@@ -383,7 +382,7 @@ myServer = Server
   ]
 ```
 
-Notice, the types of the Plans don't have to be the same. The `build` function erases the types and gives us the end product we want. This allows us to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two handlers that run in two different Monads in the same Server.
+Notice, the types of the Plans used to build your Server don't have to be the same. The `build` function erases the types and gives us the end products we need. This allows us to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two Handlers that operate in two different Monads in the same Server.
 
 Now that you have you your Server, you can use it to:
 
@@ -441,7 +440,7 @@ myServer = Server
 
 #### DRY Endpoints
 
-When implementing an API you will usually need the same path to have multiple methods, each with different parameters in the query, body and headers. Since Endpoints are Records, this is easy to deal with. Let's say we have a typical `/users/{userID : UserID}` route that accepts GET and PUT requests for fetching and updating a specific user respectively. The GET variant doesn't need a Body, but the PUT variant will.
+When implementing an API you will usually need the same path to have multiple methods, each with different parameters in the query, body and headers. Since Endpoints are records this is easy to deal with. Let's say we have a typical `/users/{userID : UserID}` route that accepts GET and PUT requests for fetching and updating a specific user respectively. The GET variant doesn't need a Body, but the PUT variant will.
 
 ```haskell
 getUser = Endpoint
@@ -495,7 +494,7 @@ COMING SOON
 
 ## Matchpoint
 
-A *Matchpoint* is a *pattern* that matches on `Request` values.
+A Matchpoint is a *pattern* that matches on Request values.
 
 ```haskell
 pattern Matchpoint :: Request -> Matchpoint
@@ -520,7 +519,7 @@ The `GetUserByID` pattern defined above would match against any Request of the f
 
 `PathParam` is a pattern synonym that you can use in your Matchpoints to match against path parameters of any type that are instances of both `ToHttpApiData` and `FromHttpApiData`. This is required since `PathParam` is a *bidirectional pattern synonym*. This property of `PathParam` makes it useful for generating URLs.
 
-If our matching logic is more complicated, pattern synonyms alone may not be enough. For more complicated routes, we can use Okapi's DSL inside our Matchpoints by using `-XViewPatterns`. As an example, let's reimplement the first Endpoint on this page as a Matchpoint. Here's the Endpoint version first:
+If your matching logic is more complicated, pattern synonyms alone may not be enough. For more complicated routes, we can use Okapi's DSL inside our Matchpoints by using `-XViewPatterns`. As an example, let's reimplement the first Endpoint on this page as a Matchpoint. Here's the Endpoint version first.
 
 ```haskell
 -- | Define Endpoints using an Applicative eDSL
@@ -545,7 +544,7 @@ myEndpoint = Endpoint
     pure itsOk
 ```
 
-Here's the equivalent Matchpoint version:
+Here's the equivalent Matchpoint version.
 
 ```haskell
 -- | Define Matchpoints using the same DSL
@@ -562,7 +561,7 @@ xyQuery = do
   pure (x, y)
 ```
 
-We can simplify `MyMatchpoint` further by using more pattern synonyms:
+We can simplify `MyMatchpoint` further by using more pattern synonyms.
 
 ```haskell
 pattern MyMatchpoint n pair bar <- Matchpoint
@@ -586,7 +585,7 @@ xyQuery = do
 
 Pattern synonyms like `MagicNumber` or `XYQuery` in the example above come in handy when we need to use the same pattern inside multiple Matchpoints.
 
-You would use the Matchpoint we defined above like so (using `-XLambdaCase`):
+You can use the Matchpoint we defined above in a case statement with other Matchpoints to define a Server.
 
 ```haskell
 type Server m = Request -> m Response
@@ -611,13 +610,13 @@ Notice, the Server type for Matchpoints is much simpler than the Server type for
 
 We recommend using Endpoints. Matchpoints are great if you're not worried about safety and just want to get something up and running quickly. Here are some downsides to using Matchpoints to implement your Server:
 
-1. Can't do any static analysis. This means you can't generate OpenAPI specifications for Servers that use Matchpoints or perform any optimizations. You can perform static analysis on the Scripts that you use in your Matchpoints, if there are any.
+1. We can't perform any static analysis on them. This means you can't generate OpenAPI specifications for Matchpoint Servers or perform any optimizations on them. You can perform static analysis on the Scripts that you use in your Matchpoints, if there are any.
 
 2. All Handlers in a Matchpoint Server must operate within the same context. For Endpoints, this is not the case.
 
 3. Endpoints are more modular. You can achieve some level of moduarity with your Matchpoints by using nested `-XPatternSynonyms` though.
 
-4. Matchpoint Servers have no knowledge of what Responses you will return to the Client. Endpoint Servers know every possible Response you may return from your Handlers, besides ones caused by `IO` errors (the goal is for Endpoints to know about these as well).
+4. Matchpoint Servers have no knowledge of what Responses you will return to the Client. Endpoint Servers know every possible Response you may return from your Handlers, besides the ones returned by `IO` errors (the goal is for Endpoints to know about these as well).
 
 5. Requires knowledge of the `-XPatternSynonyms` and `-XViewPatterns` language extensions.
 
