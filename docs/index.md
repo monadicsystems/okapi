@@ -34,34 +34,10 @@ myEndpoint = Endpoint
     pure foo
   do pure ()
   do
-    itsOk <- Responder.json @Int HTTP.status200 do
+    itsOk <- Responder.json @Int status200 do
       addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
       pure addSecretNumber
     pure itsOk
-
--- | Define Handlers for Endpoints
-myHandler magicNumber (x, y) foo () responder = do
-  let newNumber = magicNumber + x * y
-  print newNumber
-  print foo
-  return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
-
--- | Combine Endpoints with Handlers to create Plans
-myPlan = Plan
-  myEndpoint
-  myHandler
-
--- | Compose Plans with other Plans to create Servers
-myServer = Server
-  Nothing
-  default404
-  [ myPlan
-  , Plan myOtherEndpoint myOtherHandler
-  , anotherPlan
-  ]
-
--- | Run your Servers using Warp
-main = Warp.run 3000 $ instantiate id myServer
 ```
 
 An alternative, more concise way of defining a server in Okapi is via *Matchpoints*:
@@ -306,14 +282,146 @@ The type parameters `p`, `q`, `b`, `h` and `r` represent the types of the values
 
 ### Plan
 
-A Plan
+A Plan is how your Endpoint and a compatible Handler come together.
+
+```haskell
+data Plan m p q h b r = Plan
+  { transformer :: m ~> IO,
+    endpoint :: Endpoint p q h b r,
+    handler :: Monad m => p -> q -> b -> h -> r -> m Response
+  }
+```
+
+The `transformer` field represents a natural transformation from your handler's Monad `m` to `IO`. This is where you handle how you're custom effects are interpreted in `IO`.
+
+The `endpoint` field represents your Endpoint.
+
+The `handler` field represents your Handler. The types must match the types of your `endpoint` and `transformer`.
+
+Here's an example of a `Plan`:
+
+```haskell
+myPlan = Plan
+  id
+  myEndpoint
+  myHandler
+
+myEndpoint = Endpoint
+  GET
+  do
+    Path.static "index"
+    magicNumber <- Path.param @Int
+    pure magicNumber
+  do
+    x <- Query.param @Int "x"
+    y <- Query.option 10 $ Query.param @Int "y"
+    pure (x, y)
+  do
+    foo <- Body.json @Value
+    pure foo
+  do pure ()
+  do
+    itsOk <- Responder.json @Int HTTP.status200 do
+      addSecretNumber <- ResponderHeaders.has @Int "X-SECRET"
+      pure addSecretNumber
+    pure itsOk
+
+myHandler magicNumber (x, y) foo () responder = do
+  let newNumber = magicNumber + x * y
+  print newNumber
+  print foo
+  return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
+```
+
+The Server you build will be a combination of many Plans.
 
 ### Server
 
-### Lifter
+A Server is the final type of value that you need to generate an Application or Specification.
 
-### Execution
+```haskell
+data Server = Server
+  { info :: Maybe Info,
+    defaultResponse :: WAI.Response,
+    artifacts :: [Artifact]
+  }
+```
+
+The `info` field represents your Server's metadata. It's used in the generation of the Server's specification. It's optional.
+
+The `artifacts` field is a list of Artifact. A single Artifact is generated from a single Plan, which contains a `transformer`, an Endpoint and a Handler. An Artifact contains two values that are generated from a Plan:
+
+1. An IO action that returns a Response. It's only executed if the Endpoint used to generate the IO action matches the Request.
+2. An OpenAPI PathItem value based on the structure of the Endpoint used to build the Artifact.
+
+These two values, when combined with the Server's other Artifacts, are used to generate the final Application and OpenAPI Specification respectively.
+
+```haskell
+build ::
+  forall m p q h b r.
+  Monad m =>
+  Plan m p q h b r ->
+  Artifact
+build = ...
+
+plan1 :: Plan A B C D E F
+plan1 = ...
+
+plan2 :: Plan G X Z U I P
+plan2 = ...
+
+plan3 :: Plan Y T L G N Q
+plan3 = ...
+
+myServer = Server
+  Nothing
+  default404
+  [ build plan1
+  , build plan2
+  , build plan3
+  , ...
+  ]
+```
+
+Notice the types of the Plans don't have to be the same. The build function erases the types and gives us the end product that we want. This allows you to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two handlers that run in two different Monads in the same Server.
+
+Now that you have you your Server you can either:
+
+1. Generate a WAI Application
+2. Generate an OpenAPI Specification
+
+```haskell
+myServer :: Server
+myServer = ...
+
+api :: Application
+api = genWaiApplication myServer
+
+apiSpec :: OpenApi
+apiSpec = genOpenAPISpec myServer
+```
 
 ## Matchpoint
 
 ## TLDR
+
+or even
+
+```haskell
+{-# LANGUAGE ApplicativeComprehensions #-}
+
+myEndpoint' = Endpoint
+  GET
+  [ n | Path.static "index", n <- Path.param @Int ]
+  [ (x, y) | x <- Query.param @Int "x", y <- Query.option 10 $ Query.param @Int "y" ]
+  [ foo | foo <- Body.json @Value ]
+  [ () | ]
+  [ itsOk |
+    itsOk <- Responder.json
+      @Int
+      status200
+      [ addSecretNumber | addSecretNumber <- ResponderHeaders.has @Int "X-SECRET" ]
+  ]
+```
+
+this works when `-XApplicativeComprehensions` is turned on.

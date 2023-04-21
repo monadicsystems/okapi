@@ -55,34 +55,10 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a 
 <span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
 <span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> HTTP.status200 <span class="kw">do</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> status200 <span class="kw">do</span></span>
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> ResponderHeaders.has <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Handlers for Endpoints</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>myHandler magicNumber (x, y) foo () responder <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> newNumber <span class="ot">=</span> magicNumber <span class="op">+</span> x <span class="op">*</span> y</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> newNumber</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> foo</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> responder (\addHeader response <span class="ot">-&gt;</span> addHeader (newNumber <span class="op">*</span> <span class="dv">100</span>) response) newNumber</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Combine Endpoints with Handlers to create Plans</span></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>myPlan <span class="ot">=</span> <span class="dt">Plan</span></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  myEndpoint</span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>  myHandler</span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Compose Plans with other Plans to create Servers</span></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> <span class="dt">Server</span></span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Nothing</span></span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>  default404</span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>  [ myPlan</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>  , <span class="dt">Plan</span> myOtherEndpoint myOtherHandler</span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>  , anotherPlan</span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>  ]</span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Run your Servers using Warp</span></span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> Warp.run <span class="dv">3000</span> <span class="op">$</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span></code></pre></div>
 <p>An alternative, more concise way of defining a server in Okapi is via
 <em>Matchpoints</em>:</p>
 <div class="sourceCode" id="cb2"><pre
@@ -304,12 +280,144 @@ Handler creates the Response.</p>
 returned by the Endpoint's Path, Query, Body, Headers and Responder
 Scripts respectively.</p>
 <h3>Plan</h3>
-<p>A Plan</p>
+<p>A Plan is how your Endpoint and a compatible Handler come
+together.</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Plan</span> m p q h b r <span class="ot">=</span> <span class="dt">Plan</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> transformer ::</span> m <span class="op">~&gt;</span> <span class="dt">IO</span>,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    endpoint ::</span> <span class="dt">Endpoint</span> p q h b r,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    handler ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> p <span class="ot">-&gt;</span> q <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> h <span class="ot">-&gt;</span> r <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
+<p>The <code>transformer</code> field represents a natural
+transformation from your handler's Monad <code>m</code> to
+<code>IO</code>. This is where you handle how you're custom effects are
+interpreted in <code>IO</code>.</p>
+<p>The <code>endpoint</code> field represents your Endpoint.</p>
+<p>The <code>handler</code> field represents your Handler. The types
+must match the types of your <code>endpoint</code> and
+<code>transformer</code>.</p>
+<p>Here's an example of a <code>Plan</code>:</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>myPlan <span class="ot">=</span> <span class="dt">Plan</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">id</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  myEndpoint</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  myHandler</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;index&quot;</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> magicNumber</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> (x, y)</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>    foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> HTTP.status200 <span class="kw">do</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> ResponderHeaders.has <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>myHandler magicNumber (x, y) foo () responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> newNumber <span class="ot">=</span> magicNumber <span class="op">+</span> x <span class="op">*</span> y</span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> newNumber</span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> foo</span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> responder (\addHeader response <span class="ot">-&gt;</span> addHeader (newNumber <span class="op">*</span> <span class="dv">100</span>) response) newNumber</span></code></pre></div>
+<p>The Server you build will be a combination of many Plans.</p>
 <h3>Server</h3>
-<h3>Lifter</h3>
-<h3>Execution</h3>
+<p>A Server is the final type of value that you need to generate an
+Application or Specification.</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Server</span> <span class="ot">=</span> <span class="dt">Server</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> info ::</span> <span class="dt">Maybe</span> <span class="dt">Info</span>,</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    defaultResponse ::</span> <span class="dt">WAI.Response</span>,</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    artifacts ::</span> [<span class="dt">Artifact</span>]</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
+<p>The <code>info</code> field represents your Server's metadata. It's
+used in the generation of the Server's specification. It's optional.</p>
+<p>The <code>artifacts</code> field is a list of Artifact. A single
+Artifact is generated from a single Plan, which contains a
+<code>transformer</code>, an Endpoint and a Handler. An Artifact
+contains two values that are generated from a Plan:</p>
+<ol type="1">
+<li>An IO action that returns a Response. It's only executed if the
+Endpoint used to generate the IO action matches the Request.</li>
+<li>An OpenAPI PathItem value based on the structure of the Endpoint
+used to build the Artifact.</li>
+</ol>
+<p>These two values, when combined with the Server's other Artifacts,
+are used to generate the final Application and OpenAPI Specification
+respectively.</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ot">build ::</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">forall</span> m p q h b r<span class="op">.</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Monad</span> m <span class="ot">=&gt;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Plan</span> m p q h b r <span class="ot">-&gt;</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Artifact</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>build <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="ot">plan1 ::</span> <span class="dt">Plan</span> <span class="dt">A</span> <span class="dt">B</span> <span class="dt">C</span> <span class="dt">D</span> <span class="dt">E</span> <span class="dt">F</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>plan1 <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="ot">plan2 ::</span> <span class="dt">Plan</span> <span class="dt">G</span> <span class="dt">X</span> <span class="dt">Z</span> <span class="dt">U</span> <span class="dt">I</span> <span class="dt">P</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>plan2 <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="ot">plan3 ::</span> <span class="dt">Plan</span> <span class="dt">Y</span> <span class="dt">T</span> <span class="dt">L</span> <span class="dt">G</span> <span class="dt">N</span> <span class="dt">Q</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>plan3 <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> <span class="dt">Server</span></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>  <span class="dt">Nothing</span></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>  default404</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>  [ build plan1</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>  , build plan2</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>  , build plan3</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>  , <span class="op">...</span></span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
+<p>Notice the types of the Plans don't have to be the same. The build
+function erases the types and gives us the end product that we want.
+This allows you to mix and match various combinations of Endpoints,
+Handlers, and Monad transformations in the same Server definition. For
+example, you can have two handlers that run in two different Monads in
+the same Server.</p>
+<p>Now that you have you your Server you can either:</p>
+<ol type="1">
+<li>Generate a WAI Application</li>
+<li>Generate an OpenAPI Specification</li>
+</ol>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myServer ::</span> <span class="dt">Server</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="ot">api ::</span> <span class="dt">Application</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>api <span class="ot">=</span> genWaiApplication myServer</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="ot">apiSpec ::</span> <span class="dt">OpenApi</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>apiSpec <span class="ot">=</span> genOpenAPISpec myServer</span></code></pre></div>
 <h2 id="matchpoint">Matchpoint</h2>
 <h2 id="tldr">TLDR</h2>
+<p>or even</p>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeComprehensions #-}</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>myEndpoint&#39; <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  [ n <span class="op">|</span> Path.static <span class="st">&quot;index&quot;</span>, n <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span> ]</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  [ (x, y) <span class="op">|</span> x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span>, y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span> ]</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  [ foo <span class="op">|</span> foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span> ]</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  [ () <span class="op">|</span> ]</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  [ itsOk <span class="op">|</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>      <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>      status200</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>      [ addSecretNumber <span class="op">|</span> addSecretNumber <span class="ot">&lt;-</span> ResponderHeaders.has <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span> ]</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
+<p>this works when <code>-XApplicativeComprehensions</code> is turned
+on.</p>
   </main>
   </body>
 </html>
