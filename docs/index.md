@@ -1,14 +1,21 @@
 # 🦓🦒Okapi
 
-## Introduction
-
 Okapi is a micro framework for implementing HTTP servers.
 
 - Ergonomic DSL for routing and parsing requests
 - Integrate Okapi with ANY monad stack or effect system
 - Automatically generate clients and OpenAPI specifications
 
-The primary way to implement a server in Okapi is via *Endpoints*:
+## Getting Started
+
+1. Use the command `stack new <project-name>` to create a new Haskell project
+2. Add the `okapi` library to your project's dependencies
+
+## Introduction
+
+There are two ways to implement servers in Okapi.
+
+The recommended way to implement a server in Okapi is via *Endpoints*:
 
 ```haskell
 -- | Define Endpoints using an Applicative eDSL
@@ -107,11 +114,6 @@ with Endpoints, but not a server implemented with Matchpoints.
 
 On the flip side, a server implemented with Matchpoints will be more
 concise than a server implemented with Endpoints.
-
-## Getting Started
-
-1. Use the command `stack new <project-name>` to create a new Haskell project
-2. Add the `okapi` library to your project's dependencies
 
 ## Endpoint
 
