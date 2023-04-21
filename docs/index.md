@@ -225,11 +225,11 @@ request. These are defined in more detail below.
 
    This is done using a combination of higher order functions, linear types, and smart constructors.
 
-   Responder Script operations have to take a *Responder Headers* Script as an argument to define what headers will be attached to the Response.
+   Responder Script operations have to take a *Add Header* Script as an argument to define what headers will be attached to the Response.
 
    For now, there is only one operation for Responder Scripts: `json`.
 
-   Responder Header Scripts also only have one operation: `has`.
+   Add Header Scripts also only have one operation: `has`.
 
    ```haskell
    {-# LANGUAGE ApplicativeDo #-}
