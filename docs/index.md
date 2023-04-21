@@ -615,7 +615,7 @@ The Server type for Matchpoints is much simpler than the Server type for Endpoin
 
 We recommend using Endpoints. Matchpoints are great if you're not worried about safety and just want to get something up and running quickly. Here are some downsides to using Matchpoints to implement your Server:
 
-1. We can't perform any static analysis on them. This means you can't generate OpenAPI specifications for Matchpoint Servers or perform any optimizations on them. You can perform static analysis on the Scripts that you use in your Matchpoints, if there are any.
+1. We can't perform any static analysis on them. This means you can't generate OpenAPI specifications for Matchpoint Servers or perform any optimizations on them. You can perform static analysis on the Scripts that you use in your Matchpoints though, if there are any.
 
 2. All Handlers in a Matchpoint Server must operate within the same context. For Endpoints, this is not the case.
 
