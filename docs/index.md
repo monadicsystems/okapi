@@ -292,7 +292,7 @@ data Plan m p q h b r = Plan
   }
 ```
 
-The `transformer` field represents a natural transformation from your handler's Monad `m` to `IO`. This is where you handle how you're custom effects are interpreted in `IO`.
+The `transformer` field represents a natural transformation from your handler's Monad `m` to `IO`. This is where you handle how you're custom effects are interpreted in an `IO` context.
 
 The `endpoint` field represents your Endpoint.
 
@@ -383,9 +383,9 @@ myServer = Server
   ]
 ```
 
-Notice the types of the Plans don't have to be the same. The build function erases the types and gives us the end product that we want. This allows you to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two handlers that run in two different Monads in the same Server.
+Notice, the types of the Plans don't have to be the same. The `build` function erases the types and gives us the end product we want. This allows us to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two handlers that run in two different Monads in the same Server.
 
-Now that you have you your Server you can either:
+Now that you have you your Server, you can use it to:
 
 1. Generate a WAI Application
 2. Generate an OpenAPI Specification
@@ -462,7 +462,7 @@ pattern GetUserByID userID <- Matchpoint
 
 The `GetUserByID` pattern defined above would match against any Request of the form `GET /users/{userID : UserID}`. The Handler on the RHS of this pattern in a case statement will then be able to use the `userID` parameter in it's function body if the Request matches sucessfully. If not, the next Matchpoint in your case statement is checked, just like regular patterns that we use all the time.
 
-`PathParam` is a pattern synonym that you can use with in your Matchpoints to match against path parameters of any type that is an instance of both `ToHttpApiData` and `FromHttpApiData`. This is required since `PathParam` is a *bidirectional pattern synonym*. This property of `PathParam` makes it useful for generating URLs.
+`PathParam` is a pattern synonym that you can use in your Matchpoints to match against path parameters of any type that are instances of both `ToHttpApiData` and `FromHttpApiData`. This is required since `PathParam` is a *bidirectional pattern synonym*. This property of `PathParam` makes it useful for generating URLs.
 
 If our matching logic is more complicated, pattern synonyms alone may not be enough. For more complicated routes, we can use Okapi's DSL inside our Matchpoints by using `-XViewPatterns`. As an example, let's reimplement the first Endpoint on this page as a Matchpoint. Here's the Endpoint version first:
 
@@ -492,6 +492,7 @@ myEndpoint = Endpoint
 Here's the equivalent Matchpoint version:
 
 ```haskell
+-- | Define Matchpoints using the same DSL
 pattern MyMatchpoint magicNumber pair foo = Matchpoint
   GET
   (Path.eval $ Path.static "index" *> Path.param @Int -> Ok magicNumber)
@@ -508,14 +509,18 @@ xyQuery = do
 We can simplify `MyMatchpoint` further by using more pattern synonyms:
 
 ```haskell
-pattern MyMatchpoint magicNumber pair foo <- Matchpoint
+pattern MyMatchpoint n pair bar <- Matchpoint
   GET
-  (Path.eval $ Path.static "index" *> Path.param @Int -> Ok magicNumber)
+  (MagicNumber n)
   (XYQuery pair)
-  (Body.eval $ Body.json @Value -> Ok foo)
+  (Foo bar)
   __
 
+pattern MagicNumber n <- (Path.eval $ Path.static "index" *> Path.param @Int -> Ok n)
+
 pattern XYQuery pair <- (Query.eval xyQuery -> Ok pair)
+
+pattern Foo baz <- (Body.eval $ Body.json @Value -> Ok baz)
 
 xyQuery = do
   x <- Query.param @Int "x"
@@ -523,7 +528,7 @@ xyQuery = do
   pure (x, y)
 ```
 
-Custom patterns like `XYQuery` in the example above come in handy when we need to use the same pattern inside multiple Matchpoints.
+Pattern synonyms like `MagicNumber` or `XYQuery` in the example above come in handy when we need to use the same pattern inside multiple Matchpoints.
 
 You would use the Matchpoint we defined above like so (using `-XLambdaCase`):
 
@@ -544,19 +549,21 @@ api :: Application
 api = instantiate id myServer
 ```
 
-You'll notice the Server type for Matchpoints is much simpler than the Server type for Endpoints.
+Notice, the Server type for Matchpoints is much simpler than the Server type for Endpoints.
 
 ### Matchpoints vs. Endpoints
 
 We recommend using Endpoints. Matchpoints are great if you're not worried about safety and just want to get something up and running quickly. Here are some downsides to using Matchpoints to implement your Server:
 
-1. Can't do any static analysis. This means you can't generate OpenAPI specifications for Servers that use Matchpoints or perform any optimizations. You can perform static analysis on the Scripts that you use in your Matchpoints, if any.
+1. Can't do any static analysis. This means you can't generate OpenAPI specifications for Servers that use Matchpoints or perform any optimizations. You can perform static analysis on the Scripts that you use in your Matchpoints, if there are any.
 
-2. All handlers in a Matchpoint Server must operate within the same context. For Endpoints, this is not the case.
+2. All Handlers in a Matchpoint Server must operate within the same context. For Endpoints, this is not the case.
 
 3. Endpoints are more modular. You can achieve some level of moduarity with your Matchpoints by using nested `-XPatternSynonyms` though.
 
 4. Matchpoint Servers have no knowledge of what Responses you will return to the Client. Endpoint Servers know every possible Response you may return from your Handlers, besides ones caused by `IO` errors (the goal is for Endpoints to know about these as well).
+
+5. Requires knowledge of the `-XPatternSynonyms` and `-XViewPatterns` language extensions.
 
 In short, if you don't care about safety, use Matchpoints.
 
