@@ -521,7 +521,7 @@ pattern GetUserByID userID <- Matchpoint
   _
 ```
 
-The `GetUserByID` pattern defined above would match against any Request of the form `GET /users/{userID : UserID}`. The Handler on the RHS of this pattern in a case statement will then be able to use the `userID` parameter in it's function body if the Request matches sucessfully. If not, the next Matchpoint in your case statement is checked, just like regular patterns that we use all the time.
+The `GetUserByID` pattern defined above would match against any Request of the form `GET /users/{userID : UserID}`. The Handler on the RHS of this pattern in a case statement will then be able to use the `userID` parameter in its function body if the Request matches sucessfully. If not, the next Matchpoint in your case statement is checked, just like regular patterns that we use all the time.
 
 `PathParam` is a pattern synonym that you can use in your Matchpoints to match against path parameters of any type that are instances of both `ToHttpApiData` and `FromHttpApiData`. This is required since `PathParam` is a *bidirectional pattern synonym*. This property of `PathParam` makes it useful for generating URLs.
 
