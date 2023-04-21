@@ -469,7 +469,7 @@ putUser = getUser
   }
 ```
 
-This way, we can define the `putUser` Endpoint by simply modifying `getUser` and without unecessarily repeating ourself.
+This way, we can define the `putUser` Endpoint by simply modifying `getUser` and without unnecessarily repeating our self.
 
 #### Applicative Comprehensions?
 
@@ -631,3 +631,5 @@ In short, if you don't care about safety, use Matchpoints.
 ## Servant <> Okapi
 
 Coming Soon
+
+
