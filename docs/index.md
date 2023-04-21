@@ -239,6 +239,7 @@ Request. These operations are covered in more detail below.
    {-# LANGUAGE ApplicativeDo #-}
    {-# LANGUAGE RecordWildCards #-}
    {-# LANGUAGE BlockArguments #-}
+   {-# LANGUAGE LinearTypes #-}
 
    data SecretHeaders = SecretHeaders
      { firstSecret :: Int -> Response -> Response

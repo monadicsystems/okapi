@@ -245,33 +245,34 @@ the Response.</p>
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeDo #-}</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE RecordWildCards #-}</span></span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE BlockArguments #-}</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">SecretHeaders</span> <span class="ot">=</span> <span class="dt">SecretHeaders</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> firstSecret ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> secondSecret ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">MyResponders</span> <span class="ot">=</span> <span class="dt">MyResponders</span></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> allGood ::</span> (<span class="dt">SecretHeaders</span> <span class="op">%</span><span class="dv">1</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span>) <span class="ot">-&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> notGood ::</span> (() <span class="op">%</span><span class="dv">1</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span>) <span class="ot">-&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>myResponderScript <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  allGood <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Text</span> status200 <span class="kw">do</span></span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    addSecret <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;IntSecret&quot;</span></span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    addAnotherSecret <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-Another-Secret&quot;</span></span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> <span class="dt">SecretHeaders</span> {<span class="op">..</span>}</span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  notGood <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Text</span> status501 <span class="op">$</span> <span class="fu">pure</span> ()</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> <span class="dt">MyResponders</span> {<span class="op">..</span>}</span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>myHandler someNumber _ _ _ _ (<span class="dt">MyResponders</span> allGood notGood) <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  <span class="kw">if</span> someNumber <span class="op">&lt;</span> <span class="dv">100</span></span>
-<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">then</span> <span class="fu">return</span> <span class="op">$</span> allGood</span>
-<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>      (\(<span class="dt">SecretHeaders</span> firstSecret secondSecret) response <span class="ot">-&gt;</span> secondSecret <span class="dv">0</span> <span class="op">$</span> firstSecret <span class="dv">7</span> response)</span>
-<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;All Good!&quot;</span></span>
-<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>    <span class="kw">else</span> <span class="fu">return</span> <span class="op">$</span> notGood</span>
-<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>      (\() response <span class="ot">-&gt;</span> response)</span>
-<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Not Good!&quot;</span></span></code></pre></div>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE LinearTypes #-}</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">SecretHeaders</span> <span class="ot">=</span> <span class="dt">SecretHeaders</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> firstSecret ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> secondSecret ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">MyResponders</span> <span class="ot">=</span> <span class="dt">MyResponders</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> allGood ::</span> (<span class="dt">SecretHeaders</span> <span class="op">%</span><span class="dv">1</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span>) <span class="ot">-&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> notGood ::</span> (() <span class="op">%</span><span class="dv">1</span> <span class="ot">-&gt;</span> <span class="dt">Response</span> <span class="ot">-&gt;</span> <span class="dt">Response</span>) <span class="ot">-&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> <span class="dt">Response</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>myResponderScript <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>  allGood <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Text</span> status200 <span class="kw">do</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    addSecret <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;IntSecret&quot;</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    addAnotherSecret <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-Another-Secret&quot;</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> <span class="dt">SecretHeaders</span> {<span class="op">..</span>}</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  notGood <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Text</span> status501 <span class="op">$</span> <span class="fu">pure</span> ()</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> <span class="dt">MyResponders</span> {<span class="op">..</span>}</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>myHandler someNumber _ _ _ _ (<span class="dt">MyResponders</span> allGood notGood) <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>  <span class="kw">if</span> someNumber <span class="op">&lt;</span> <span class="dv">100</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>    <span class="kw">then</span> <span class="fu">return</span> <span class="op">$</span> allGood</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>      (\(<span class="dt">SecretHeaders</span> firstSecret secondSecret) response <span class="ot">-&gt;</span> secondSecret <span class="dv">0</span> <span class="op">$</span> firstSecret <span class="dv">7</span> response)</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;All Good!&quot;</span></span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>    <span class="kw">else</span> <span class="fu">return</span> <span class="op">$</span> notGood</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>      (\() response <span class="ot">-&gt;</span> response)</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Not Good!&quot;</span></span></code></pre></div>
 <p>More information about <em>Responder</em> and <em>AddHeader</em> are
 available in the Handler section.</p></li>
 </ol>
