@@ -401,7 +401,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb16-1"><a
 <span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>apiSpec <span class="ot">=</span> genOpenAPISpec myServer</span></code></pre></div>
 <p>In the future, you should be able to automatically generate API
 clients as well.</p>
-<h3>Not Using A Plan</h3>
+<h4>Not Using A Plan</h4>
 <p>You can also create Servers with out first creating Plans. If you
 want to do this, you can just use the <code>buildWith</code> function
 directly.</p>
@@ -432,7 +432,137 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb18-1"><a
 <span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>      <span class="op">...</span></span>
 <span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
 <h2 id="matchpoint">Matchpoint</h2>
+<p>A <em>Matchpoint</em> is a <em>pattern</em> that matches on
+<code>Request</code> values.</p>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">Matchpoint</span><span class="ot"> ::</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> <span class="dt">Matchpoint</span></span></code></pre></div>
+<p>You can use the Matchpoint pattern synonym to create your own pattern
+synonyms that match specific Requests.</p>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">UserID</span> <span class="ot">=</span> <span class="dt">UserID</span> <span class="dt">Int</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="co">{- various typeclasses -}</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUserByID</span><span class="ot"> ::</span> <span class="dt">UserID</span> <span class="ot">-&gt;</span> <span class="dt">Request</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUserByID</span> userID <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  [<span class="st">&quot;users&quot;</span>, <span class="dt">PathParam</span> <span class="op">@</span><span class="dt">UserID</span> userID]</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  _</span></code></pre></div>
+<p>The <code>GetUserByID</code> pattern defined above would match
+against any Request of the form
+<code>GET /users/{userID : UserID}</code>. The Handler on the RHS of
+this pattern in a case statement will then be able to use the
+<code>userID</code> parameter in it's function body if the Request
+matches sucessfully. If not, the next Matchpoint in your case statement
+is checked, just like regular patterns that we use all the time.</p>
+<p><code>PathParam</code> is a pattern synonym that you can use with in
+your Matchpoints to match against path parameters of any type that is an
+instance of both <code>ToHttpApiData</code> and
+<code>FromHttpApiData</code>. This is required since
+<code>PathParam</code> is a <em>bidirectional pattern synonym</em>. This
+property of <code>PathParam</code> makes it useful for generating
+URLs.</p>
+<p>If our matching logic is more complicated, pattern synonyms alone may
+not be enough. For more complicated routes, we can use Okapi's DSL
+inside our Matchpoints by using <code>-XViewPatterns</code>. As an
+example, let's reimplement the first Endpoint on this page as a
+Matchpoint. Here's the Endpoint version first:</p>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;index&quot;</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> magicNumber</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> (x, y)</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> status200 <span class="kw">do</span></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span></code></pre></div>
+<p>Here's the equivalent Matchpoint version:</p>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> magicNumber pair foo <span class="ot">=</span> <span class="dt">Matchpoint</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;index&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> magicNumber)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  (Query.eval xyQuery <span class="ot">-&gt;</span> <span class="dt">Ok</span> pair)</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>  (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> foo)</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  __</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>xyQuery <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
+<p>We can simplify <code>MyMatchpoint</code> further by using more
+pattern synonyms:</p>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> magicNumber pair foo <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;index&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> magicNumber)</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">XYQuery</span> pair)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> foo)</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  __</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">XYQuery</span> pair <span class="ot">&lt;-</span> (Query.eval xyQuery <span class="ot">-&gt;</span> <span class="dt">Ok</span> pair)</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>xyQuery <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
+<p>Custom patterns like <code>XYQuery</code> in the example above come
+in handy when we need to use the same pattern inside multiple
+Matchpoints.</p>
+<p>You would use the Matchpoint we defined above like so (using
+<code>-XLambdaCase</code>):</p>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="ot">myServer ::</span> <span class="dt">Server</span> <span class="dt">IO</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> \<span class="kw">case</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">MyMatchpoint</span> n (x, y) foo <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>  _ <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="ot">instantiate ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> (m <span class="op">~&gt;</span> <span class="dt">IO</span>) <span class="ot">-&gt;</span> <span class="dt">Server</span> m <span class="ot">-&gt;</span> <span class="dt">Application</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>instantiate transformer server <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="ot">api ::</span> <span class="dt">Application</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>api <span class="ot">=</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
+<p>You'll notice the Server type for Matchpoints is much simpler than
+the Server type for Endpoints.</p>
+<h3>Matchpoints vs. Endpoints</h3>
+<p>We recommend using Endpoints. Matchpoints are great if you're not
+worried about safety and just want to get something up and running
+quickly. Here are some downsides to using Matchpoints to implement your
+Server:</p>
+<ol type="1">
+<li><p>Can't do any static analysis. This means you can't generate
+OpenAPI specifications for Servers that use Matchpoints or perform any
+optimizations. You can perform static analysis on the Scripts that you
+use in your Matchpoints, if any.</p></li>
+<li><p>All handlers in a Matchpoint Server must operate within the same
+context. For Endpoints, this is not the case.</p></li>
+<li><p>Endpoints are more modular. You can achieve some level of
+moduarity with your Matchpoints by using nested
+<code>-XPatternSynonyms</code> though.</p></li>
+<li><p>Matchpoint Servers have no knowledge of what Responses you will
+return to the Client. Endpoint Servers know every possible Response you
+may return from your Handlers, besides ones caused by <code>IO</code>
+errors (the goal is for Endpoints to know about these as well).</p></li>
+</ol>
+<p>In short, if you don't care about safety, use Matchpoints.</p>
 <h2 id="servant&lt;&gt;okapi">Servant &lt;&gt; Okapi</h2>
+<p>Coming Soon</p>
 <!-- ## TLDR
 
 or even

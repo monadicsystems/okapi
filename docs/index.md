@@ -403,7 +403,7 @@ apiSpec = genOpenAPISpec myServer
 
 In the future, you should be able to automatically generate API clients as well.
 
-### Not Using A Plan
+#### Not Using A Plan
 
 You can also create Servers with out first creating Plans. If you want to do this, you can just use the `buildWith` function directly.
 
@@ -439,7 +439,130 @@ myServer = Server
 
 ## Matchpoint
 
+A *Matchpoint* is a *pattern* that matches on `Request` values.
+
+```haskell
+pattern Matchpoint :: Request -> Matchpoint
+```
+
+You can use the Matchpoint pattern synonym to create your own pattern synonyms that match specific Requests.
+
+```haskell
+newtype UserID = UserID Int
+  deriving ({- various typeclasses -})
+
+pattern GetUserByID :: UserID -> Request
+pattern GetUserByID userID <- Matchpoint
+  GET
+  ["users", PathParam @UserID userID]
+  _
+  _
+  _
+```
+
+The `GetUserByID` pattern defined above would match against any Request of the form `GET /users/{userID : UserID}`. The Handler on the RHS of this pattern in a case statement will then be able to use the `userID` parameter in it's function body if the Request matches sucessfully. If not, the next Matchpoint in your case statement is checked, just like regular patterns that we use all the time.
+
+`PathParam` is a pattern synonym that you can use with in your Matchpoints to match against path parameters of any type that is an instance of both `ToHttpApiData` and `FromHttpApiData`. This is required since `PathParam` is a *bidirectional pattern synonym*. This property of `PathParam` makes it useful for generating URLs.
+
+If our matching logic is more complicated, pattern synonyms alone may not be enough. For more complicated routes, we can use Okapi's DSL inside our Matchpoints by using `-XViewPatterns`. As an example, let's reimplement the first Endpoint on this page as a Matchpoint. Here's the Endpoint version first:
+
+```haskell
+-- | Define Endpoints using an Applicative eDSL
+myEndpoint = Endpoint
+  GET
+  do
+    Path.static "index"
+    magicNumber <- Path.param @Int
+    pure magicNumber
+  do
+    x <- Query.param @Int "x"
+    y <- Query.option 10 $ Query.param @Int "y"
+    pure (x, y)
+  do
+    foo <- Body.json @Value
+    pure foo
+  do pure ()
+  do
+    itsOk <- Responder.json @Int status200 do
+      addSecretNumber <- AddHeader.using @Int "X-SECRET"
+      pure addSecretNumber
+    pure itsOk
+```
+
+Here's the equivalent Matchpoint version:
+
+```haskell
+pattern MyMatchpoint magicNumber pair foo = Matchpoint
+  GET
+  (Path.eval $ Path.static "index" *> Path.param @Int -> Ok magicNumber)
+  (Query.eval xyQuery -> Ok pair)
+  (Body.eval $ Body.json @Value -> Ok foo)
+  __
+
+xyQuery = do
+  x <- Query.param @Int "x"
+  y <- Query.option 10 $ Query.param @Int "y"
+  pure (x, y)
+```
+
+We can simplify `MyMatchpoint` further by using more pattern synonyms:
+
+```haskell
+pattern MyMatchpoint magicNumber pair foo <- Matchpoint
+  GET
+  (Path.eval $ Path.static "index" *> Path.param @Int -> Ok magicNumber)
+  (XYQuery pair)
+  (Body.eval $ Body.json @Value -> Ok foo)
+  __
+
+pattern XYQuery pair <- (Query.eval xyQuery -> Ok pair)
+
+xyQuery = do
+  x <- Query.param @Int "x"
+  y <- Query.option 10 $ Query.param @Int "y"
+  pure (x, y)
+```
+
+Custom patterns like `XYQuery` in the example above come in handy when we need to use the same pattern inside multiple Matchpoints.
+
+You would use the Matchpoint we defined above like so (using `-XLambdaCase`):
+
+```haskell
+type Server m = Request -> m Response
+
+myServer :: Server IO
+myServer = \case
+  MyMatchpoint n (x, y) foo -> do
+    ...
+  _ -> do
+    ...
+
+instantiate :: Monad m => (m ~> IO) -> Server m -> Application
+instantiate transformer server = ...
+
+api :: Application
+api = instantiate id myServer
+```
+
+You'll notice the Server type for Matchpoints is much simpler than the Server type for Endpoints.
+
+### Matchpoints vs. Endpoints
+
+We recommend using Endpoints. Matchpoints are great if you're not worried about safety and just want to get something up and running quickly. Here are some downsides to using Matchpoints to implement your Server:
+
+1. Can't do any static analysis. This means you can't generate OpenAPI specifications for Servers that use Matchpoints or perform any optimizations. You can perform static analysis on the Scripts that you use in your Matchpoints, if any.
+
+2. All handlers in a Matchpoint Server must operate within the same context. For Endpoints, this is not the case.
+
+3. Endpoints are more modular. You can achieve some level of moduarity with your Matchpoints by using nested `-XPatternSynonyms` though.
+
+4. Matchpoint Servers have no knowledge of what Responses you will return to the Client. Endpoint Servers know every possible Response you may return from your Handlers, besides ones caused by `IO` errors (the goal is for Endpoints to know about these as well).
+
+In short, if you don't care about safety, use Matchpoints.
+
 ## Servant <> Okapi
+
+Coming Soon
 
 <!-- ## TLDR
 
