@@ -229,7 +229,7 @@ request. These are defined in more detail below.
 
    For now, there is only one operation for Responder Scripts: `json`.
 
-   Add Header Scripts also only have one operation: `has`.
+   Add Header Scripts also only have one operation: `using`.
 
    ```haskell
    {-# LANGUAGE ApplicativeDo #-}
