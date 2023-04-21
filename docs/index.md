@@ -195,7 +195,7 @@ request. These are defined in more detail below.
 
    The `bodyScript` field defines the request body and it's content type that the Endpoint accepts.
 
-   There are four operations for Body Scripts: `json`, `form`, `formParam`, `file`.
+   There are four operations for Body Scripts: `json`, `form`, `param`, `file`.
 
    There are two modifiers for Body Scripts: `optional` and `option`.
 
