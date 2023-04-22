@@ -55,6 +55,7 @@ library
     , extra
     , http-api-data
     , http-types
+    , insert-ordered-containers
     , kind-generics
     , kind-generics-th
     , linear-base

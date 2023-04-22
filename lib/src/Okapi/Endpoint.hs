@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -15,11 +16,19 @@ import Control.Natural (type (~>))
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.CaseInsensitive qualified as CI
+import Data.Function ((&))
+import Data.HashMap.Strict.InsOrd qualified as InsOrdHashMap
+import Data.List.NonEmpty qualified as NonEmpty
+import Data.OpenApi (OpenApi (_openApiInfo))
 import Data.OpenApi qualified as OAPI
 import Data.OpenApi.Declare qualified as OAPI
+import Data.OpenApi.Internal (OpenApiSpecVersion (..), upperOpenApiSpecVersion)
 import Data.Proxy
+import Data.Semigroup (Semigroup (..))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
+import Data.Version qualified as Version
+import Extra qualified
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Okapi.Request (Request)
@@ -33,18 +42,18 @@ import Okapi.Script.Responder qualified as Responder
 
 data Endpoint p q h b r = Endpoint
   { method :: HTTP.StdMethod,
-    pathScript :: Path.Script p,
-    queryScript :: Query.Script q,
-    headersScript :: Headers.Script h,
-    bodyScript :: Body.Script b,
-    responderScript :: Responder.Script r
+    path :: Path.Script p,
+    query :: Query.Script q,
+    headers :: Headers.Script h,
+    body :: Body.Script b,
+    responder :: Responder.Script r
   }
 
-genOAPIPathItem :: Endpoint p q h b r -> (FilePath, OAPI.PathItem)
-genOAPIPathItem endpoint = (pathName, pathItem)
+toPathItem :: Endpoint p q h b r -> (FilePath, OAPI.PathItem)
+toPathItem endpoint = (pathName, pathItem)
   where
     pathName :: FilePath
-    pathName = renderPath endpoint.pathScript
+    pathName = renderPath endpoint.path
 
     pathItem :: OAPI.PathItem
     pathItem = addOperationForMethod endpoint.method operation mempty
@@ -68,7 +77,7 @@ genOAPIPathItem endpoint = (pathName, pathItem)
         }
 
     parameters :: [OAPI.Referenced OAPI.Param]
-    parameters = pathParams endpoint.pathScript <> queryParams endpoint.queryScript <> headersParams endpoint.headersScript
+    parameters = pathParams endpoint.path <> queryParams endpoint.query <> headersParams endpoint.headers
 
     pathParams :: Path.Script a -> [OAPI.Referenced OAPI.Param]
     pathParams path = case path of
@@ -181,27 +190,27 @@ data Executable = Run (IO WAI.Response) | Null
 
 type Compiler = Request -> Executable
 
-data Artifacts = Artifacts
+data Artifact = Artifact
   { compiler :: Compiler,
-    openAPIPathItem :: (FilePath, OAPI.PathItem)
+    pathItem :: (FilePath, OAPI.PathItem)
   }
 
 build ::
   forall m p q h b r.
   Monad m =>
   Plan m p q h b r ->
-  Artifacts
-build plan = Artifacts {..}
+  Artifact
+build plan = Artifact {..}
   where
-    openAPIPathItem = genOAPIPathItem plan.endpoint
+    pathItem = toPathItem plan.endpoint
     compiler (method, path, query, body, headers) =
       if method == plan.endpoint.method
         then
-          let pathResult = fst $ Path.eval plan.endpoint.pathScript path
-              queryResult = fst $ Query.eval plan.endpoint.queryScript query
-              bodyResult = fst $ Body.eval plan.endpoint.bodyScript body
-              headersResult = fst $ Headers.eval plan.endpoint.headersScript headers
-              responderResult = fst $ Responder.eval plan.endpoint.responderScript ()
+          let pathResult = fst $ Path.eval plan.endpoint.path path
+              queryResult = fst $ Query.eval plan.endpoint.query query
+              bodyResult = fst $ Body.eval plan.endpoint.body body
+              headersResult = fst $ Headers.eval plan.endpoint.headers headers
+              responderResult = fst $ Responder.eval plan.endpoint.responder ()
            in case (pathResult, queryResult, bodyResult, headersResult, responderResult) of
                 (Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
                   response <- transformer plan $ handler plan p q b h r
@@ -209,51 +218,76 @@ build plan = Artifacts {..}
                 _ -> Null
         else Null
 
-data Info = Info
-  { author :: Text.Text,
-    name :: Text.Text
-  }
-
 data Server = Server
-  { info :: Maybe Info,
-    artifacts :: [Artifacts],
+  { info :: OAPI.Info,
+    url :: [Text.Text],
+    description :: Maybe Text.Text,
+    artifacts :: [Artifact],
     defaultResponse :: WAI.Response
   }
 
 data Options = Options
 
-genApplication ::
-  Options ->
+toApp ::
   Server ->
-  (WAI.Application, OAPI.OpenApi)
-genApplication _ server = (app, spec)
+  WAI.Application
+toApp server = app
   where
-    spec = genOpenAPISpec server.artifacts
+    app :: WAI.Application
     app waiRequest respond = do
-      -- This is where routing happens. May be ineffecient
-      body <- WAI.strictRequestBody waiRequest
-      let Right method = HTTP.parseMethod $ WAI.requestMethod waiRequest
-          -- \^ TODO: Fix above. Not complete
-          path = WAI.pathInfo waiRequest
-          query = WAI.queryString waiRequest
-          headers = WAI.requestHeaders waiRequest
-          request = (method, path, query, body, headers)
-          executables = map (($ request) . compiler) (artifacts server)
-          loop :: [Executable] -> Executable
-          loop [] = Null
-          loop (h : t) = case h of
-            Null -> loop t
-            runnable -> runnable
-      case loop executables of
-        Null -> respond server.defaultResponse
-        Run action -> action >>= respond
+      let path = WAI.pathInfo waiRequest
+      if Extra.dropPrefix server.url path == path
+        then do
+          respond server.defaultResponse
+        else do
+          body <- WAI.strictRequestBody waiRequest
+          let Right method = HTTP.parseMethod $ WAI.requestMethod waiRequest
+              -- \^ TODO: Fix above. Not complete
+              query = WAI.queryString waiRequest
+              headers = WAI.requestHeaders waiRequest
+              request = (method, path, query, body, headers)
+              executables = map (($ request) . compiler) (artifacts server)
+              loop :: [Executable] -> Executable
+              loop [] = Null
+              loop (h : t) = case h of
+                Null -> loop t
+                runnable -> runnable
+          case loop executables of
+            Null -> respond server.defaultResponse
+            Run action -> action >>= respond
 
-genOpenAPISpec ::
-  [Artifacts] ->
+toOpenApi ::
+  Server ->
   OAPI.OpenApi
-genOpenAPISpec = undefined
+toOpenApi server =
+  mempty
+    { OAPI._openApiInfo = server.info,
+      OAPI._openApiServers =
+        [ OAPI.Server
+            (Text.intercalate "/" server.url)
+            server.description
+            mempty
+        ],
+      OAPI._openApiPaths = InsOrdHashMap.fromList paths,
+      OAPI._openApiOpenapi = OpenApiSpecVersion {getVersion = Version.Version [3, 0, 3] []}
+    }
+  where
+    paths =
+      let clean :: NonEmpty.NonEmpty (FilePath, OAPI.PathItem) -> (FilePath, OAPI.PathItem)
+          clean group =
+            let cleanPathItemFilePath = fst $ NonEmpty.head group
+                cleanPathItem =
+                  group
+                    |> fmap snd
+                    |> sconcat
+             in (cleanPathItemFilePath, cleanPathItem)
+       in map pathItem server.artifacts
+            |> NonEmpty.groupBy (\(fp, _) (fp', _) -> fp == fp')
+            |> fmap clean
 
-genJSClient ::
+(|>) = (&)
+
+toJSClient ::
   Server ->
   BS.ByteString
-genJSClient = undefined
+toJSClient = undefined
