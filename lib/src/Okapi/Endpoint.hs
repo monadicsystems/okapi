@@ -10,7 +10,14 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Okapi.Endpoint where
+module Okapi.Endpoint
+  ( StdMethod (..),
+    Plan (..),
+    Endpoint (..),
+    status200,
+    status404,
+  )
+where
 
 import Control.Natural (type (~>))
 import Data.Aeson qualified as Aeson
@@ -29,6 +36,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Version qualified as Version
 import Extra qualified
+import Network.HTTP.Types (StdMethod (..), status200, status404)
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Okapi.Request (Request)

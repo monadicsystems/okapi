@@ -9,6 +9,7 @@
 module Okapi.Script.Body where
 
 import Control.Monad.Par qualified as Par
+import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
@@ -33,6 +34,7 @@ data Script a where
   FMap :: (a -> b) -> Script a -> Script b
   Pure :: a -> Script a
   Apply :: Script (a -> b) -> Script a -> Script b
+  JSON :: Aeson.FromJSON a => Script a
 
 -- FormParam :: Web.FromHttpApiData a => HTTP.HeaderName -> Body a
 
@@ -58,9 +60,15 @@ eval op state = case op of
       (Ok x, state'') -> (Ok $ f x, state'')
       (Fail e, state'') -> (Fail e, state'')
     (Fail e, state') -> (Fail e, state')
+  JSON -> case Aeson.decode state of
+    Nothing -> (Fail JSONParseFail, state)
+    Just json -> (Ok json, mempty)
 
 -- FormParam name -> case lookup name state of
 --   Nothing -> (Fail FormParamNotFound, state)
 --   Just vBS -> case Web.parseHeaderMaybe vBS of
 --     Nothing -> (Fail FormParamParseFail, state)
 --     Just v -> (Ok v, List.delete (name, vBS) state)
+
+json :: Aeson.FromJSON a => Script a
+json = JSON
