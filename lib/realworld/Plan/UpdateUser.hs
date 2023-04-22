@@ -25,7 +25,7 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
+          { method = PUT,
             path = Path.static "user",
             query = pure (),
             body = Body.json @UserUpdate,

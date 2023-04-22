@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LinearTypes #-}
@@ -7,9 +6,9 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.UnFollowUser where
+module Plan.GetArticle where
 
-import Data (Article (..), Slug, User (..), Username)
+import Data (Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
@@ -29,18 +28,14 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = DELETE,
-            path = do
-              Path.static "articles"
-              slug <- Path.param @Slug "slug"
-              Path.static "favorite"
-              pure slug,
+          { method = GET,
+            path = Path.static "articles" *> Path.param @Slug "slug",
             query = pure (),
             body = pure (),
             headers = pure (),
-            responder = Responder.json @Article status200 $ pure ()
+            responder = Responder.json @User status200 $ pure ()
           },
       handler = \username _ _ _ responder -> do
         print username
-        return $ responder (\() response -> response) Article
+        return $ responder (\() response -> response) User
     }

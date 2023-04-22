@@ -30,7 +30,7 @@ data User = User
   deriving (Eq, Show, Generic, ToJSON)
 
 newtype Tag = Tag {text :: Text}
-  deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON)
+  deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON, FromJSON)
 
 newtype Username = Username {text :: Text}
   deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON)
@@ -49,3 +49,38 @@ data ArticlesQuery = ArticlesQuery
     offset :: Offset
   }
   deriving (Eq, Show)
+
+data FeedQuery = FeedQuery
+  { limit :: Limit,
+    offset :: Offset
+  }
+  deriving (Eq, Show)
+
+newtype Slug = Slug {text :: Text}
+  deriving newtype (Eq, Show, FromHttpApiData, ToSchema)
+
+data Article = Article
+  deriving (Eq, Show, Generic, ToJSON)
+
+data NewArticle = NewArticle
+  { title :: Text,
+    description :: Text,
+    body :: Text,
+    tagList :: Maybe [Tag]
+  }
+  deriving (Generic, FromJSON)
+
+data ArticleUpdate = ArticleUpdate
+  { title :: Maybe Text,
+    description :: Maybe Text,
+    body :: Maybe Text
+  }
+  deriving (Generic, FromJSON)
+
+data NewComment = NewComment
+  { body :: Text
+  }
+  deriving (Generic, FromJSON)
+
+data Comment = Comment
+  deriving (Eq, Show, Generic, ToJSON)

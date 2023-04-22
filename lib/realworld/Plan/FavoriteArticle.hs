@@ -7,7 +7,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.UnFollowUser where
+module Plan.FavoriteArticle where
 
 import Data (Article (..), Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
@@ -29,7 +29,7 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = DELETE,
+          { method = POST,
             path = do
               Path.static "articles"
               slug <- Path.param @Slug "slug"
