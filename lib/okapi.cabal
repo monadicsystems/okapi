@@ -126,8 +126,10 @@ test-suite okapi-test
 executable realworld
     main-is:          Main.hs
     other-modules:
+      App
       Data
       Database
+      JWT
       Plan.Authentication
       Plan.Registration
       Plan.GetCurrentUser
@@ -160,6 +162,10 @@ executable realworld
       , http-api-data
       , pretty-simple
       , aeson
+      , jose
       , openapi3
+      , sqlite-simple
+      , time
+      , lens
     hs-source-dirs:   realworld
     default-language: Haskell2010

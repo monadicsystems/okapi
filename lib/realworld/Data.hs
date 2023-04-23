@@ -8,6 +8,7 @@
 
 module Data where
 
+import Crypto.JWT (SignedJWT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
@@ -27,13 +28,19 @@ data Profile = Profile
   deriving (Eq, Show, Generic, ToJSON)
 
 data User = User
+  { email :: Text,
+    token :: SignedJWT,
+    username :: Username,
+    bio :: Text,
+    image :: Text
+  }
   deriving (Eq, Show, Generic, ToJSON)
 
 newtype Tag = Tag {text :: Text}
   deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON, FromJSON)
 
 newtype Username = Username {text :: Text}
-  deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON)
+  deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON, FromJSON)
 
 newtype Limit = Limit {int :: Int}
   deriving newtype (Eq, Show, FromHttpApiData, ToSchema, ToJSON)
