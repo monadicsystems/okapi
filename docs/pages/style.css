@@ -20,6 +20,10 @@ html {
   line-height: 1.5rem;
 }
 
+h1 {
+  line-height: 0;
+}
+
 h1,
 h2,
 h3 {

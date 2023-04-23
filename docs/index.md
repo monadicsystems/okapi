@@ -1,4 +1,6 @@
-# 🦓🦒Okapi
+# ┌───────┐
+# │ Okapi │
+# └───────┘
 
 Okapi is a micro framework for HTTP servers.
 
@@ -11,10 +13,14 @@ Okapi is a micro framework for HTTP servers.
 
 Please feel free to reach out to me on [GitHub](https://github.com/monadicsystems/okapi) if you have any questions/criticisms/ideas or would like to contribute to this project.
 
+---
+
 ## Getting Started
 
 1. Use the command `stack new <project-name>` to create a new Haskell project
 2. Add the `okapi` library to your project's dependencies
+
+***
 
 ## Introduction
 
@@ -96,6 +102,8 @@ with Endpoints, but not a Server implemented with Matchpoints.
 
 On the flip side, a Server implemented with Matchpoints will be more
 concise than the same Server implemented with Endpoints.
+
+___
 
 ## Endpoint
 
