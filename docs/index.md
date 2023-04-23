@@ -1,6 +1,6 @@
 # 🦓🦒Okapi
 
-Okapi is a micro framework for implementing HTTP servers.
+Okapi is a micro framework for HTTP servers.
 
 - Ergonomic DSL for parsing requests
 - Integrates seamlessly with ANY monad stack or effect system

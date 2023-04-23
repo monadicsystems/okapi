@@ -18,14 +18,21 @@ html {
   font-family: 'BerkeleyMono', sans-serif;
   background-color: #f5f5f5;
   line-height: 1.5rem;
-  font-weight: 400 !important;
 }
 
 h1,
 h2,
-h3,
+h3 {
+  font-weight: 500;
+}
+
+h2,
+h3 {
+  text-decoration: underline;
+}
+
 h4 {
-  font-weight: 400;
+  font-style: semibold;
 }
 
 em,
