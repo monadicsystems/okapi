@@ -130,6 +130,7 @@ executable realworld
       Data
       Database
       JWT
+      API
       API.Authentication
       API.Registration
       API.GetCurrentUser
