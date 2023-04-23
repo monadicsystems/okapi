@@ -487,6 +487,8 @@ putUser = getUser
 
 This way, we can define the `putUser` Endpoint by simply modifying `getUser` and avoid repeating our self.
 
+***
+
 ## Matchpoint
 
 A Matchpoint is a *pattern* that matches on Request values.
@@ -617,6 +619,8 @@ We recommend using Endpoints. Matchpoints are great if you're not worried about 
 5. Requires knowledge of the `-XPatternSynonyms` and `-XViewPatterns` language extensions.
 
 In short, if you don't care about safety, use Matchpoints.
+
+***
 
 ## Servant <> Okapi
 
