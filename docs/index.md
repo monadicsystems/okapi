@@ -477,7 +477,7 @@ putUser = getUser
   }
 ```
 
-This way, we can define the `putUser` Endpoint by simply modifying `getUser` and without repeating our self.
+This way, we can define the `putUser` Endpoint by simply modifying `getUser` and avoid repeating our self.
 
 ## Matchpoint
 
