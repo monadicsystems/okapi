@@ -21,7 +21,7 @@
   </nav>
   <main>
 <h1>🦓🦒Okapi</h1>
-<p>Okapi is a micro framework for implementing HTTP servers.</p>
+<p>Okapi is a micro framework for HTTP servers.</p>
 <ul>
 <li>Ergonomic DSL for parsing requests</li>
 <li>Integrates seamlessly with ANY monad stack or effect system</li>
@@ -49,24 +49,25 @@ dependencies</li>
 <div class="sourceCode" id="cb1"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;index&quot;</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> magicNumber</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> (x, y)</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> status200 <span class="kw">do</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span></code></pre></div>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  { method <span class="ot">=</span> <span class="dt">GET</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  , path <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      Path.static <span class="st">&quot;index&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> magicNumber</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  , query <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>      y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> (x, y)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  , body <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>      foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> foo</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>  , headers <span class="ot">=</span> <span class="fu">pure</span> ()</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  , responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>      itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> status200 <span class="kw">do</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>        <span class="fu">pure</span> addSecretNumber</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> itsOk</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>An alternative, more concise way of defining a Server in Okapi is via
 <em>Matchpoints</em>:</p>
 <div class="sourceCode" id="cb2"><pre
@@ -121,12 +122,12 @@ single Operation that can be taken against your API.</p>
 <p>An Endpoint has 6 fields.</p>
 <div class="sourceCode" id="cb3"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Endpoint</span> p q h b r <span class="ot">=</span> <span class="dt">Endpoint</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> method ::</span> <span class="dt">StdMethod</span>,                  <span class="co">-- (1)</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    pathScript ::</span> <span class="dt">Path.Script</span> p,          <span class="co">-- (2)</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    queryScript ::</span> <span class="dt">Query.Script</span> q,        <span class="co">-- (3)</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="ot">    headersScript ::</span> <span class="dt">Headers.Script</span> h,    <span class="co">-- (4)</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="ot">    bodyScript ::</span> <span class="dt">Body.Script</span> b,          <span class="co">-- (5)</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="ot">    responderScript ::</span> <span class="dt">Responder.Script</span> r <span class="co">-- (6)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> method ::</span> <span class="dt">StdMethod</span>             <span class="co">-- (1)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> path ::</span> <span class="dt">Path.Script</span> p           <span class="co">-- (2)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> query ::</span> <span class="dt">Query.Script</span> q         <span class="co">-- (3)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> body ::</span> <span class="dt">Body.Script</span> b           <span class="co">-- (4)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> headers ::</span> <span class="dt">Headers.Script</span> h     <span class="co">-- (5)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> responder ::</span> <span class="dt">Responder.Script</span> r <span class="co">-- (6)</span></span>
 <span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>The <code>method</code> field is a simple value, but the other fields
 point to what's called a <em>Script</em>. Scripts represent Okapi's DSL
@@ -182,15 +183,15 @@ Endpoint accepts.</p>
 library.</p>
 <p>Only the standard methods mentioned in RFC-1234 are allowed.</p></li>
 <li><h4>Path Script</h4>
-<p>The <code>pathScript</code> field defines the Request Path that the
+<p>The <code>path</code> field defines the Request Path that the
 Endpoint accepts, including Path parameters.</p>
 <p>Path Scripts have two operations: <code>static</code> and
 <code>param</code>.</p>
 <div class="sourceCode" id="cb6"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>myPathScript <span class="ot">=</span> Path.static <span class="st">&quot;person&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;personID&quot;</span></span></code></pre></div></li>
 <li><h4>Query Script</h4>
-<p>The <code>queryScript</code> field defines the Query that the
-Endpoint accepts.</p>
+<p>The <code>query</code> field defines the Query that the Endpoint
+accepts.</p>
 <p>There are two operations for Query Scripts: <code>param</code> and
 <code>flag</code>.</p>
 <p>There are two modifiers for Query Scripts: <code>optional</code> and
@@ -206,7 +207,7 @@ class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a 
 <span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  minAge    <span class="ot">&lt;-</span> Query.option <span class="dv">21</span> <span class="op">$</span> Query.param <span class="st">&quot;min_age&quot;</span></span>
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (lastName, optSalary, minAge)</span></code></pre></div></li>
 <li><h4>Body Script</h4>
-<p>The <code>bodyScript</code> field defines the Request Body that the
+<p>The <code>body</code> field defines the Request Body that the
 Endpoint accepts.</p>
 <p>There are four operations for Body Scripts: <code>json</code>,
 <code>form</code>, <code>param</code>, <code>file</code>.</p>
@@ -216,8 +217,8 @@ Endpoint accepts.</p>
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myBodyScript ::</span> <span class="dt">Body.Script</span> (<span class="dt">Maybe</span> <span class="dt">Value</span>)</span>
 <span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>myBodyScript <span class="ot">=</span> Body.optional <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span></span></code></pre></div></li>
 <li><h4>Headers Script</h4>
-<p>The <code>headersScript</code> field defines the Request Headers that
-the Endpoint accepts.</p>
+<p>The <code>headers</code> field defines the Request Headers that the
+Endpoint accepts.</p>
 <p>There are two operations for Headers Scripts: <code>param</code> and
 <code>cookie</code>.</p>
 <p>There are two modifiers for Headers Scripts: <code>optional</code>
@@ -226,7 +227,7 @@ and <code>option</code>.</p>
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">myHeadersScript ::</span> <span class="dt">Headers.Script</span> _</span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>myHeadersScript <span class="ot">=</span> <span class="fu">undefined</span></span></code></pre></div></li>
 <li><h4>Responder Script</h4>
-<p>The <code>responderScript</code> field defines the Responses that the
+<p>The <code>responder</code> field defines the Responses that the
 Endpoint's handler MUST return.</p>
 <p>Responder Scripts have to be more complex than the other Script types
 in order for the Endpoint to have a contract with its Handler. The
@@ -294,9 +295,9 @@ Scripts respectively.</p>
 together.</p>
 <div class="sourceCode" id="cb12"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Plan</span> m p q h b r <span class="ot">=</span> <span class="dt">Plan</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> transformer ::</span> m <span class="op">~&gt;</span> <span class="dt">IO</span>,</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    endpoint ::</span> <span class="dt">Endpoint</span> p q h b r,</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    handler ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> p <span class="ot">-&gt;</span> q <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> h <span class="ot">-&gt;</span> r <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> transformer ::</span> m <span class="op">~&gt;</span> <span class="dt">IO</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> endpoint ::</span> <span class="dt">Endpoint</span> p q h b r</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> handler ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> p <span class="ot">-&gt;</span> q <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> h <span class="ot">-&gt;</span> r <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
 <span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>The <code>transformer</code> field represents a <em>natural
 transformation</em> from your Handler's Monad <code>m</code>, to
@@ -309,44 +310,46 @@ must match the types of your <code>endpoint</code> and
 <p>Here's an example of a <code>Plan</code>:</p>
 <div class="sourceCode" id="cb13"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>myPlan <span class="ot">=</span> <span class="dt">Plan</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">id</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  myEndpoint</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  myHandler</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;index&quot;</span></span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> magicNumber</span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
-<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> (x, y)</span>
-<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>    foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
-<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
-<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
-<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> HTTP.status200 <span class="kw">do</span></span>
-<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
-<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
-<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span>
-<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>myHandler magicNumber (x, y) foo () responder <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> newNumber <span class="ot">=</span> magicNumber <span class="op">+</span> x <span class="op">*</span> y</span>
-<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> newNumber</span>
-<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> foo</span>
-<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> responder (\addHeader response <span class="ot">-&gt;</span> addHeader (newNumber <span class="op">*</span> <span class="dv">100</span>) response) newNumber</span></code></pre></div>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  { transformer <span class="ot">=</span> <span class="fu">id</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  , endpoint <span class="ot">=</span> myEndpoint</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  , handler <span class="ot">=</span> myHandler</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  { method <span class="ot">=</span> <span class="dt">GET</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  , path <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>      Path.static <span class="st">&quot;index&quot;</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>      magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> magicNumber</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  , query <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>      x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>      y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> (x, y)</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>  , body <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>      foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> foo</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  , headers <span class="ot">=</span> <span class="fu">pure</span> ()</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>  , responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>      itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> HTTP.status200 <span class="kw">do</span></span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>        addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>        <span class="fu">pure</span> addSecretNumber</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> itsOk</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>myHandler magicNumber (x, y) foo () responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="kw">let</span> newNumber <span class="ot">=</span> magicNumber <span class="op">+</span> x <span class="op">*</span> y</span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> newNumber</span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">print</span> foo</span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">return</span> <span class="op">$</span> responder (\addHeader response <span class="ot">-&gt;</span> addHeader (newNumber <span class="op">*</span> <span class="dv">100</span>) response) newNumber</span></code></pre></div>
 <p>The Server you build will be a combination of many Plans.</p>
 <h3>Server</h3>
 <p>A Server is the final type of value that you need to generate an
 Application or Specification.</p>
 <div class="sourceCode" id="cb14"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Server</span> <span class="ot">=</span> <span class="dt">Server</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> info ::</span> <span class="dt">Maybe</span> <span class="dt">Info</span>,</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="ot">    defaultResponse ::</span> <span class="dt">WAI.Response</span>,</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="ot">    artifacts ::</span> [<span class="dt">Artifact</span>]</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  {<span class="ot"> info ::</span> <span class="dt">Maybe</span> <span class="dt">Info</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> defaultResponse ::</span> <span class="dt">WAI.Response</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  ,<span class="ot"> artifacts ::</span> [<span class="dt">Artifact</span>]</span>
 <span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>The <code>info</code> field represents your Server's metadata. It's
 used in the generation of the Server's Specification. It's optional.</p>
@@ -450,23 +453,24 @@ respectively. The GET variant doesn't need a Body, but the PUT variant
 will.</p>
 <div class="sourceCode" id="cb19"><pre
 class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>getUser <span class="ot">=</span> <span class="dt">Endpoint</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;users&quot;</span></span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    userID <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">UserID</span></span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> userID</span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> () <span class="co">-- No Body Needed</span></span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span> <span class="co">-- The appropriate responses for a GET request</span></span>
-<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>putUser <span class="ot">=</span> getUser</span>
-<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>  { method <span class="ot">=</span> <span class="dt">PUT</span></span>
-<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>  , bodyScript <span class="ot">=</span> Body.json <span class="op">@</span><span class="dt">UpdatedUser</span> <span class="co">-- Body Needed</span></span>
-<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>  , responderScript <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>      <span class="op">...</span> <span class="co">-- The appropriate responses for a PUT request</span></span>
-<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>  { method <span class="ot">=</span> <span class="dt">GET</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  , path <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>      Path.static <span class="st">&quot;users&quot;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>      userID <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">UserID</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> userID</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>  , query <span class="ot">=</span> <span class="fu">pure</span> ()</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>  , body <span class="ot">=</span> <span class="fu">pure</span> () <span class="co">-- No Body Needed</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>  , headers <span class="ot">=</span> <span class="fu">pure</span> ()</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  , responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>      <span class="op">...</span> <span class="co">-- The appropriate responses for a GET request</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>putUser <span class="ot">=</span> getUser</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>  { method <span class="ot">=</span> <span class="dt">PUT</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>  , body <span class="ot">=</span> Body.json <span class="op">@</span><span class="dt">UpdatedUser</span> <span class="co">-- Body Needed</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>  , responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>      <span class="op">...</span> <span class="co">-- The appropriate responses for a PUT request</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>This way, we can define the <code>putUser</code> Endpoint by simply
 modifying <code>getUser</code> and without unnecessarily repeating our
 self.</p>
@@ -475,44 +479,24 @@ self.</p>
 use Applicative Comprehensions when defining a Script. The Endpoint
 definition at the top of this page would look like this when using
 Applicative Comprehensions.</p>
-<div class="sourceCode" id="cb20"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ot">{-# LANGUAGE ApplicativeComprehensions #-}</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>myEndpoint&#39; <span class="ot">=</span> <span class="dt">Endpoint</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  [ n <span class="op">|</span> Path.static <span class="st">&quot;index&quot;</span>, n <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span> ]</span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  [ (x, y) <span class="op">|</span> x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span>, y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span> ]</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  [ foo <span class="op">|</span> foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span> ]</span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>  [ () <span class="op">|</span> ]</span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  [ itsOk <span class="op">|</span></span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json</span>
-<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>      <span class="op">@</span><span class="dt">Int</span></span>
-<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>      status200</span>
-<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>      [ addSecretNumber <span class="op">|</span> addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span> ]</span>
-<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>  ]</span></code></pre></div>
-<p>As you can see it's more concise, but could be harder to understand
-for those who aren't familiar with the
-<code>-XApplicativeComprehensions</code> language extension.</p>
-<h4>Idiom Brackets?</h4>
-<p>COMING SOON</p>
 <h2 id="matchpoint">Matchpoint</h2>
 <p>A Matchpoint is a <em>pattern</em> that matches on Request
 values.</p>
-<div class="sourceCode" id="cb21"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">Matchpoint</span><span class="ot"> ::</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> <span class="dt">Matchpoint</span></span></code></pre></div>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">Matchpoint</span><span class="ot"> ::</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> <span class="dt">Matchpoint</span></span></code></pre></div>
 <p>You can use the Matchpoint pattern synonym to create your own pattern
 synonyms that match specific Requests.</p>
-<div class="sourceCode" id="cb22"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">UserID</span> <span class="ot">=</span> <span class="dt">UserID</span> <span class="dt">Int</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="co">{- various typeclasses -}</span>)</span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUserByID</span><span class="ot"> ::</span> <span class="dt">UserID</span> <span class="ot">-&gt;</span> <span class="dt">Request</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUserByID</span> userID <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
-<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  [<span class="st">&quot;users&quot;</span>, <span class="dt">PathParam</span> <span class="op">@</span><span class="dt">UserID</span> userID]</span>
-<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  _</span>
-<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  _</span>
-<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  _</span></code></pre></div>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">newtype</span> <span class="dt">UserID</span> <span class="ot">=</span> <span class="dt">UserID</span> <span class="dt">Int</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  <span class="kw">deriving</span> (<span class="co">{- various typeclasses -}</span>)</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUserByID</span><span class="ot"> ::</span> <span class="dt">UserID</span> <span class="ot">-&gt;</span> <span class="dt">Request</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">GetUserByID</span> userID <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  [<span class="st">&quot;users&quot;</span>, <span class="dt">PathParam</span> <span class="op">@</span><span class="dt">UserID</span> userID]</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>  _</span></code></pre></div>
 <p>The <code>GetUserByID</code> pattern defined above would match
 against any Request of the form
 <code>GET /users/{userID : UserID}</code>. The Handler on the RHS of
@@ -532,81 +516,82 @@ may not be enough. For more complicated routes, we can use Okapi's DSL
 inside our Matchpoints by using <code>-XViewPatterns</code>. As an
 example, let's reimplement the first Endpoint on this page as a
 Matchpoint. Here's the Endpoint version first.</p>
-<div class="sourceCode" id="cb23"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    Path.static <span class="st">&quot;index&quot;</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> magicNumber</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> (x, y)</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> foo</span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span> <span class="fu">pure</span> ()</span>
-<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>  <span class="kw">do</span></span>
-<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> status200 <span class="kw">do</span></span>
-<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>      addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
-<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> addSecretNumber</span>
-<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pure</span> itsOk</span></code></pre></div>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Endpoints using an Applicative eDSL</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>myEndpoint <span class="ot">=</span> <span class="dt">Endpoint</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  { method <span class="ot">=</span> <span class="dt">GET</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>  , path <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>      Path.static <span class="st">&quot;index&quot;</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>      magicNumber <span class="ot">&lt;-</span> Path.param <span class="op">@</span><span class="dt">Int</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> magicNumber</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>  , query <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>      x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>      y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> (x, y)</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>  , body <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>      foo <span class="ot">&lt;-</span> Body.json <span class="op">@</span><span class="dt">Value</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> foo</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>  , headers <span class="ot">=</span> <span class="fu">pure</span> ()</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>  , responder <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>      itsOk <span class="ot">&lt;-</span> Responder.json <span class="op">@</span><span class="dt">Int</span> status200 <span class="kw">do</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>        addSecretNumber <span class="ot">&lt;-</span> AddHeader.using <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;X-SECRET&quot;</span></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>        <span class="fu">pure</span> addSecretNumber</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>      <span class="fu">pure</span> itsOk</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>  }</span></code></pre></div>
 <p>Here's the equivalent Matchpoint version.</p>
-<div class="sourceCode" id="cb24"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Matchpoints using the same DSL</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> magicNumber pair foo <span class="ot">=</span> <span class="dt">Matchpoint</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;index&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> magicNumber)</span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  (Query.eval xyQuery <span class="ot">-&gt;</span> <span class="dt">Ok</span> pair)</span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> foo)</span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>  __</span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>xyQuery <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- | Define Matchpoints using the same DSL</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> magicNumber pair foo <span class="ot">=</span> <span class="dt">Matchpoint</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;index&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> magicNumber)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  (Query.eval xyQuery <span class="ot">-&gt;</span> <span class="dt">Ok</span> pair)</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> foo)</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>xyQuery <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
 <p>We can simplify <code>MyMatchpoint</code> further by using more
 pattern synonyms.</p>
-<div class="sourceCode" id="cb25"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> n pair bar <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">MagicNumber</span> n)</span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">XYQuery</span> pair)</span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">Foo</span> bar)</span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>  __</span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MagicNumber</span> n <span class="ot">&lt;-</span> (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;index&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> n)</span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">XYQuery</span> pair <span class="ot">&lt;-</span> (Query.eval xyQuery <span class="ot">-&gt;</span> <span class="dt">Ok</span> pair)</span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">Foo</span> baz <span class="ot">&lt;-</span> (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> baz)</span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>xyQuery <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
-<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
-<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MyMatchpoint</span> n pair bar <span class="ot">&lt;-</span> <span class="dt">Matchpoint</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">GET</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">MagicNumber</span> n)</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">XYQuery</span> pair)</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>  (<span class="dt">Foo</span> bar)</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>  _</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">MagicNumber</span> n <span class="ot">&lt;-</span> (Path.eval <span class="op">$</span> Path.static <span class="st">&quot;index&quot;</span> <span class="op">*&gt;</span> Path.param <span class="op">@</span><span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> n)</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">XYQuery</span> pair <span class="ot">&lt;-</span> (Query.eval xyQuery <span class="ot">-&gt;</span> <span class="dt">Ok</span> pair)</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="kw">pattern</span> <span class="dt">Foo</span> baz <span class="ot">&lt;-</span> (Body.eval <span class="op">$</span> Body.json <span class="op">@</span><span class="dt">Value</span> <span class="ot">-&gt;</span> <span class="dt">Ok</span> baz)</span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>xyQuery <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>  x <span class="ot">&lt;-</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;x&quot;</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>  y <span class="ot">&lt;-</span> Query.option <span class="dv">10</span> <span class="op">$</span> Query.param <span class="op">@</span><span class="dt">Int</span> <span class="st">&quot;y&quot;</span></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pure</span> (x, y)</span></code></pre></div>
 <p>Pattern synonyms like <code>MagicNumber</code> or
 <code>XYQuery</code> in the example above come in handy when we need to
 use the same pattern inside multiple Matchpoints.</p>
 <p>You can use the Matchpoint we defined above in a case statement with
 other Matchpoints to define a Server.</p>
-<div class="sourceCode" id="cb26"><pre
-class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="ot">myServer ::</span> <span class="dt">Server</span> <span class="dt">IO</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> \<span class="kw">case</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">MyMatchpoint</span> n (x, y) foo <span class="ot">-&gt;</span> <span class="kw">do</span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>  _ <span class="ot">-&gt;</span> <span class="kw">do</span></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="ot">instantiate ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> (m <span class="op">~&gt;</span> <span class="dt">IO</span>) <span class="ot">-&gt;</span> <span class="dt">Server</span> m <span class="ot">-&gt;</span> <span class="dt">Application</span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>instantiate transformer server <span class="ot">=</span> <span class="op">...</span></span>
-<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a><span class="ot">api ::</span> <span class="dt">Application</span></span>
-<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>api <span class="ot">=</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">Server</span> m <span class="ot">=</span> <span class="dt">Request</span> <span class="ot">-&gt;</span> m <span class="dt">Response</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="ot">myServer ::</span> <span class="dt">Server</span> <span class="dt">IO</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>myServer <span class="ot">=</span> \<span class="kw">case</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">MyMatchpoint</span> n (x, y) foo <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>  _ <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">...</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="ot">instantiate ::</span> <span class="dt">Monad</span> m <span class="ot">=&gt;</span> (m <span class="op">~&gt;</span> <span class="dt">IO</span>) <span class="ot">-&gt;</span> <span class="dt">Server</span> m <span class="ot">-&gt;</span> <span class="dt">Application</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>instantiate transformer server <span class="ot">=</span> <span class="op">...</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="ot">api ::</span> <span class="dt">Application</span></span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>api <span class="ot">=</span> instantiate <span class="fu">id</span> myServer</span></code></pre></div>
 <p>The Server type for Matchpoints is much simpler than the Server type
 for Endpoints.</p>
 <h3>Matchpoints vs. Endpoints</h3>

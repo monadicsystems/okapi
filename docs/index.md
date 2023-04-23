@@ -25,24 +25,25 @@ The recommended way to implement a Server in Okapi is via *Endpoints*:
 ```haskell
 -- | Define Endpoints using an Applicative eDSL
 myEndpoint = Endpoint
-  GET
-  do
-    Path.static "index"
-    magicNumber <- Path.param @Int
-    pure magicNumber
-  do
-    x <- Query.param @Int "x"
-    y <- Query.option 10 $ Query.param @Int "y"
-    pure (x, y)
-  do
-    foo <- Body.json @Value
-    pure foo
-  do pure ()
-  do
-    itsOk <- Responder.json @Int status200 do
-      addSecretNumber <- AddHeader.using @Int "X-SECRET"
-      pure addSecretNumber
-    pure itsOk
+  { method = GET
+  , path = do
+      Path.static "index"
+      magicNumber <- Path.param @Int
+      pure magicNumber
+  , query = do
+      x <- Query.param @Int "x"
+      y <- Query.option 10 $ Query.param @Int "y"
+      pure (x, y)
+  , body = do
+      foo <- Body.json @Value
+      pure foo
+  , headers = pure ()
+  , responder = do
+      itsOk <- Responder.json @Int status200 do
+        addSecretNumber <- AddHeader.using @Int "X-SECRET"
+        pure addSecretNumber
+      pure itsOk
+  }
 ```
 
 An alternative, more concise way of defining a Server in Okapi is via *Matchpoints*:
@@ -104,12 +105,12 @@ An Endpoint has 6 fields.
 
 ```haskell
 data Endpoint p q h b r = Endpoint
-  { method :: StdMethod,                  -- (1)
-    pathScript :: Path.Script p,          -- (2)
-    queryScript :: Query.Script q,        -- (3)
-    headersScript :: Headers.Script h,    -- (4)
-    bodyScript :: Body.Script b,          -- (5)
-    responderScript :: Responder.Script r -- (6)
+  { method :: StdMethod             -- (1)
+  , path :: Path.Script p           -- (2)
+  , query :: Query.Script q         -- (3)
+  , body :: Body.Script b           -- (4)
+  , headers :: Headers.Script h     -- (5)
+  , responder :: Responder.Script r -- (6)
   }
 ```
 
@@ -167,7 +168,7 @@ Request. These operations are covered in more detail below.
 
 2. #### Path Script
 
-   The `pathScript` field defines the Request Path that the Endpoint accepts, including Path parameters.
+   The `path` field defines the Request Path that the Endpoint accepts, including Path parameters.
    
    Path Scripts have two operations: `static` and `param`.
 
@@ -177,7 +178,7 @@ Request. These operations are covered in more detail below.
 
 3. #### Query Script
 
-   The `queryScript` field defines the Query that the Endpoint accepts.
+   The `query` field defines the Query that the Endpoint accepts.
 
    There are two operations for Query Scripts: `param` and `flag`.
 
@@ -197,7 +198,7 @@ Request. These operations are covered in more detail below.
 
 4. #### Body Script
 
-   The `bodyScript` field defines the Request Body that the Endpoint accepts.
+   The `body` field defines the Request Body that the Endpoint accepts.
 
    There are four operations for Body Scripts: `json`, `form`, `param`, `file`.
 
@@ -210,7 +211,7 @@ Request. These operations are covered in more detail below.
 
 5. #### Headers Script
 
-   The `headersScript` field defines the Request Headers that the Endpoint accepts.
+   The `headers` field defines the Request Headers that the Endpoint accepts.
 
    There are two operations for Headers Scripts: `param` and `cookie`.
 
@@ -223,7 +224,7 @@ Request. These operations are covered in more detail below.
 
 6. #### Responder Script
 
-   The `responderScript` field defines the Responses that the Endpoint's handler MUST return.
+   The `responder` field defines the Responses that the Endpoint's handler MUST return.
 
    Responder Scripts have to be more complex than the other Script types in order for the Endpoint to have a contract with its Handler. The contract ensures that the Handler will respond with the Responses defined in the Responder Script.
 
@@ -291,9 +292,9 @@ A Plan is how your Endpoint and its designated Handler come together.
 
 ```haskell
 data Plan m p q h b r = Plan
-  { transformer :: m ~> IO,
-    endpoint :: Endpoint p q h b r,
-    handler :: Monad m => p -> q -> b -> h -> r -> m Response
+  { transformer :: m ~> IO
+  , endpoint :: Endpoint p q h b r
+  , handler :: Monad m => p -> q -> b -> h -> r -> m Response
   }
 ```
 
@@ -307,29 +308,31 @@ Here's an example of a `Plan`:
 
 ```haskell
 myPlan = Plan
-  id
-  myEndpoint
-  myHandler
+  { transformer = id
+  , endpoint = myEndpoint
+  , handler = myHandler
+  }
 
 myEndpoint = Endpoint
-  GET
-  do
-    Path.static "index"
-    magicNumber <- Path.param @Int
-    pure magicNumber
-  do
-    x <- Query.param @Int "x"
-    y <- Query.option 10 $ Query.param @Int "y"
-    pure (x, y)
-  do
-    foo <- Body.json @Value
-    pure foo
-  do pure ()
-  do
-    itsOk <- Responder.json @Int HTTP.status200 do
-      addSecretNumber <- AddHeader.using @Int "X-SECRET"
-      pure addSecretNumber
-    pure itsOk
+  { method = GET
+  , path = do
+      Path.static "index"
+      magicNumber <- Path.param @Int
+      pure magicNumber
+  , query = do
+      x <- Query.param @Int "x"
+      y <- Query.option 10 $ Query.param @Int "y"
+      pure (x, y)
+  , body = do
+      foo <- Body.json @Value
+      pure foo
+  , headers = pure ()
+  , responder = do
+      itsOk <- Responder.json @Int HTTP.status200 do
+        addSecretNumber <- AddHeader.using @Int "X-SECRET"
+        pure addSecretNumber
+      pure itsOk
+  }
 
 myHandler magicNumber (x, y) foo () responder = do
   let newNumber = magicNumber + x * y
@@ -346,9 +349,9 @@ A Server is the final type of value that you need to generate an Application or 
 
 ```haskell
 data Server = Server
-  { info :: Maybe Info,
-    defaultResponse :: WAI.Response,
-    artifacts :: [Artifact]
+  { info :: Maybe Info
+  , defaultResponse :: WAI.Response
+  , artifacts :: [Artifact]
   }
 ```
 
@@ -450,21 +453,22 @@ When implementing an API you will usually need the same path to have multiple me
 
 ```haskell
 getUser = Endpoint
-  GET
-  do
-    Path.static "users"
-    userID <- Path.param @UserID
-    pure userID
-  do pure ()
-  do pure () -- No Body Needed
-  do pure ()
-  do
-    ... -- The appropriate responses for a GET request
+  { method = GET
+  , path = do
+      Path.static "users"
+      userID <- Path.param @UserID
+      pure userID
+  , query = pure ()
+  , body = pure () -- No Body Needed
+  , headers = pure ()
+  , responder = do
+      ... -- The appropriate responses for a GET request
+  }
 
 putUser = getUser
   { method = PUT
-  , bodyScript = Body.json @UpdatedUser -- Body Needed
-  , responderScript = do
+  , body = Body.json @UpdatedUser -- Body Needed
+  , responder = do
       ... -- The appropriate responses for a PUT request
   }
 ```
@@ -474,29 +478,6 @@ This way, we can define the `putUser` Endpoint by simply modifying `getUser` and
 #### Applicative Comprehensions?
 
 Since Okapi's Script DSL is an Applicative, it would be possible to use Applicative Comprehensions when defining a Script. The Endpoint definition at the top of this page would look like this when using Applicative Comprehensions.
-
-```haskell
-{-# LANGUAGE ApplicativeComprehensions #-}
-
-myEndpoint' = Endpoint
-  GET
-  [ n | Path.static "index", n <- Path.param @Int ]
-  [ (x, y) | x <- Query.param @Int "x", y <- Query.option 10 $ Query.param @Int "y" ]
-  [ foo | foo <- Body.json @Value ]
-  [ () | ]
-  [ itsOk |
-    itsOk <- Responder.json
-      @Int
-      status200
-      [ addSecretNumber | addSecretNumber <- AddHeader.using @Int "X-SECRET" ]
-  ]
-```
-
-As you can see it's more concise, but could be harder to understand for those who aren't familiar with the `-XApplicativeComprehensions` language extension.
-
-#### Idiom Brackets?
-
-COMING SOON
 
 ## Matchpoint
 
@@ -530,24 +511,25 @@ If your matching logic is more complicated, pattern synonyms alone may not be en
 ```haskell
 -- | Define Endpoints using an Applicative eDSL
 myEndpoint = Endpoint
-  GET
-  do
-    Path.static "index"
-    magicNumber <- Path.param @Int
-    pure magicNumber
-  do
-    x <- Query.param @Int "x"
-    y <- Query.option 10 $ Query.param @Int "y"
-    pure (x, y)
-  do
-    foo <- Body.json @Value
-    pure foo
-  do pure ()
-  do
-    itsOk <- Responder.json @Int status200 do
-      addSecretNumber <- AddHeader.using @Int "X-SECRET"
-      pure addSecretNumber
-    pure itsOk
+  { method = GET
+  , path = do
+      Path.static "index"
+      magicNumber <- Path.param @Int
+      pure magicNumber
+  , query = do
+      x <- Query.param @Int "x"
+      y <- Query.option 10 $ Query.param @Int "y"
+      pure (x, y)
+  , body = do
+      foo <- Body.json @Value
+      pure foo
+  , headers = pure ()
+  , responder = do
+      itsOk <- Responder.json @Int status200 do
+        addSecretNumber <- AddHeader.using @Int "X-SECRET"
+        pure addSecretNumber
+      pure itsOk
+  }
 ```
 
 Here's the equivalent Matchpoint version.
@@ -559,7 +541,7 @@ pattern MyMatchpoint magicNumber pair foo = Matchpoint
   (Path.eval $ Path.static "index" *> Path.param @Int -> Ok magicNumber)
   (Query.eval xyQuery -> Ok pair)
   (Body.eval $ Body.json @Value -> Ok foo)
-  __
+  _
 
 xyQuery = do
   x <- Query.param @Int "x"
@@ -575,7 +557,7 @@ pattern MyMatchpoint n pair bar <- Matchpoint
   (MagicNumber n)
   (XYQuery pair)
   (Foo bar)
-  __
+  _
 
 pattern MagicNumber n <- (Path.eval $ Path.static "index" *> Path.param @Int -> Ok n)
 
@@ -631,5 +613,3 @@ In short, if you don't care about safety, use Matchpoints.
 ## Servant <> Okapi
 
 Coming Soon
-
-
