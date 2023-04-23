@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LinearTypes #-}
@@ -7,12 +6,10 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.FavoriteArticle where
+module API.UpdateUser where
 
-import Data (Article (..), Slug, User (..), Username)
+import Data (User (..), UserUpdate)
 import qualified Data.Aeson as Aeson
-import qualified Data.OpenApi as OAPI
-import Data.Text (Text)
 import GHC.Generics (Generic)
 import Okapi.Endpoint
 import Okapi.Script.AddHeader (Response)
@@ -22,25 +19,20 @@ import qualified Okapi.Script.Headers as Headers
 import qualified Okapi.Script.Path as Path
 import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
-import qualified Web.HttpApiData as Web
 
 plan =
   Plan
     { transformer = id,
       endpoint =
         Endpoint
-          { method = POST,
-            path = do
-              Path.static "articles"
-              slug <- Path.param @Slug "slug"
-              Path.static "favorite"
-              pure slug,
+          { method = PUT,
+            path = Path.static "user",
             query = pure (),
-            body = pure (),
+            body = Body.json @UserUpdate,
             headers = pure (),
-            responder = Responder.json @Article status200 $ pure ()
+            responder = Responder.json @User status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
-        print username
-        return $ responder (\() response -> response) Article
+      handler = \_ _ _ userRegistration responder -> do
+        print userRegistration
+        return $ responder (\() response -> response) User
     }

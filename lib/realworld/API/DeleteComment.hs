@@ -7,7 +7,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.DeleteComment where
+module API.DeleteComment where
 
 import Data (Comment (..), NewArticle, NewComment, Slug, User (..), Username)
 import qualified Data.Aeson as Aeson

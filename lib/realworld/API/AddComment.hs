@@ -7,9 +7,9 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.FollowUser where
+module API.AddComment where
 
-import Data (Profile (..), Username)
+import Data (Comment (..), NewArticle, NewComment, Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
@@ -31,16 +31,16 @@ plan =
         Endpoint
           { method = POST,
             path = do
-              Path.static "profiles"
-              username <- Path.param @Username "username"
-              Path.static "follow"
-              pure username,
+              Path.static "articles"
+              slug <- Path.param @Slug "slug"
+              Path.static "comments"
+              pure slug,
             query = pure (),
-            body = pure (),
+            body = Body.json @NewComment,
             headers = pure (),
-            responder = Responder.json @Profile status200 $ pure ()
+            responder = Responder.json @Comment status200 $ pure ()
           },
       handler = \username _ _ _ responder -> do
         print username
-        return $ responder (\() response -> response) Profile
+        return $ responder (\() response -> response) Comment
     }

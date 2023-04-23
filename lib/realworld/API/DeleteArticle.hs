@@ -1,14 +1,14 @@
-{-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LinearTypes #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.ListArticles where
+module API.DeleteArticle where
 
-import Data (ArticlesQuery (..), Limit (..), Offset (..), Tag, User (..), Username)
+import Data (Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
@@ -28,20 +28,14 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
-            path = Path.static "articles",
-            query = do
-              tag <- Query.optional $ Query.param @Tag "tag"
-              author <- Query.optional $ Query.param @Username "author"
-              favorited <- Query.optional $ Query.param @Username "favorited"
-              limit <- Query.option (Limit 20) $ Query.param @Limit "limit"
-              offset <- Query.option (Offset 0) $ Query.param @Offset "offset"
-              pure ArticlesQuery {..},
+          { method = DELETE,
+            path = Path.static "articles" *> Path.param @Slug "slug",
+            query = pure (),
             body = pure (),
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \_ _ _ userRegistration responder -> do
-        print userRegistration
+      handler = \username _ _ _ responder -> do
+        print username
         return $ responder (\() response -> response) User
     }

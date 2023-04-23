@@ -1,15 +1,14 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LinearTypes #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.GetComments where
+module API.GetTags where
 
-import Data (Comment (..), NewArticle, NewComment, Slug, User (..), Username)
+import Data (ArticlesQuery (..), Limit (..), Offset (..), Tag, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
@@ -30,17 +29,13 @@ plan =
       endpoint =
         Endpoint
           { method = GET,
-            path = do
-              Path.static "articles"
-              slug <- Path.param @Slug "slug"
-              Path.static "comments"
-              pure slug,
+            path = Path.static "tags",
             query = pure (),
             body = pure (),
             headers = pure (),
-            responder = Responder.json @[Comment] status200 $ pure ()
+            responder = Responder.json @[Tag] status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
-        print username
-        return $ responder (\() response -> response) [Comment]
+      handler = \_ _ _ userRegistration responder -> do
+        print userRegistration
+        return $ responder (\() response -> response) []
     }

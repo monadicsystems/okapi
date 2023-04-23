@@ -1,15 +1,14 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LinearTypes #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.AddComment where
+module API.FeedArticles where
 
-import Data (Comment (..), NewArticle, NewComment, Slug, User (..), Username)
+import Data (ArticlesQuery (..), FeedQuery (..), Limit (..), Offset (..), Tag, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
@@ -29,18 +28,17 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = POST,
-            path = do
-              Path.static "articles"
-              slug <- Path.param @Slug "slug"
-              Path.static "comments"
-              pure slug,
-            query = pure (),
-            body = Body.json @NewComment,
+          { method = GET,
+            path = Path.static "articles" *> Path.static "feed",
+            query = do
+              limit <- Query.option (Limit 20) $ Query.param @Limit "limit"
+              offset <- Query.option (Offset 0) $ Query.param @Offset "offset"
+              pure FeedQuery {..},
+            body = pure (),
             headers = pure (),
-            responder = Responder.json @Comment status200 $ pure ()
+            responder = Responder.json @User status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
-        print username
-        return $ responder (\() response -> response) Comment
+      handler = \_ _ _ userRegistration responder -> do
+        print userRegistration
+        return $ responder (\() response -> response) User
     }

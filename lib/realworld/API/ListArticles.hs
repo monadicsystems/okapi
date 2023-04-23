@@ -1,14 +1,14 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LinearTypes #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.GetProfile where
+module API.ListArticles where
 
-import Data (User (..), Username)
+import Data (ArticlesQuery (..), Limit (..), Offset (..), Tag, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
@@ -29,13 +29,19 @@ plan =
       endpoint =
         Endpoint
           { method = GET,
-            path = Path.static "profiles" *> Path.param @Username "username",
-            query = pure (),
+            path = Path.static "articles",
+            query = do
+              tag <- Query.optional $ Query.param @Tag "tag"
+              author <- Query.optional $ Query.param @Username "author"
+              favorited <- Query.optional $ Query.param @Username "favorited"
+              limit <- Query.option (Limit 20) $ Query.param @Limit "limit"
+              offset <- Query.option (Offset 0) $ Query.param @Offset "offset"
+              pure ArticlesQuery {..},
             body = pure (),
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
-        print username
+      handler = \_ _ _ userRegistration responder -> do
+        print userRegistration
         return $ responder (\() response -> response) User
     }

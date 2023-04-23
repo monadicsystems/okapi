@@ -6,9 +6,9 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Plan.GetCurrentUser where
+module API.Registration where
 
-import Data (User (..))
+import Data (User (..), UserRegistration)
 import qualified Data.Aeson as Aeson
 import GHC.Generics (Generic)
 import Okapi.Endpoint
@@ -25,10 +25,10 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
-            path = Path.static "user",
+          { method = POST,
+            path = Path.static "users",
             query = pure (),
-            body = pure (),
+            body = Body.json @UserRegistration,
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
