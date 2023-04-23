@@ -606,7 +606,7 @@ We recommend using Endpoints. Matchpoints are great if you're not worried about 
 
 2. All Handlers in a Matchpoint Server must operate within the same context. For Endpoints, this is not the case.
 
-3. Endpoints are more modular. You can achieve some level of moduarity with your Matchpoints by using nested `-XPatternSynonyms` though.
+3. Endpoints are more modular. You can achieve some level of modularity with your Matchpoints by using nested `-XPatternSynonyms` though.
 
 4. Matchpoint Servers have no knowledge of what Responses you will return to the Client. Endpoint Servers know every possible Response you may return from your Handlers, besides the ones returned by `IO` errors (the goal is for Endpoints to know about these as well).
 
