@@ -28,7 +28,7 @@ h1 {
 h2,
 h3 {
   font-weight: 500;
-  text-decoration: underline;
+  /* text-decoration: underline; */
 }
 
 h4 {
