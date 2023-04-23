@@ -1,6 +1,43 @@
+/* Regular variant */
+@font-face {
+  font-family: 'BerkeleyMono';
+  src: url('BerkeleyMonoVariable-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* Italicized variant */
+@font-face {
+  font-family: 'BerkeleyMono';
+  src: url('BerkeleyMonoVariable-Italic.woff2') format('woff2');
+  font-weight: normal;
+  font-style: italic;
+}
+
 html {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: 'BerkeleyMono', sans-serif;
   background-color: #f5f5f5;
+  line-height: 1.5rem;
+  font-weight: 400 !important;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 400;
+}
+
+em,
+i {
+  font-family: 'BerkeleyMono', sans-serif;
+  font-style: italic;
+}
+
+code {
+  font-family: 'BerkeleyMono', sans-serif;
+  font-style: normal;
+  line-height: normal;
 }
 
 body {
