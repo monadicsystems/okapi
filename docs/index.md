@@ -479,10 +479,6 @@ putUser = getUser
 
 This way, we can define the `putUser` Endpoint by simply modifying `getUser` and without unnecessarily repeating our self.
 
-#### Applicative Comprehensions?
-
-Since Okapi's Script DSL is an Applicative, it would be possible to use Applicative Comprehensions when defining a Script. The Endpoint definition at the top of this page would look like this when using Applicative Comprehensions.
-
 ## Matchpoint
 
 A Matchpoint is a *pattern* that matches on Request values.
