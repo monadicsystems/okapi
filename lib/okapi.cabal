@@ -165,7 +165,9 @@ executable realworld
       , jose
       , openapi3
       , sqlite-simple
+      , hedis
       , time
+      , transformers
       , lens
     hs-source-dirs:   realworld
     default-language: Haskell2010
