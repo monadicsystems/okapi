@@ -382,13 +382,15 @@ plan3 :: Plan Y T L G N Q
 plan3 = ...
 
 myServer = Server
-  Nothing
-  default404
-  [ build plan1
-  , build plan2
-  , build plan3
-  , ...
-  ]
+  { info = Nothing
+  , defaultResponse = default404
+  , artifacts =
+      [ build plan1
+      , build plan2
+      , build plan3
+      , ...
+      ]
+  }
 ```
 
 The types of the Plans used to build your Server don't have to be the same. The `build` function erases the types and gives us the end products we need. This allows us to mix and match various combinations of Endpoints, Handlers, and Monad transformations in the same Server definition. For example, you can have two Handlers that operate in two different Monads in the same Server.
@@ -436,15 +438,17 @@ partially applied function on your Endpoints and Handlers to produce Artifacts.
 buildWithIO = buildWith id
 
 myServer = Server
-  Nothing
-  default404
-  [ buildWithIO endpoint1 handler1
-  , buildWithIO endpoint2 handler2
-  , buildWithIO endpoint3 \x y z a b -> do
-      doSomethingWith x
-      log a y b
-      ...
-  ]
+  { info = Nothing
+  , defaultResponse = default404
+  , artifacts =
+      [ buildWithIO endpoint1 handler1
+      , buildWithIO endpoint2 handler2
+      , buildWithIO endpoint3 \x y z a b -> do
+          doSomethingWith x
+          log a y b
+          ...
+      ]
+  }
 ```
 
 #### DRY Endpoints
