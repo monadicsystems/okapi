@@ -172,5 +172,6 @@ executable realworld
       , time
       , transformers
       , lens
+      , natural-transformation
     hs-source-dirs:   realworld
     default-language: Haskell2010

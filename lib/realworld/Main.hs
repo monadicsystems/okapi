@@ -3,17 +3,23 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LinearTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE QualifiedDo #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Main where
 
+import API (buildWithContext)
+import API.AddComment qualified as AddComent
+import API.AddComment qualified as AddComment
+import App (Config)
 import Data.Text qualified as Text
 import Database
 import Okapi.Endpoint
@@ -26,5 +32,23 @@ import Okapi.Script.Responder qualified as Responder
 import Text.Pretty.Simple (pPrint)
 import Web.HttpApiData qualified as Web
 
+getConfig :: IO Config
+getConfig = undefined
+
 main :: IO ()
-main = print True
+main = do
+  config <- getConfig
+  let builder = buildWithContext config
+  pure ()
+
+realworldAPI builder =
+  Server
+    { info = mempty,
+      url = ["api"],
+      description = Nothing,
+      -- defaultResponse = mempty,
+      artifacts =
+        [ builder AddComent.endpoint AddComment.handler,
+          undefined
+        ]
+    }

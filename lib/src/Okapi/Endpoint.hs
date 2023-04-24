@@ -14,6 +14,10 @@ module Okapi.Endpoint
   ( StdMethod (..),
     Plan (..),
     Endpoint (..),
+    Handler,
+    Artifact,
+    Server (..),
+    buildWith,
     status200,
     status404,
   )
@@ -190,10 +194,12 @@ toPathItem endpoint = (pathName, pathItem)
       Path.Static t -> "/" <> Text.unpack t
       Path.Param @p name -> "/{" <> Text.unpack name <> "}"
 
+type Handler m s p q b h r = Monad m => s -> p -> q -> b -> h -> r -> m Response
+
 data Plan m s p q h b r = Plan
   { transformer :: m ~> IO,
     endpoint :: Endpoint s p q h b r,
-    handler :: Monad m => s -> p -> q -> b -> h -> r -> m Response
+    handler :: Handler m s p q b h r
   }
 
 data Executable = Run (IO WAI.Response) | Null
@@ -204,6 +210,15 @@ data Artifact = Artifact
   { compiler :: Compiler,
     pathItem :: (FilePath, OAPI.PathItem)
   }
+
+buildWith ::
+  forall m s p q h b r.
+  Monad m =>
+  (m ~> IO) ->
+  Endpoint s p q h b r ->
+  Handler m s p q h b r ->
+  Artifact
+buildWith transformer endpoint handler = undefined
 
 build ::
   forall m s p q h b r.
