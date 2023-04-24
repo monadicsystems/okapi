@@ -164,6 +164,7 @@ executable realworld
       , http-api-data
       , pretty-simple
       , aeson
+      , bytestring
       , jose
       , openapi3
       , sqlite-simple

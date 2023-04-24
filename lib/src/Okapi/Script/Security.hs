@@ -13,6 +13,7 @@ import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
+import Data.CaseInsensitive qualified as CI
 import Data.List qualified as List
 import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
@@ -26,10 +27,8 @@ import Web.HttpApiData qualified as Web
 data Error
   = ParseFail
   | ParamNotFound
-  | CookieHeaderNotFound
-  | CookieNotFound
-  | HeaderValueParseFail
-  | CookieValueParseFail
+  | APIKeyParseFailIn In
+  | APIKeyNotFoundIn In BS.ByteString
   deriving (Eq, Show, Generics.Generic)
 
 data In
@@ -90,11 +89,25 @@ eval op state = case op of
       (err@(Fail e), _) -> (err, state)
       (ok, newCookies) -> (ok, state {cookies = newCookies})
 
-findAPIKeyInCookie :: Web.Cookies -> BS.ByteString -> (Result Error a, Web.Cookies)
-findAPIKeyInCookie cookies name = undefined
+findAPIKeyInCookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => Web.Cookies -> BS.ByteString -> (Result Error a, Web.Cookies)
+findAPIKeyInCookie cookies name = case lookup name cookies of
+  Nothing -> (Fail $ APIKeyNotFoundIn Cookie name, cookies)
+  Just bs -> case Web.parseHeaderMaybe bs of
+    Nothing -> (Fail $ APIKeyParseFailIn Cookie, cookies)
+    Just value -> (Ok value, List.delete (name, bs) cookies)
 
-findAPIKeyInHeader :: HTTP.RequestHeaders -> BS.ByteString -> (Result Error a, HTTP.RequestHeaders)
-findAPIKeyInHeader headers name = undefined
+findAPIKeyInHeader :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.RequestHeaders -> BS.ByteString -> (Result Error a, HTTP.RequestHeaders)
+findAPIKeyInHeader headers name = case lookup (CI.mk name) headers of
+  Nothing -> (Fail $ APIKeyNotFoundIn Header name, headers)
+  Just bs -> case Web.parseHeaderMaybe bs of
+    Nothing -> (Fail $ APIKeyParseFailIn Header, headers)
+    Just value -> (Ok value, List.delete (CI.mk name, bs) headers)
 
-findAPIKeyInQuery :: HTTP.Query -> BS.ByteString -> (Result Error a, HTTP.Query)
-findAPIKeyInQuery query name = undefined
+findAPIKeyInQuery :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.Query -> BS.ByteString -> (Result Error a, HTTP.Query)
+findAPIKeyInQuery query name = case lookup name query of
+  Nothing -> (Fail $ APIKeyNotFoundIn Header name, query)
+  Just maybeBS -> case maybeBS of
+    Nothing -> undefined
+    Just bs -> case Web.parseHeaderMaybe bs of
+      Nothing -> (Fail $ APIKeyParseFailIn Header, query)
+      Just value -> (Ok value, List.delete (name, Just bs) query)
