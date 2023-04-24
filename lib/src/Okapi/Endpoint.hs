@@ -2,6 +2,7 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -53,17 +54,17 @@ import Okapi.Script.Query qualified as Query
 import Okapi.Script.Responder qualified as Responder
 import Okapi.Script.Security qualified as Security
 
-data Endpoint s p q h b r = Endpoint
+data Endpoint s p q b h r = Endpoint
   { security :: Security.Script s,
     method :: HTTP.StdMethod,
     path :: Path.Script p,
     query :: Query.Script q,
-    headers :: Headers.Script h,
     body :: Body.Script b,
+    headers :: Headers.Script h,
     responder :: Responder.Script r
   }
 
-toPathItem :: Endpoint s p q h b r -> (FilePath, OAPI.PathItem)
+toPathItem :: Endpoint s p q b h r -> (FilePath, OAPI.PathItem)
 toPathItem endpoint = (pathName, pathItem)
   where
     pathName :: FilePath
@@ -198,7 +199,7 @@ type Handler m s p q b h r = Monad m => s -> p -> q -> b -> h -> r -> m Response
 
 data Plan m s p q h b r = Plan
   { transformer :: m ~> IO,
-    endpoint :: Endpoint s p q h b r,
+    endpoint :: Endpoint s p q b h r,
     handler :: Handler m s p q b h r
   }
 
@@ -212,13 +213,13 @@ data Artifact = Artifact
   }
 
 buildWith ::
-  forall m s p q h b r.
+  forall m s p q b h r.
   Monad m =>
   (m ~> IO) ->
-  Endpoint s p q h b r ->
-  Handler m s p q h b r ->
+  Endpoint s p q b h r ->
+  Handler m s p q b h r ->
   Artifact
-buildWith transformer endpoint handler = undefined
+buildWith transformer endpoint handler = build Plan {transformer, endpoint, handler}
 
 build ::
   forall m s p q h b r.

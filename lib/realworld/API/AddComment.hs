@@ -41,5 +41,5 @@ endpoint =
     }
 
 handler token username _ _ _ responder = do
-  print username
+  -- print username
   return $ responder (\() response -> response) Comment
