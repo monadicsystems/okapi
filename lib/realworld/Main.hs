@@ -39,6 +39,8 @@ main :: IO ()
 main = do
   config <- getConfig
   let builder = buildWithContext config
+      api = realworldAPI builder
+  -- TODO: Linearity constraint doesn't get passed to builder?? Linear types BUG
   pure ()
 
 realworldAPI builder =
