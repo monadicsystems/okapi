@@ -172,7 +172,7 @@ Request. These operations are covered in more detail below.
    
    Its type is `StdMethod` from the `http-types` library.
    
-   Only the standard methods mentioned in RFC-1234 are allowed.
+   [HTTP standard method (as defined by RFC 2616, and PATCH which is defined by RFC 5789).](https://hackage.haskell.org/package/http-types-0.12.3/docs/Network-HTTP-Types-Method.html#t:StdMethod)
 
 2. #### Path Script
 

@@ -47,9 +47,11 @@ import Okapi.Script.Headers qualified as Headers
 import Okapi.Script.Path qualified as Path
 import Okapi.Script.Query qualified as Query
 import Okapi.Script.Responder qualified as Responder
+import Okapi.Script.Security qualified as Security
 
-data Endpoint p q h b r = Endpoint
-  { method :: HTTP.StdMethod,
+data Endpoint s p q h b r = Endpoint
+  { security :: Security.Security s,
+    method :: HTTP.StdMethod,
     path :: Path.Script p,
     query :: Query.Script q,
     headers :: Headers.Script h,
@@ -57,7 +59,7 @@ data Endpoint p q h b r = Endpoint
     responder :: Responder.Script r
   }
 
-toPathItem :: Endpoint p q h b r -> (FilePath, OAPI.PathItem)
+toPathItem :: Endpoint s p q h b r -> (FilePath, OAPI.PathItem)
 toPathItem endpoint = (pathName, pathItem)
   where
     pathName :: FilePath
@@ -188,10 +190,10 @@ toPathItem endpoint = (pathName, pathItem)
       Path.Static t -> "/" <> Text.unpack t
       Path.Param @p name -> "/{" <> Text.unpack name <> "}"
 
-data Plan m p q h b r = Plan
+data Plan m s p q h b r = Plan
   { transformer :: m ~> IO,
-    endpoint :: Endpoint p q h b r,
-    handler :: Monad m => p -> q -> b -> h -> r -> m Response
+    endpoint :: Endpoint s p q h b r,
+    handler :: Monad m => s -> p -> q -> b -> h -> r -> m Response
   }
 
 data Executable = Run (IO WAI.Response) | Null
@@ -204,9 +206,9 @@ data Artifact = Artifact
   }
 
 build ::
-  forall m p q h b r.
+  forall m s p q h b r.
   Monad m =>
-  Plan m p q h b r ->
+  Plan m s p q h b r ->
   Artifact
 build plan = Artifact {..}
   where
@@ -214,14 +216,17 @@ build plan = Artifact {..}
     compiler (method, path, query, body, headers) =
       if method == plan.endpoint.method
         then
-          let pathResult = fst $ Path.eval plan.endpoint.path path
+          let securityResult = case plan.endpoint.security of
+                Security.NotSecure -> Ok ()
+                Security.Secure script -> fst $ Security.eval script $ Security.State query headers []
+              pathResult = fst $ Path.eval plan.endpoint.path path
               queryResult = fst $ Query.eval plan.endpoint.query query
               bodyResult = fst $ Body.eval plan.endpoint.body body
               headersResult = fst $ Headers.eval plan.endpoint.headers headers
               responderResult = fst $ Responder.eval plan.endpoint.responder ()
-           in case (pathResult, queryResult, bodyResult, headersResult, responderResult) of
-                (Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
-                  response <- transformer plan $ handler plan p q b h r
+           in case (securityResult, pathResult, queryResult, bodyResult, headersResult, responderResult) of
+                (Ok s, Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
+                  response <- transformer plan $ handler plan s p q b h r
                   return $ toWaiResponse response
                 _ -> Null
         else Null

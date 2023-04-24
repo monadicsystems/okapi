@@ -38,6 +38,7 @@ library
       Okapi.Script.Body
       Okapi.Script.Responder
       Okapi.Script.AddHeader
+      Okapi.Script.Security
   other-modules:
       Paths_okapi
   hs-source-dirs:
