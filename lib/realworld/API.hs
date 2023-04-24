@@ -21,5 +21,5 @@ import Web.HttpApiData qualified as Web
 newtype Token = Token {bytes :: Text.Text}
   deriving newtype (Eq, Show, Web.FromHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
-tokenAuth :: Security Token
-tokenAuth = Secure $ Security.apiKey @Token Header "Authorization"
+auth :: Security.Script Token
+auth = Security.apiKey @Token Header "Authorization"

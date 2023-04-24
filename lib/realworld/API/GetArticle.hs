@@ -21,6 +21,7 @@ import qualified Okapi.Script.Headers as Headers
 import qualified Okapi.Script.Path as Path
 import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
+import qualified Okapi.Script.Security as Security
 import qualified Web.HttpApiData as Web
 
 plan =
@@ -28,14 +29,15 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
+          { security = Security.none,
+            method = GET,
             path = Path.static "articles" *> Path.param @Slug "slug",
             query = pure (),
             body = pure (),
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
+      handler = \() username _ _ _ responder -> do
         print username
-        return $ responder (\() response -> response) User
+        return $ responder (\() response -> response) undefined
     }

@@ -8,6 +8,7 @@
 
 module API.GetCurrentUser where
 
+import API (auth)
 import Data (User (..))
 import qualified Data.Aeson as Aeson
 import GHC.Generics (Generic)
@@ -25,14 +26,15 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
+          { security = auth,
+            method = GET,
             path = Path.static "user",
             query = pure (),
             body = pure (),
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \_ _ _ userRegistration responder -> do
+      handler = \token _ _ _ userRegistration responder -> do
         print userRegistration
-        return $ responder (\() response -> response) User
+        return $ responder (\() response -> response) undefined
     }

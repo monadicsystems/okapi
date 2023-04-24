@@ -19,22 +19,24 @@ import qualified Okapi.Script.Headers as Headers
 import qualified Okapi.Script.Path as Path
 import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
+import qualified Okapi.Script.Security as Security
 
 plan =
   Plan
     { transformer = id,
       endpoint =
         Endpoint
-          { method = POST,
+          { security = Security.none,
+            method = POST,
             path = Path.static "users" *> Path.static "login",
             query = pure (),
             body = Body.json @UserLogin,
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \_ _ _ userLogin responder -> do
+      handler = \() _ _ _ userLogin responder -> do
         print userLogin
-        return $ responder (\() response -> response) User
+        return $ responder (\() response -> response) undefined
     }
 
 -- TODO: Needs this if Plan parts are inside a where clause for some reason

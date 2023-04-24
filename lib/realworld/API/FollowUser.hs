@@ -9,6 +9,7 @@
 
 module API.FollowUser where
 
+import API (auth)
 import Data (Profile (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
@@ -29,7 +30,8 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = POST,
+          { security = auth,
+            method = POST,
             path = do
               Path.static "profiles"
               username <- Path.param @Username "username"
@@ -40,7 +42,7 @@ plan =
             headers = pure (),
             responder = Responder.json @Profile status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
+      handler = \token username _ _ _ responder -> do
         print username
         return $ responder (\() response -> response) Profile
     }

@@ -50,7 +50,7 @@ import Okapi.Script.Responder qualified as Responder
 import Okapi.Script.Security qualified as Security
 
 data Endpoint s p q h b r = Endpoint
-  { security :: Security.Security s,
+  { security :: Security.Script s,
     method :: HTTP.StdMethod,
     path :: Path.Script p,
     query :: Query.Script q,
@@ -216,9 +216,7 @@ build plan = Artifact {..}
     compiler (method, path, query, body, headers) =
       if method == plan.endpoint.method
         then
-          let securityResult = case plan.endpoint.security of
-                Security.NotSecure -> Ok ()
-                Security.Secure script -> fst $ Security.eval script $ Security.State query headers []
+          let securityResult = fst $ Security.eval plan.endpoint.security $ Security.State query headers []
               pathResult = fst $ Path.eval plan.endpoint.path path
               queryResult = fst $ Query.eval plan.endpoint.query query
               bodyResult = fst $ Body.eval plan.endpoint.body body

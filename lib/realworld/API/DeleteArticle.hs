@@ -8,6 +8,7 @@
 
 module API.DeleteArticle where
 
+import API (auth)
 import Data (Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
@@ -28,14 +29,15 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = DELETE,
+          { security = auth,
+            method = DELETE,
             path = Path.static "articles" *> Path.param @Slug "slug",
             query = pure (),
             body = pure (),
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
+      handler = \token username _ _ _ responder -> do
         print username
-        return $ responder (\() response -> response) User
+        return $ responder (\() response -> response) undefined
     }

@@ -9,6 +9,7 @@
 
 module API.DeleteComment where
 
+import API (auth)
 import Data (Comment (..), NewArticle, NewComment, Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
@@ -29,7 +30,8 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
+          { security = auth,
+            method = GET,
             path = do
               Path.static "articles"
               slug <- Path.param @Slug "slug"
@@ -40,7 +42,7 @@ plan =
             headers = pure (),
             responder = Responder.json @[Comment] status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
+      handler = \token username _ _ _ responder -> do
         print username
         return $ responder (\() response -> response) [Comment]
     }

@@ -9,6 +9,7 @@
 
 module API.UnFollowUser where
 
+import API (auth)
 import Data (Article (..), Slug, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
@@ -29,7 +30,8 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = DELETE,
+          { security = auth,
+            method = DELETE,
             path = do
               Path.static "articles"
               slug <- Path.param @Slug "slug"
@@ -40,7 +42,7 @@ plan =
             headers = pure (),
             responder = Responder.json @Article status200 $ pure ()
           },
-      handler = \username _ _ _ responder -> do
+      handler = \token username _ _ _ responder -> do
         print username
         return $ responder (\() response -> response) Article
     }

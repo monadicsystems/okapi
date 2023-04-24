@@ -8,6 +8,7 @@
 
 module API.UpdateArticle where
 
+import API (auth)
 import Data (ArticleUpdate, Slug, User (..), UserUpdate)
 import qualified Data.Aeson as Aeson
 import GHC.Generics (Generic)
@@ -25,14 +26,15 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = PUT,
+          { security = auth,
+            method = PUT,
             path = Path.static "articles" *> Path.param @Slug "slug",
             query = pure (),
             body = Body.json @ArticleUpdate,
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \_ _ _ userRegistration responder -> do
+      handler = \token _ _ _ userRegistration responder -> do
         print userRegistration
-        return $ responder (\() response -> response) User
+        return $ responder (\() response -> response) undefined
     }

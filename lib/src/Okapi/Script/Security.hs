@@ -9,6 +9,7 @@
 
 module Okapi.Script.Security where
 
+import Control.Applicative (Alternative ((<|>)), empty)
 import Data.Aeson qualified as Aeson
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
@@ -41,11 +42,14 @@ data Script a where
   FMap :: (a -> b) -> Script a -> Script b
   Pure :: a -> Script a
   Apply :: Script (a -> b) -> Script a -> Script b
+  Empty :: Script a
+  Alt :: Script a -> Script a -> Script a
+  None :: Script ()
   APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Script a
 
-data Security s where
-  NotSecure :: Security ()
-  Secure :: Script s -> Security s
+-- data Security s where
+--   NotSecure :: Security ()
+--   Secure :: Script s -> Security s
 
 instance Functor Script where
   fmap = FMap
@@ -53,6 +57,13 @@ instance Functor Script where
 instance Applicative Script where
   pure = Pure
   (<*>) = Apply
+
+instance Alternative Script where
+  (<|>) = Alt
+  empty = Empty
+
+none :: Script ()
+none = None
 
 apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Script a
 apiKey = APIKey
@@ -66,7 +77,7 @@ data State = State
 eval ::
   Script a ->
   State ->
-  (Result Error a, State)
+  (Result [Error] a, State)
 eval op state = case op of
   FMap f opX ->
     case eval opX state of
@@ -78,6 +89,13 @@ eval op state = case op of
       (Ok x, state'') -> (Ok $ f x, state'')
       (Fail e, state'') -> (Fail e, state'')
     (Fail e, state') -> (Fail e, state')
+  Empty -> (Fail [], state)
+  Alt opA opB -> case eval opA state of
+    (ok@(Ok a), state') -> (ok, state')
+    (Fail e, _) -> case eval opB state of
+      (ok@(Ok b), state') -> (ok, state')
+      (Fail e', _) -> (Fail $ e <> e', state)
+  None -> (Ok (), state)
   APIKey inside name -> case inside of
     Query -> case findAPIKeyInQuery state.query name of
       (err@(Fail e), _) -> (err, state)
@@ -89,25 +107,25 @@ eval op state = case op of
       (err@(Fail e), _) -> (err, state)
       (ok, newCookies) -> (ok, state {cookies = newCookies})
 
-findAPIKeyInCookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => Web.Cookies -> BS.ByteString -> (Result Error a, Web.Cookies)
+findAPIKeyInCookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => Web.Cookies -> BS.ByteString -> (Result [Error] a, Web.Cookies)
 findAPIKeyInCookie cookies name = case lookup name cookies of
-  Nothing -> (Fail $ APIKeyNotFoundIn Cookie name, cookies)
+  Nothing -> (Fail [APIKeyNotFoundIn Cookie name], cookies)
   Just bs -> case Web.parseHeaderMaybe bs of
-    Nothing -> (Fail $ APIKeyParseFailIn Cookie, cookies)
+    Nothing -> (Fail [APIKeyParseFailIn Cookie], cookies)
     Just value -> (Ok value, List.delete (name, bs) cookies)
 
-findAPIKeyInHeader :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.RequestHeaders -> BS.ByteString -> (Result Error a, HTTP.RequestHeaders)
+findAPIKeyInHeader :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.RequestHeaders -> BS.ByteString -> (Result [Error] a, HTTP.RequestHeaders)
 findAPIKeyInHeader headers name = case lookup (CI.mk name) headers of
-  Nothing -> (Fail $ APIKeyNotFoundIn Header name, headers)
+  Nothing -> (Fail [APIKeyNotFoundIn Header name], headers)
   Just bs -> case Web.parseHeaderMaybe bs of
-    Nothing -> (Fail $ APIKeyParseFailIn Header, headers)
+    Nothing -> (Fail [APIKeyParseFailIn Header], headers)
     Just value -> (Ok value, List.delete (CI.mk name, bs) headers)
 
-findAPIKeyInQuery :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.Query -> BS.ByteString -> (Result Error a, HTTP.Query)
+findAPIKeyInQuery :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.Query -> BS.ByteString -> (Result [Error] a, HTTP.Query)
 findAPIKeyInQuery query name = case lookup name query of
-  Nothing -> (Fail $ APIKeyNotFoundIn Header name, query)
+  Nothing -> (Fail [APIKeyNotFoundIn Header name], query)
   Just maybeBS -> case maybeBS of
     Nothing -> undefined
     Just bs -> case Web.parseHeaderMaybe bs of
-      Nothing -> (Fail $ APIKeyParseFailIn Header, query)
+      Nothing -> (Fail [APIKeyParseFailIn Header], query)
       Just value -> (Ok value, List.delete (name, Just bs) query)

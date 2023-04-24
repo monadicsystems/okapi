@@ -8,6 +8,7 @@
 
 module API.FeedArticles where
 
+import API (auth)
 import Data (ArticlesQuery (..), FeedQuery (..), Limit (..), Offset (..), Tag, User (..), Username)
 import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
@@ -28,7 +29,8 @@ plan =
     { transformer = id,
       endpoint =
         Endpoint
-          { method = GET,
+          { security = auth,
+            method = GET,
             path = Path.static "articles" *> Path.static "feed",
             query = do
               limit <- Query.option (Limit 20) $ Query.param @Limit "limit"
@@ -38,7 +40,7 @@ plan =
             headers = pure (),
             responder = Responder.json @User status200 $ pure ()
           },
-      handler = \_ _ _ userRegistration responder -> do
+      handler = \token _ _ _ userRegistration responder -> do
         print userRegistration
-        return $ responder (\() response -> response) User
+        return $ responder (\() response -> response) undefined
     }
