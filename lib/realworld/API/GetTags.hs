@@ -24,20 +24,20 @@ import qualified Okapi.Script.Responder as Responder
 import qualified Okapi.Script.Security as Security
 import qualified Web.HttpApiData as Web
 
-plan =
-  Plan
-    { transformer = id,
-      endpoint =
-        Endpoint
-          { security = Security.none,
-            method = GET,
-            path = Path.static "tags",
-            query = pure (),
-            body = pure (),
-            headers = pure (),
-            responder = Responder.json @[Tag] status200 $ pure ()
-          },
-      handler = \() _ _ _ userRegistration responder -> do
-        print userRegistration
-        return $ responder (\() response -> response) []
+plan = Plan endpoint' handler'
+
+endpoint' =
+  Endpoint
+    { security = Security.none,
+      method = GET,
+      path = Path.static "tags",
+      query = pure (),
+      body = pure (),
+      headers = pure (),
+      responder = Responder.json @[Tag] status200 $ pure ()
     }
+
+handler' :: Monad m => () -> p1 -> p2 -> p3 -> p4 -> ((() %1 -> p5 -> p5) -> [a1] -> a2) -> m a2
+handler' () _ _ _ userRegistration responder = do
+  -- print userRegistration
+  return $ responder (\() response -> response) []

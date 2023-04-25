@@ -21,23 +21,23 @@ import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
 import qualified Okapi.Script.Security as Security
 
-plan =
-  Plan
-    { transformer = id,
-      endpoint =
-        Endpoint
-          { security = Security.none,
-            method = POST,
-            path = Path.static "users" *> Path.static "login",
-            query = pure (),
-            body = Body.json @UserLogin,
-            headers = pure (),
-            responder = Responder.json @User status200 $ pure ()
-          },
-      handler = \() _ _ _ userLogin responder -> do
-        print userLogin
-        return $ responder (\() response -> response) undefined
+plan = Plan endpoint' handler'
+
+endpoint' =
+  Endpoint
+    { security = Security.none,
+      method = POST,
+      path = Path.static "users" *> Path.static "login",
+      query = pure (),
+      body = Body.json @UserLogin,
+      headers = pure (),
+      responder = Responder.json @User status200 $ pure ()
     }
+
+handler' :: Monad m => () -> p1 -> p2 -> p3 -> p4 -> ((() %1 -> p5 -> p5) -> t -> a) -> m a
+handler' () _ _ _ userLogin responder = do
+  -- print userLogin
+  return $ responder (\() response -> response) undefined
 
 -- TODO: Needs this if Plan parts are inside a where clause for some reason
 -- addHeader :: () %1 -> Response -> Response

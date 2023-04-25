@@ -162,6 +162,7 @@ executable realworld
       , okapi
       , text
       , http-api-data
+      , http-types
       , pretty-simple
       , aeson
       , bytestring
@@ -173,5 +174,8 @@ executable realworld
       , transformers
       , lens
       , natural-transformation
+      , warp
+      , wai
+      , aeson-pretty
     hs-source-dirs:   realworld
     default-language: Haskell2010

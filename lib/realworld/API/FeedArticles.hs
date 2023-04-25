@@ -24,23 +24,23 @@ import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
 import qualified Web.HttpApiData as Web
 
-plan =
-  Plan
-    { transformer = id,
-      endpoint =
-        Endpoint
-          { security = auth,
-            method = GET,
-            path = Path.static "articles" *> Path.static "feed",
-            query = do
-              limit <- Query.option (Limit 20) $ Query.param @Limit "limit"
-              offset <- Query.option (Offset 0) $ Query.param @Offset "offset"
-              pure FeedQuery {..},
-            body = pure (),
-            headers = pure (),
-            responder = Responder.json @User status200 $ pure ()
-          },
-      handler = \token _ _ _ userRegistration responder -> do
-        print userRegistration
-        return $ responder (\() response -> response) undefined
+plan = Plan endpoint' handler'
+
+endpoint' =
+  Endpoint
+    { security = auth,
+      method = GET,
+      path = Path.static "articles" *> Path.static "feed",
+      query = do
+        limit <- Query.option (Limit 20) $ Query.param @Limit "limit"
+        offset <- Query.option (Offset 0) $ Query.param @Offset "offset"
+        pure FeedQuery {..},
+      body = pure (),
+      headers = pure (),
+      responder = Responder.json @User status200 $ pure ()
     }
+
+handler' :: Monad m => p1 -> p2 -> p3 -> p4 -> p5 -> ((() %1 -> p6 -> p6) -> t -> a) -> m a
+handler' token _ _ _ userRegistration responder = do
+  -- print userRegistration
+  return $ responder (\() response -> response) undefined

@@ -21,20 +21,20 @@ import qualified Okapi.Script.Path as Path
 import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
 
-plan =
-  Plan
-    { transformer = id,
-      endpoint =
-        Endpoint
-          { security = auth,
-            method = PUT,
-            path = Path.static "user",
-            query = pure (),
-            body = Body.json @UserUpdate,
-            headers = pure (),
-            responder = Responder.json @User status200 $ pure ()
-          },
-      handler = \token _ _ _ userRegistration responder -> do
-        print userRegistration
-        return $ responder (\() response -> response) undefined
+plan = Plan endpoint' handler'
+
+endpoint' =
+  Endpoint
+    { security = auth,
+      method = PUT,
+      path = Path.static "user",
+      query = pure (),
+      body = Body.json @UserUpdate,
+      headers = pure (),
+      responder = Responder.json @User status200 $ pure ()
     }
+
+handler' :: Monad m => p1 -> p2 -> p3 -> p4 -> p5 -> ((() %1 -> p6 -> p6) -> t -> a) -> m a
+handler' token _ _ _ userRegistration responder = do
+  -- print userRegistration
+  return $ responder (\() response -> response) undefined

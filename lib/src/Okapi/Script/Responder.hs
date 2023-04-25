@@ -42,7 +42,7 @@ data Script a where
     HTTP.Status ->
     AddHeader.Script h ->
     Script
-      ( (h -> (Response -> Response)) ->
+      ( (h %1 -> (Response -> Response)) ->
         a ->
         Response
       )
@@ -85,7 +85,7 @@ json ::
   HTTP.Status ->
   AddHeader.Script h ->
   Script
-    ( (h -> (Response -> Response)) ->
+    ( (h %1 -> (Response -> Response)) ->
       a ->
       Response
     )

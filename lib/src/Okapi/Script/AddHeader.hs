@@ -30,7 +30,7 @@ data Error
   | CookieHeaderNotFound
   | CookieNotFound
   | ResponderHeadersError -- TODO: Script shouldn't be able to fail...
-  deriving (Eq, Show, Generics.Generic, Par.NFData)
+  deriving (Eq, Show, Generics.Generic)
 
 data Script a where
   FMap :: (a -> b) -> Script a -> Script b

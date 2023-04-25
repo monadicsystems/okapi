@@ -18,9 +18,11 @@ module Okapi.Endpoint
     Handler,
     Artifact,
     Server (..),
-    buildWith,
+    build,
     status200,
     status404,
+    toOpenApi,
+    toApp,
   )
 where
 
@@ -30,6 +32,9 @@ import Data.ByteString qualified as BS
 import Data.CaseInsensitive qualified as CI
 import Data.Function ((&))
 import Data.HashMap.Strict.InsOrd qualified as InsOrdHashMap
+import Data.List (groupBy)
+import Data.List qualified as List
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.OpenApi (OpenApi (_openApiInfo))
 import Data.OpenApi qualified as OAPI
@@ -40,6 +45,7 @@ import Data.Semigroup (Semigroup (..))
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import Data.Version qualified as Version
+import Debug.Trace qualified as Debug
 import Extra qualified
 import Network.HTTP.Types (StdMethod (..), status200, status404)
 import Network.HTTP.Types qualified as HTTP
@@ -198,8 +204,7 @@ toPathItem endpoint = (pathName, pathItem)
 type Handler m s p q b h r = Monad m => s -> p -> q -> b -> h -> r -> m Response
 
 data Plan m s p q h b r = Plan
-  { transformer :: m ~> IO,
-    endpoint :: Endpoint s p q b h r,
+  { endpoint :: Endpoint s p q b h r,
     handler :: Handler m s p q b h r
   }
 
@@ -212,21 +217,22 @@ data Artifact = Artifact
     pathItem :: (FilePath, OAPI.PathItem)
   }
 
-buildWith ::
-  forall m s p q b h r.
-  Monad m =>
-  (m ~> IO) ->
-  Endpoint s p q b h r ->
-  Handler m s p q b h r ->
-  Artifact
-buildWith transformer endpoint handler = build Plan {transformer, endpoint, handler}
+-- buildWith ::
+--   forall m s p q b h r.
+--   Monad m =>
+--   (m ~> IO) ->
+--   Endpoint s p q b h r ->
+--   Handler m s p q b h r ->
+--   Artifact
+-- buildWith transformer endpoint handler = build transformer (Plan {endpoint, handler})
 
 build ::
   forall m s p q h b r.
   Monad m =>
+  (m ~> IO) ->
   Plan m s p q h b r ->
   Artifact
-build plan = Artifact {..}
+build transformer plan = Artifact {..}
   where
     pathItem = toPathItem plan.endpoint
     compiler (method, path, query, body, headers) =
@@ -240,7 +246,7 @@ build plan = Artifact {..}
               responderResult = fst $ Responder.eval plan.endpoint.responder ()
            in case (securityResult, pathResult, queryResult, bodyResult, headersResult, responderResult) of
                 (Ok s, Ok p, Ok q, Ok b, Ok h, Ok r) -> Run do
-                  response <- transformer plan $ handler plan s p q b h r
+                  response <- transformer $ handler plan s p q b h r
                   return $ toWaiResponse response
                 _ -> Null
         else Null
@@ -295,22 +301,40 @@ toOpenApi server =
             server.description
             mempty
         ],
-      OAPI._openApiPaths = InsOrdHashMap.fromList paths,
+      OAPI._openApiPaths = InsOrdHashMap.fromList cleaned,
       OAPI._openApiOpenapi = OpenApiSpecVersion {getVersion = Version.Version [3, 0, 3] []}
     }
   where
-    paths =
+    cleaned =
       let clean :: NonEmpty.NonEmpty (FilePath, OAPI.PathItem) -> (FilePath, OAPI.PathItem)
-          clean group =
-            let cleanPathItemFilePath = fst $ NonEmpty.head group
-                cleanPathItem =
-                  group
-                    |> fmap snd
-                    |> sconcat
-             in (cleanPathItemFilePath, cleanPathItem)
+          clean (h@(fp, pi) :| t) = (fp, pi <> loop (map snd t))
+
+          loop :: [OAPI.PathItem] -> OAPI.PathItem
+          loop [] = mempty
+          loop (h : t) = h <> loop t
        in map pathItem server.artifacts
+            |> List.sortBy (\(fp, _) (fp', _) -> compare fp fp')
             |> NonEmpty.groupBy (\(fp, _) (fp', _) -> fp == fp')
             |> fmap clean
+
+-- groupBy (\(fp, _) (fp', _) -> fp == fp')
+-- merge :: OAPI.PathItem -> OAPI.PathItem -> OAPI.PathItem
+-- merge pathItem1 pathItem2 =
+--   pathItem1
+--     { OAPI._pathItemGet = help pathItem1._pathItemGet pathItem2._pathItemGet,
+--       OAPI._pathItemPost = help pathItem1._pathItemPost pathItem2._pathItemPost,
+--       OAPI._pathItemPut = help pathItem1._pathItemPut pathItem2._pathItemPut,
+--       OAPI._pathItemDelete = help pathItem1._pathItemDelete pathItem2._pathItemDelete,
+--       OAPI._pathItemOptions = help pathItem1._pathItemOptions pathItem2._pathItemOptions,
+--       OAPI._pathItemHead = help pathItem1._pathItemHead pathItem2._pathItemHead,
+--       OAPI._pathItemPatch = help pathItem1._pathItemPatch pathItem2._pathItemPatch,
+--       OAPI._pathItemTrace = help pathItem1._pathItemTrace pathItem2._pathItemTrace
+--     }
+--   where
+--     help Nothing Nothing = Nothing
+--     help x@(Just _) y@(Just _) = x <> y
+--     help x@(Just _) Nothing = x
+--     help Nothing y@(Just _) = y
 
 (|>) = (&)
 

@@ -25,24 +25,24 @@ import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
 import qualified Web.HttpApiData as Web
 
-plan =
-  Plan
-    { transformer = id,
-      endpoint =
-        Endpoint
-          { security = auth,
-            method = DELETE,
-            path = do
-              Path.static "articles"
-              slug <- Path.param @Slug "slug"
-              Path.static "favorite"
-              pure slug,
-            query = pure (),
-            body = pure (),
-            headers = pure (),
-            responder = Responder.json @Article status200 $ pure ()
-          },
-      handler = \token username _ _ _ responder -> do
-        print username
-        return $ responder (\() response -> response) Article
+plan = Plan endpoint' handler'
+
+endpoint' =
+  Endpoint
+    { security = auth,
+      method = DELETE,
+      path = do
+        Path.static "articles"
+        slug <- Path.param @Slug "slug"
+        Path.static "favorite"
+        pure slug,
+      query = pure (),
+      body = pure (),
+      headers = pure (),
+      responder = Responder.json @Article status200 $ pure ()
     }
+
+handler' :: Monad m => p1 -> p2 -> p3 -> p4 -> p5 -> ((() %1 -> p6 -> p6) -> Article -> a) -> m a
+handler' token username _ _ _ responder = do
+  -- print username
+  return $ responder (\() response -> response) Article

@@ -25,7 +25,9 @@ import qualified Okapi.Script.Query as Query
 import qualified Okapi.Script.Responder as Responder
 import qualified Web.HttpApiData as Web
 
-endpoint =
+plan = Plan endpoint' handler'
+
+endpoint' =
   Endpoint
     { security = auth,
       method = POST,
@@ -40,6 +42,15 @@ endpoint =
       responder = Responder.json @Comment status200 $ pure ()
     }
 
-handler token username _ _ _ responder = do
+handler' ::
+  Monad m =>
+  p1 ->
+  p2 ->
+  p3 ->
+  p4 ->
+  p5 ->
+  ((() %1 -> p6 -> p6) -> Comment -> a) ->
+  m a
+handler' token username _ _ _ responder = do
   -- print username
   return $ responder (\() response -> response) Comment

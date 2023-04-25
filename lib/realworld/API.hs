@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeApplications #-}
@@ -20,24 +21,23 @@ import Data.ByteString qualified as BS
 import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
-import Okapi.Endpoint (Artifact, Endpoint, Handler, buildWith)
+import Okapi.Endpoint (Artifact, Endpoint, Handler, Plan, build)
 import Okapi.Script.Security
 import Okapi.Script.Security qualified as Security
 import Web.HttpApiData qualified as Web
 
-newtype Token = Token {bytes :: Text.Text}
+newtype Token = Token {text :: Text.Text}
   deriving newtype (Eq, Show, Web.FromHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
 auth :: Security.Script Token
 auth = Security.apiKey @Token Header "Authorization"
 
-buildWithContext ::
+buildWith ::
   forall s p q h b r.
   Config ->
-  Endpoint s p q h b r ->
-  Handler Context s p q h b r ->
+  Plan Context s p q h b r ->
   Artifact
-buildWithContext config = buildWith (transformer config)
+buildWith config = build (transformer config)
   where
     transformer :: Config -> Context ~> IO
     transformer config context = runReaderT context config
