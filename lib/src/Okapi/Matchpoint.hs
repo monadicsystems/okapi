@@ -15,6 +15,7 @@ import Network.Wai qualified as WAI
 import Okapi.Request (Request)
 import Web.HttpApiData qualified as Web
 
+{-
 pattern Matchpoint :: HTTP.StdMethod -> [Text.Text] -> HTTP.Query -> LBS.ByteString -> HTTP.RequestHeaders -> Request
 pattern Matchpoint method path query body headers <- (method, path, query, body, headers)
 
@@ -46,3 +47,4 @@ instantiate transformer server waiRequest respond = do
 
 toWaiResponse :: Response -> WAI.Response
 toWaiResponse = undefined
+-}

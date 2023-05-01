@@ -44,13 +44,13 @@ data Script a where
   Static :: Text.Text -> Script ()
   Param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Script a
 
-$(deriveGenericK ''Script)
+-- $(deriveGenericK ''Script)
 
 {-
 instance GenericK (Script (a_a11LZ :: ghc-prim:GHC.Types.Type) :: ghc-prim:GHC.Types.Type) where
   type RepK (Script (a_a11LZ :: ghc-prim:GHC.Types.Type) :: ghc-prim:GHC.Types.Type) =
     Generics.D1
-      ('Generics.MetaData "Script" "Okapi.Endpoint.Script" "okapi-0.2.0.0-inplace" 'False)
+      ('Generics.MetaData "Script" "Okapi.Operation.Script" "okapi-0.2.0.0-inplace" 'False)
       ((:+:)
          ((:+:)
             (Generics.C1 ('Generics.MetaCons "FMap" 'Generics.PrefixI 'False)

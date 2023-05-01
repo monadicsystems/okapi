@@ -217,8 +217,8 @@ Probably not ideal because the exact extractor value can depend on the path para
 ### Route as Data
 
 ```haskell
-myRoute :: Endpoint
-myRoute = Endpoint
+myRoute :: Operation
+myRoute = Operation
   { method = GET
   , path =
 	  [ Static "people"
@@ -237,8 +237,8 @@ myRoute = Endpoint
 Combine with extractor DSL?
 
 ```haskell
-myRoute :: Endpoint pd qd hd bd
-myRoute = Endpoint
+myRoute :: Operation pd qd hd bd
+myRoute = Operation
   { method = GET
   , path = do
       static "profile"
@@ -251,8 +251,8 @@ myRoute = Endpoint
   , body = json @PersonFilter
   }
 
-myRoute' :: Endpoint pd qd hd bd rd
-myRoute' = Endpoint
+myRoute' :: Operation pd qd hd bd rd
+myRoute' = Operation
   { method = GET :| [PUT, POST]
   , path = do
       static "profile"
@@ -271,8 +271,8 @@ myRoute' = Endpoint
 	  pure Send{..}
   }
 
-myRoute'' :: Endpoint pd qd hd bd rd
-myRoute'' = Endpoint
+myRoute'' :: Operation pd qd hd bd rd
+myRoute'' = Operation
   GET
   static "index"
   NoQuery
@@ -292,7 +292,7 @@ data Params pd qd hd bd rd = Params
   }
 
 -- Use type level function to produce types for both
--- Endpoint and Params.
+-- Operation and Params.
 
 myHandler
   :: Monad m
@@ -314,7 +314,7 @@ myHandler paramsResult = case paramsResult of
 makeController
   :: Monad m
   => (m ~> IO)
-  -> Endpoint pd qd hd bd rd
+  -> Operation pd qd hd bd rd
   -> (Params pd qd hd bd rd -> m Response)
   -> Controller
 makeController lifter endpoint handler = ...
@@ -467,7 +467,7 @@ import Data.Text
 Plan.Plan
   { lifter = id,
     endpoint =
-      Endpoint.Endpoint
+      Operation.Operation
         { method = GET,
           path = do
             Path.static "index"
@@ -502,7 +502,7 @@ Plan.Plan
 
     -- Define the endpoint for the web service.
     endpoint =
-      Endpoint.Endpoint
+      Operation.Operation
         { -- HTTP GET method for this endpoint.
           method = GET,
 
@@ -561,7 +561,7 @@ Plan.Plan
 ```haskell
 Plan.Plan
   { lifter = id,
-    endpoint = Endpoint.Endpoint
+    endpoint = Operation.Operation
       GET
       do
         Path.static "index"
@@ -588,7 +588,7 @@ Plan.Plan
 
 ```haskell
 Plan
-  Endpoint
+  Operation
     Method.GET
     Path.do
       Path.static "index"
@@ -615,7 +615,7 @@ Plan
 
 ```haskell
 Plan $$
-  Endpoint $$
+  Operation $$
     Method.GET
     Path.do
       Path.static "index"
@@ -642,7 +642,7 @@ Plan $$
 
 ```haskell
 Plan $$
-  Endpoint $$
+  Operation $$
     GET
     do
       Path.static "index"
@@ -666,7 +666,7 @@ Plan $$
   id
 ```
 
-### Endpoint Patterns
+### Operation Patterns
 
 ```haskell
 data Request = Request StdMethod [Text] Query BS.ByteString RequestHeaders

@@ -28,7 +28,7 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Endpoint
+      Okapi.Operation
       Okapi.Matchpoint
       Okapi.Request
       Okapi.Script
@@ -36,9 +36,11 @@ library
       Okapi.Script.Query
       Okapi.Script.Headers
       Okapi.Script.Body
+      Okapi.Script.Body.Multipart
       Okapi.Script.Responder
-      Okapi.Script.AddHeader
+      Okapi.Script.Responder.AddHeader
       Okapi.Script.Security
+      Okapi.Script.Security.Secure
   other-modules:
       Paths_okapi
   hs-source-dirs:

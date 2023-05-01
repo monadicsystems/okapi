@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Script.Responder where
+module Okapi.Script.Responder.AddHeader where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -19,9 +19,8 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
+import Network.Wai qualified as WAI
 import Okapi.Script
-import Okapi.Script.Responder.AddHeader (Response (..))
-import Okapi.Script.Responder.AddHeader qualified as AddHeader
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -30,22 +29,14 @@ data Error
   | ParamNotFound
   | CookieHeaderNotFound
   | CookieNotFound
-  | ResponderHeadersError -- TODO: AddHeader shouldn't be able to fail...
-  deriving (Eq, Show, Generics.Generic, Par.NFData)
+  | ResponderHeadersError -- TODO: Script shouldn't be able to fail...
+  deriving (Eq, Show, Generics.Generic)
 
 data Script a where
   FMap :: (a -> b) -> Script a -> Script b
   Pure :: a -> Script a
   Apply :: Script (a -> b) -> Script a -> Script b
-  JSON ::
-    Aeson.ToJSON a =>
-    HTTP.Status ->
-    AddHeader.Script h ->
-    Script
-      ( (h %1 -> (Response -> Response)) ->
-        a ->
-        Response
-      )
+  Using :: Web.ToHttpApiData a => HTTP.HeaderName -> Script (a -> (Response -> Response))
 
 instance Functor Script where
   fmap = FMap
@@ -53,6 +44,17 @@ instance Functor Script where
 instance Applicative Script where
   pure = Pure
   (<*>) = Apply
+
+data Response = Response
+  { status :: HTTP.Status,
+    headers :: [ResponseHeader],
+    body :: LBS.ByteString
+  }
+
+data ResponseHeader = ResponseHeader HTTP.HeaderName BS.ByteString
+
+toWaiResponse :: Response -> WAI.Response
+toWaiResponse = undefined
 
 eval ::
   Script a ->
@@ -69,24 +71,13 @@ eval op state = case op of
       (Ok x, state'') -> (Ok $ f x, state'')
       (Fail e, state'') -> (Fail e, state'')
     (Fail e, state') -> (Fail e, state')
-  JSON status responderHeaders -> case AddHeader.eval responderHeaders () of
-    (Ok h, _) ->
-      let f headerApplicator payload =
-            Response
-              { status = status,
-                body = Aeson.encode payload,
-                headers = []
-              }
-       in (Ok f, state)
-    (left, _) -> (Fail ResponderHeadersError, state)
+  Using headerName ->
+    let f value response = response {headers = headers response <> [ResponseHeader headerName $ Web.toHeader value]}
+     in (Ok f, state)
 
-json ::
-  Aeson.ToJSON a =>
-  HTTP.Status ->
-  AddHeader.Script h ->
+using ::
+  Web.ToHttpApiData a =>
+  HTTP.HeaderName ->
   Script
-    ( (h %1 -> (Response -> Response)) ->
-      a ->
-      Response
-    )
-json = JSON
+    (a -> Response -> Response)
+using = Using

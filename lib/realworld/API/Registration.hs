@@ -11,7 +11,7 @@ module API.Registration where
 import Data (User (..), UserRegistration)
 import qualified Data.Aeson as Aeson
 import GHC.Generics (Generic)
-import Okapi.Endpoint
+import Okapi.Operation
 import Okapi.Script.AddHeader (Response)
 import qualified Okapi.Script.AddHeader as AddHeader
 import qualified Okapi.Script.Body as Body
@@ -24,7 +24,7 @@ import qualified Okapi.Script.Security as Security
 plan = Plan endpoint' handler'
 
 endpoint' =
-  Endpoint
+  Operation
     { security = Security.none,
       method = POST,
       path = Path.static "users",

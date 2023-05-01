@@ -12,7 +12,7 @@ import API (auth)
 import Data (ArticleUpdate, Slug, User (..), UserUpdate)
 import qualified Data.Aeson as Aeson
 import GHC.Generics (Generic)
-import Okapi.Endpoint
+import Okapi.Operation
 import Okapi.Script.AddHeader (Response)
 import qualified Okapi.Script.AddHeader as AddHeader
 import qualified Okapi.Script.Body as Body
@@ -24,7 +24,7 @@ import qualified Okapi.Script.Responder as Responder
 plan = Plan endpoint' handler'
 
 endpoint' =
-  Endpoint
+  Operation
     { security = auth,
       method = PUT,
       path = Path.static "articles" *> Path.param @Slug "slug",

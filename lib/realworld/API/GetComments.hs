@@ -16,7 +16,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.OpenApi as OAPI
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Okapi.Endpoint
+import Okapi.Operation
 import Okapi.Script.AddHeader (Response)
 import qualified Okapi.Script.AddHeader as AddHeader
 import qualified Okapi.Script.Body as Body
@@ -30,7 +30,7 @@ import qualified Web.HttpApiData as Web
 plan = Plan endpoint' handler'
 
 endpoint' =
-  Endpoint
+  Operation
     { security = (Right <$> auth) <|> (Left <$> Security.none),
       method = GET,
       path = do

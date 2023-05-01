@@ -21,7 +21,7 @@ import Data.ByteString qualified as BS
 import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import GHC.Generics (Generic)
-import Okapi.Endpoint (Artifact, Endpoint, Handler, Plan, build)
+import Okapi.Operation (Artifact, Handler, Operation, Plan, build)
 import Okapi.Script.Security
 import Okapi.Script.Security qualified as Security
 import Web.HttpApiData qualified as Web

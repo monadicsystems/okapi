@@ -47,7 +47,7 @@ import Database.SQLite.Simple qualified as Sqlite
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Network.Wai.Handler.Warp qualified as Warp
-import Okapi.Endpoint
+import Okapi.Operation
 import Okapi.Script.AddHeader qualified as AddHeader
 import Okapi.Script.Body qualified as Body
 import Okapi.Script.Headers qualified as Headers

@@ -17,7 +17,7 @@ import Data.Aeson qualified as Aeson
 import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Endpoint
+import Okapi.Operation
 import Okapi.Script
 import Okapi.Script.AddHeader (Response)
 import Okapi.Script.AddHeader qualified as AddHeaders
@@ -141,7 +141,7 @@ path3 = do
 testPlan =
   Plan
     id
-    ( Endpoint
+    ( Operation
         HTTP.GET
         do
           Path.static "index"
