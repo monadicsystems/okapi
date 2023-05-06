@@ -133,26 +133,7 @@ executable realworld
       Data
       Database
       JWT
-      API
-      API.Authentication
-      API.Registration
-      API.GetCurrentUser
-      API.UpdateUser
-      API.GetProfile
-      API.FollowUser
-      API.UnFollowUser
-      API.ListArticles
-      API.FeedArticles
-      API.GetArticle
-      API.UpdateArticle
-      API.CreateArticle
-      API.DeleteArticle
-      API.AddComment
-      API.GetComments
-      API.DeleteComment
-      API.FavoriteArticle
-      API.UnFavoriteArticle
-      API.GetTags
+      Resource
 
     -- Modules included in this executable, other than Main.
     -- other-modules:

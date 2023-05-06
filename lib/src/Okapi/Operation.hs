@@ -1,33 +1,24 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LinearTypes #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Okapi.Operation where
-
--- ( StdMethod (..),
---   Plan (..),
---   Operation (..),
---   Handler,
---   Artifact,
---   Server (..),
---   build,
---   status200,
---   status404,
---   toOpenApi,
---   toApp,
--- )
 
 import Control.Natural (type (~>))
 import Control.Object (Object (..), (#))
@@ -37,6 +28,7 @@ import Data.ByteString qualified as BS
 import Data.CaseInsensitive qualified as CI
 import Data.Function ((&))
 import Data.HashMap.Strict.InsOrd qualified as InsOrdHashMap
+import Data.Kind (Type)
 import Data.List (groupBy)
 import Data.List qualified as List
 import Data.List.Extra qualified as List
@@ -66,86 +58,100 @@ import Okapi.Script.Responder.AddHeader (Response, toWaiResponse)
 import Okapi.Script.Security qualified as Security
 import Okapi.Script.Security.Secure qualified as Secure
 
+type PathItems :: [Type] -> Type
+data PathItems resources where
+  Nil :: PathItems '[]
+  (:&) :: PathItem resource -> PathItems resources -> PathItems (resource ': resources)
+
+infixr 5 :&
+
+type Append :: forall a. [a] -> [a] -> [a] -- kind signature
+type family Append xs ys where -- header
+  Append '[] ys = ys -- clause 1
+  Append (x ': xs) ys = x ': Append xs ys -- clause 2
+
+appendPathItems :: PathItems resources1 -> PathItems resources2 -> PathItems (Append resources1 resources2)
+appendPathItems Nil pathItems = pathItems
+appendPathItems (h :& t) pathItems = h :& appendPathItems t pathItems
+
 data PathItem resource where
   PathItem ::
-    forall resource m1 m2 m3 m4.
-    (Monad m1, Monad m2, Monad m3, Monad m4) =>
-    { path :: Path.Script resource,
-      get :: Maybe (GET resource m1),
-      post :: Maybe (POST resource m2),
-      put :: Maybe (PUT resource m3),
-      delete :: Maybe (DELETE resource m4),
-      summary :: Maybe Text.Text,
-      description :: Maybe Text.Text
+    { summary :: Maybe Text.Text,
+      description :: Maybe Text.Text,
+      path :: Path.Script resource,
+      get :: Maybe (GET m resource security query headers responder),
+      post :: Maybe (POST m resource security query body headers responder),
+      put :: Maybe (PUT m resource security query body headers responder),
+      delete :: Maybe (DELETE m resource security query headers responder)
     } ->
     PathItem resource
 
-data GET resource m where
+data GET m resource security query headers responder where
   GET ::
     Monad m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script s),
-      query :: Query.Script q,
-      headers :: Headers.Script h,
-      responder :: Responder.Script r,
-      handler :: s -> resource -> q -> h -> r %1 -> m Response,
+      security :: NonEmpty (Security.Script security),
+      query :: Query.Script query,
+      headers :: Headers.Script headers,
+      responder :: Responder.Script responder,
+      handler :: resource -> security -> query -> headers -> responder %1 -> m Response,
       object :: Object m
     } ->
-    GET resource m
+    GET m resource security query headers responder
 
-data POST resource m where
+data POST m resource security query body headers responder where
   POST ::
     Monad m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script s),
-      query :: Query.Script q,
-      headers :: Headers.Script h,
-      body :: NonEmpty (Body.Script b),
-      responder :: Responder.Script r,
-      handler :: s -> resource -> q -> b -> h -> r %1 -> m Response,
+      security :: NonEmpty (Security.Script security),
+      query :: Query.Script query,
+      headers :: Headers.Script headers,
+      body :: NonEmpty (Body.Script body),
+      responder :: Responder.Script responder,
+      handler :: resource -> security -> query -> body -> headers -> responder %1 -> m Response,
       object :: Object m
     } ->
-    POST resource m
+    POST m resource security query body headers responder
 
-data PUT resource m where
+data PUT m resource security query body headers responder where
   PUT ::
     Monad m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script s),
-      query :: Query.Script q,
-      headers :: Headers.Script h,
-      body :: NonEmpty (Body.Script b),
-      responder :: Responder.Script r,
-      handler :: s -> resource -> q -> b -> h -> r %1 -> m Response,
+      security :: NonEmpty (Security.Script security),
+      query :: Query.Script query,
+      headers :: Headers.Script headers,
+      body :: NonEmpty (Body.Script body),
+      responder :: Responder.Script responder,
+      handler :: resource -> security -> query -> body -> headers -> responder %1 -> m Response,
       object :: Object m
     } ->
-    PUT resource m
+    PUT m resource security query body headers responder
 
-data DELETE resource m where
+data DELETE m resource security query headers responder where
   DELETE ::
     Monad m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script s),
-      query :: Query.Script q,
-      headers :: Headers.Script h,
-      responder :: Responder.Script r,
-      handler :: s -> resource -> q -> h -> r %1 -> m Response,
+      security :: NonEmpty (Security.Script security),
+      query :: Query.Script query,
+      headers :: Headers.Script headers,
+      responder :: Responder.Script responder,
+      handler :: resource -> security -> query -> headers -> responder %1 -> m Response,
       object :: Object m
     } ->
-    DELETE resource m
+    DELETE m resource security query headers responder
 
-data Server resource = Server
+data Server resources = Server
   { info :: OAPI.Info,
     url :: [Text.Text],
     description :: Maybe Text.Text,
-    pathItems :: [PathItem resource]
+    pathItems :: PathItems resources
   }
 
-toApplication :: Server resource -> WAI.Application
+toApplication :: Server resources -> WAI.Application
 toApplication Server {url, pathItems} request respond = do
   let reqPath = List.dropPrefix url $ WAI.pathInfo request
       reqQuery = WAI.queryString request
@@ -154,8 +160,8 @@ toApplication Server {url, pathItems} request respond = do
   if reqPath == WAI.pathInfo request && not (null url)
     then respond $ WAI.responseLBS HTTP.status404 mempty mempty -- TODO: If the incoming request URL doesn't have correct prefix. 404?
     else case getPathItemByPath reqPath pathItems of
-      Nothing -> respond $ WAI.responseLBS HTTP.status404 mempty mempty
-      Just (PathItem {get, post, put, delete}, resourceParam) -> case HTTP.parseMethod $ WAI.requestMethod request of
+      None -> respond $ WAI.responseLBS HTTP.status404 mempty mempty
+      Some (PathItem {get, post, put, delete}, resourceParam) -> case HTTP.parseMethod $ WAI.requestMethod request of
         Left _ -> respond $ WAI.responseLBS HTTP.status501 mempty mempty -- TODO: Return 501 Not Implemented error
         Right reqMethod ->
           case reqMethod of
@@ -165,7 +171,7 @@ toApplication Server {url, pathItems} request respond = do
                 case evalSecurity (sortSecurity security) reqSecurity of
                   (Ok securityParam, _) -> case (Query.eval query reqQuery, Headers.eval headers reqHeaders, Responder.eval responder ()) of
                     ((Ok queryParam, _), (Ok headersParam, _), (Ok responderParam, _)) -> do
-                      response <- object # handler securityParam resourceParam queryParam headersParam responderParam
+                      response <- object # handler resourceParam securityParam queryParam headersParam responderParam
                       respond $ toWaiResponse response
                     _ -> respond $ WAI.responseLBS HTTP.status422 mempty mempty -- TODO: Return 422 Unprocessable Content based on errors returned by Scripts
                   _ -> respond $ WAI.responseLBS HTTP.status401 mempty mempty -- TODO: Return 401 Unauthorized
@@ -178,7 +184,7 @@ toApplication Server {url, pathItems} request respond = do
                       bodyResult <- evalBody (sortBody body) request
                       case bodyResult of
                         (Ok bodyParam, _) -> do
-                          response <- object # handler securityParam resourceParam queryParam bodyParam headersParam responderParam
+                          response <- object # handler resourceParam securityParam queryParam bodyParam headersParam responderParam
                           respond $ toWaiResponse response
                         _ -> respond $ WAI.responseLBS HTTP.status400 mempty mempty -- TODO: Return 400 for now but can be more specific depending on content-type, etc.
                     _ -> respond $ WAI.responseLBS HTTP.status422 mempty mempty -- TODO: Return 422 Unprocessable Content based on errors returned by Scripts
@@ -192,7 +198,7 @@ toApplication Server {url, pathItems} request respond = do
                       bodyResult <- evalBody (sortBody body) request
                       case bodyResult of
                         (Ok bodyParam, _) -> do
-                          response <- object # handler securityParam resourceParam queryParam bodyParam headersParam responderParam
+                          response <- object # handler resourceParam securityParam queryParam bodyParam headersParam responderParam
                           respond $ toWaiResponse response
                         _ -> respond $ WAI.responseLBS HTTP.status400 mempty mempty -- TODO: Return 400 for now but can be more specific depending on content-type, etc.
                     _ -> respond $ WAI.responseLBS HTTP.status422 mempty mempty -- TODO: Return 422 Unprocessable Content based on errors returned by Scripts
@@ -203,16 +209,20 @@ toApplication Server {url, pathItems} request respond = do
                 case evalSecurity (sortSecurity security) reqSecurity of
                   (Ok securityParam, _) -> case (Query.eval query reqQuery, Headers.eval headers reqHeaders, Responder.eval responder ()) of
                     ((Ok queryParam, _), (Ok headersParam, _), (Ok responderParam, _)) -> do
-                      response <- object # handler securityParam resourceParam queryParam headersParam responderParam
+                      response <- object # handler resourceParam securityParam queryParam headersParam responderParam
                       respond $ toWaiResponse response
                     _ -> respond $ WAI.responseLBS HTTP.status422 mempty mempty -- TODO: Return 422 Unprocessable Content based on errors returned by Scripts
                   _ -> respond $ WAI.responseLBS HTTP.status401 mempty mempty -- TODO: Return 401 Unauthorized
             _ -> respond $ WAI.responseLBS HTTP.status501 mempty mempty -- TODO: Implement cases for remaing Standard HTTP methods
 
-getPathItemByPath :: [Text.Text] -> [PathItem resource] -> Maybe (PathItem resource, resource)
-getPathItemByPath reqPath [] = Nothing
-getPathItemByPath reqPath (pathItem@PathItem {path} : t) = case Path.eval path reqPath of
-  (Ok resourceParam, _) -> Just (pathItem, resourceParam)
+data Option where
+  None :: Option
+  Some :: forall resource. (PathItem resource, resource) -> Option
+
+getPathItemByPath :: [Text.Text] -> PathItems resources -> Option
+getPathItemByPath reqPath Nil = None
+getPathItemByPath reqPath (pathItem@PathItem {path} :& t) = case Path.eval path reqPath of
+  (Ok resourceParam, _) -> Some (pathItem, resourceParam)
   _ -> getPathItemByPath reqPath t
 
 evalBody :: NonEmpty (Body.Script a) -> WAI.Request -> IO (Result [Body.Error] a, Body.RequestBody)
@@ -263,10 +273,10 @@ sortSecurity = NonEmpty.sortBy comparer
     comparer _ Security.None = LT
     comparer _ (Security.FMap _ Security.None) = LT
 
-toOpenApi ::
+toOpenAPI ::
   Server resource ->
   OAPI.OpenApi
-toOpenApi Server {info, description, pathItems, url} =
+toOpenAPI Server {info, description, pathItems, url} =
   mempty
     { OAPI._openApiInfo = info,
       OAPI._openApiServers =
@@ -275,9 +285,13 @@ toOpenApi Server {info, description, pathItems, url} =
             description
             mempty
         ],
-      OAPI._openApiPaths = InsOrdHashMap.fromList $ map toOpenAPIPathItem pathItems,
+      OAPI._openApiPaths = pathItemsToOpenAPIPaths pathItems,
       OAPI._openApiOpenapi = OpenApiSpecVersion {getVersion = Version.Version [3, 0, 3] []}
     }
+
+pathItemsToOpenAPIPaths :: PathItems resources -> InsOrdHashMap.InsOrdHashMap FilePath OAPI.PathItem
+pathItemsToOpenAPIPaths Nil = InsOrdHashMap.fromList []
+pathItemsToOpenAPIPaths (h :& t) = let (filePath, pathItem) = toOpenAPIPathItem h in InsOrdHashMap.insert filePath pathItem $ pathItemsToOpenAPIPaths t
 
 toOpenAPIPathItem :: PathItem resource -> (FilePath, OAPI.PathItem)
 toOpenAPIPathItem PathItem {path, get, post, put, delete, summary, description} = (pathName, pathItem)
@@ -296,7 +310,7 @@ toOpenAPIPathItem PathItem {path, get, post, put, delete, summary, description} 
           OAPI._pathItemDelete = fmap (toDeleteOperation path) delete
         }
 
-toGetOperation :: Path.Script resource -> GET resource m -> OAPI.Operation
+toGetOperation :: Path.Script resource -> GET m resource security query headers responder -> OAPI.Operation
 toGetOperation path GET {security, query, headers, responder, description, summary} =
   mempty
     { OAPI._operationParameters = toParameters (path, query, headers),
@@ -306,7 +320,7 @@ toGetOperation path GET {security, query, headers, responder, description, summa
       OAPI._operationDescription = description
     }
 
-toPostOperation :: Path.Script resource -> POST resource m -> OAPI.Operation
+toPostOperation :: Path.Script resource -> POST m resource security query body headers responder -> OAPI.Operation
 toPostOperation path POST {security, query, body, headers, responder, description, summary} =
   mempty
     { OAPI._operationParameters = toParameters (path, query, headers),
@@ -317,7 +331,7 @@ toPostOperation path POST {security, query, body, headers, responder, descriptio
       OAPI._operationDescription = description
     }
 
-toPutOperation :: Path.Script resource -> PUT resource m -> OAPI.Operation
+toPutOperation :: Path.Script resource -> PUT m resource security query body headers responder -> OAPI.Operation
 toPutOperation path PUT {security, query, body, headers, responder, summary, description} =
   mempty
     { OAPI._operationParameters = toParameters (path, query, headers),
@@ -328,7 +342,7 @@ toPutOperation path PUT {security, query, body, headers, responder, summary, des
       OAPI._operationDescription = description
     }
 
-toDeleteOperation :: Path.Script resource -> DELETE resource m -> OAPI.Operation
+toDeleteOperation :: Path.Script resource -> DELETE m resource security query headers responder -> OAPI.Operation
 toDeleteOperation path DELETE {security, query, headers, responder, summary, description} =
   mempty
     { OAPI._operationParameters = toParameters (path, query, headers),

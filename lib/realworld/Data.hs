@@ -91,3 +91,6 @@ data NewComment = NewComment
 
 data Comment = Comment
   deriving (Eq, Show, Generic, ToJSON)
+
+newtype ID a = ID {int :: Int}
+  deriving newtype (Eq, Show, FromHttpApiData, ToSchema)
