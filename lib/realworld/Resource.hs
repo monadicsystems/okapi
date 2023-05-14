@@ -1,8 +1,18 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Resource where
 
 import qualified Data
+import qualified Okapi.Parser.Path as Path
 
 data Login = Login
+
+instance Path.Interface Login where
+  resource = do
+    Path.static "users"
+    Path.static "login"
+    pure Login
 
 data Users = Users
 

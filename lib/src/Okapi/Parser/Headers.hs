@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Script.Headers where
+module Okapi.Parser.Headers where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -19,7 +19,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Script
+import Okapi.Parser
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -32,36 +32,36 @@ data Error
   | CookieValueParseFail
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
-data Script a where
-  FMap :: (a -> b) -> Script a -> Script b
-  Pure :: a -> Script a
-  Apply :: Script (a -> b) -> Script a -> Script b
-  Param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.HeaderName -> Script a
-  Cookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Script a
-  Optional :: Script a -> Script (Maybe a)
-  Option :: a -> Script a -> Script a
+data Parser a where
+  FMap :: (a -> b) -> Parser a -> Parser b
+  Pure :: a -> Parser a
+  Apply :: Parser (a -> b) -> Parser a -> Parser b
+  Param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.HeaderName -> Parser a
+  Cookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Parser a
+  Optional :: Parser a -> Parser (Maybe a)
+  Option :: a -> Parser a -> Parser a
 
-instance Functor Script where
+instance Functor Parser where
   fmap = FMap
 
-instance Applicative Script where
+instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
-param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.HeaderName -> Script a
+param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.HeaderName -> Parser a
 param = Param
 
-cookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Script a
+cookie :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Parser a
 cookie = Cookie
 
-optional :: Script a -> Script (Maybe a)
+optional :: Parser a -> Parser (Maybe a)
 optional = Optional
 
-option :: a -> Script a -> Script a
+option :: a -> Parser a -> Parser a
 option = Option
 
 eval ::
-  Script a ->
+  Parser a ->
   HTTP.RequestHeaders ->
   (Result Error a, HTTP.RequestHeaders)
 eval op state = case op of
@@ -110,3 +110,6 @@ eval op state = case op of
       (Ok result, state') -> (Ok result, state')
       (_, state') -> (Ok def, state')
     _ -> eval op' state
+
+class Interface a where
+  parser :: Parser a

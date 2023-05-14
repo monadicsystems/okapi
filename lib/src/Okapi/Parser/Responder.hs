@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Script.Responder where
+module Okapi.Parser.Responder where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -19,9 +19,9 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Script
-import Okapi.Script.Responder.AddHeader (Response (..))
-import Okapi.Script.Responder.AddHeader qualified as AddHeader
+import Okapi.Parser
+import Okapi.Parser.Responder.AddHeader (Response (..))
+import Okapi.Parser.Responder.AddHeader qualified as AddHeader
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -33,29 +33,29 @@ data Error
   | ResponderHeadersError -- TODO: AddHeader shouldn't be able to fail...
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
-data Script a where
-  FMap :: (a -> b) -> Script a -> Script b
-  Pure :: a -> Script a
-  Apply :: Script (a -> b) -> Script a -> Script b
+data Parser a where
+  FMap :: (a -> b) -> Parser a -> Parser b
+  Pure :: a -> Parser a
+  Apply :: Parser (a -> b) -> Parser a -> Parser b
   JSON ::
     Aeson.ToJSON a =>
     HTTP.Status ->
-    AddHeader.Script h ->
-    Script
+    AddHeader.Parser h ->
+    Parser
       ( (h %1 -> (Response -> Response)) ->
         a ->
         Response
       )
 
-instance Functor Script where
+instance Functor Parser where
   fmap = FMap
 
-instance Applicative Script where
+instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
 eval ::
-  Script a ->
+  Parser a ->
   () ->
   (Result Error a, ())
 eval op state = case op of
@@ -83,10 +83,13 @@ eval op state = case op of
 json ::
   Aeson.ToJSON a =>
   HTTP.Status ->
-  AddHeader.Script h ->
-  Script
+  AddHeader.Parser h ->
+  Parser
     ( (h %1 -> (Response -> Response)) ->
       a ->
       Response
     )
 json = JSON
+
+class Interface a where
+  parser :: Parser a

@@ -28,19 +28,19 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Operation
+      Okapi.Server
       Okapi.Matchpoint
+      Okapi.Parser
       Okapi.Request
-      Okapi.Script
-      Okapi.Script.Path
-      Okapi.Script.Query
-      Okapi.Script.Headers
-      Okapi.Script.Body
-      Okapi.Script.Body.Multipart
-      Okapi.Script.Responder
-      Okapi.Script.Responder.AddHeader
-      Okapi.Script.Security
-      Okapi.Script.Security.Secure
+      Okapi.Route
+      Okapi.Parser.Path
+      Okapi.Parser.Query
+      Okapi.Parser.Headers
+      Okapi.Parser.Body
+      Okapi.Parser.Body.Multipart
+      Okapi.Parser.Responder
+      Okapi.Parser.Responder.AddHeader
+      Okapi.Parser.Security
   other-modules:
       Paths_okapi
   hs-source-dirs:
@@ -68,12 +68,14 @@ library
     , mtl
     , natural-transformation
     , network
+    , nonempty-containers
     , openapi3
     , parser-combinators
     , pretty-simple
     , text
     , transformers
     , unagi-chan
+    , unordered-containers
     , vault
     , wai
     , wai-extra
@@ -134,6 +136,8 @@ executable realworld
       Database
       JWT
       Resource
+      API
+      API.Login
 
     -- Modules included in this executable, other than Main.
     -- other-modules:

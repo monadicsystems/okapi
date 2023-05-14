@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Script.Body where
+module Okapi.Parser.Body where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -15,13 +15,16 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Data.List qualified as List
+import Data.List.NonEmpty (NonEmpty)
+import Data.Set.NonEmpty (NESet)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
+import Network.Wai.Parse (RequestBodyType (UrlEncoded))
 import Network.Wai.Parse qualified as WAI
-import Okapi.Script
-import Okapi.Script.Body.Multipart qualified as Multipart
+import Okapi.Parser
+import Okapi.Parser.Body.Multipart qualified as Multipart
 import Web.Cookie qualified as Web
 import Web.FormUrlEncoded qualified as Web
 import Web.HttpApiData qualified as Web
@@ -34,29 +37,41 @@ data Error
   | MultipartError Multipart.Error
   deriving (Eq, Show, Generics.Generic)
 
-data Script a where
-  FMap :: (a -> b) -> Script a -> Script b
-  -- Pure :: a -> Script a
-  -- Apply :: Script (a -> b) -> Script a -> Script b
-  None :: Script ()
-  JSON :: Aeson.FromJSON a => Script a
-  URLEncoded :: Web.FromForm a => Script a
-  Multipart :: Multipart.Script a -> Script a
+data ContentType a where
+  JSON :: Aeson.FromJSON a => ContentType a
+  URLEncoded :: Web.FromForm a => ContentType a
+  Multipart :: Multipart.Parser a -> ContentType a
 
-instance Functor Script where
-  fmap :: (a -> b) -> Script a -> Script b
+instance Eq (ContentType a) where
+  JSON == JSON = True
+  URLEncoded == UrlEncoded = True
+  Multipart _ == Multipart _ = True
+  _ == _ = False
+
+instance Functor ContentType
+
+data Parser a where
+  FMap :: (a -> b) -> Parser a -> Parser b
+  Pure :: a -> Parser a
+  Apply :: Parser (a -> b) -> Parser a -> Parser b
+  None :: Parser ()
+  Optional :: NESet (ContentType a) -> Parser (Maybe a)
+  Required :: NESet (ContentType a) -> Parser a
+
+instance Functor Parser where
+  fmap :: (a -> b) -> Parser a -> Parser b
   fmap = FMap
 
--- instance Applicative Script where
---   pure = Pure
---   (<*>) = Apply
+instance Applicative Parser where
+  pure = Pure
+  (<*>) = Apply
 
 data RequestBody
   = RequestBodyRaw LBS.ByteString
   | RequestBodyMultipart ([WAI.Param], [WAI.File LBS.ByteString])
 
 eval ::
-  Script a ->
+  Parser a ->
   RequestBody ->
   (Result Error a, RequestBody)
 eval op state = case op of
@@ -64,13 +79,13 @@ eval op state = case op of
     case eval opX state of
       (Fail e, state') -> (Fail e, state')
       (Ok x, state') -> (Ok $ f x, state')
-  -- Pure x -> (Ok x, state)
-  -- Apply opF opX -> case eval opF state of
-  --   (Ok f, state') -> case eval opX state' of
-  --     (Ok x, state'') -> (Ok $ f x, state'')
-  --     (Fail e, state'') -> (Fail e, state'')
-  --   (Fail e, state') -> (Fail e, state')
-  None -> (Ok (), state)
+  Pure x -> (Ok x, state)
+  Apply opF opX -> case eval opF state of
+    (Ok f, state') -> case eval opX state' of
+      (Ok x, state'') -> (Ok $ f x, state'')
+      (Fail e, state'') -> (Fail e, state'')
+    (Fail e, state') -> (Fail e, state')
+  -- None -> (Ok (), state)
   JSON -> case state of
     RequestBodyRaw bs -> case Aeson.decode bs of
       Nothing -> (Fail JSONParseFail, state)
@@ -90,20 +105,34 @@ eval op state = case op of
             Right form -> case Web.fromForm form of
               Left err -> (Fail $ URLEncodedParseFail err, state)
               Right value -> (Ok value, RequestBodyMultipart (mempty, files))
-  Multipart script -> case state of
+  Multipart parser -> case state of
     RequestBodyRaw _ -> (Fail NotMultipart, state)
-    RequestBodyMultipart parts -> case Multipart.eval script parts of
+    RequestBodyMultipart parts -> case Multipart.eval parser parts of
       (Ok value, state') -> (Ok value, RequestBodyMultipart state')
       (Fail err, state') -> (Fail $ MultipartError err, RequestBodyMultipart state')
 
-none :: Script ()
+none :: Parser ()
 none = None
 
-json :: Aeson.FromJSON a => Script a
+json :: Aeson.FromJSON a => Parser a
 json = JSON
 
-urlEncoded :: Web.FromForm a => Script a
+urlEncoded :: Web.FromForm a => Parser a
 urlEncoded = URLEncoded
 
-multipart :: Multipart.Script a -> Script a
+multipart :: Multipart.Parser a -> Parser a
 multipart = Multipart
+
+class Interface a where
+  parser :: NonEmpty (Parser a)
+
+-- TODO: Add optional for body
+
+countOps :: Parser a -> Int
+countOps path = case path of
+  FMap _ opX -> countOps opX
+  Pure _ -> 0
+  Apply opF opX -> countOps opF + countOps opX
+  JSON -> 1
+  URLEncoded -> 1
+  Multipart -> undefined

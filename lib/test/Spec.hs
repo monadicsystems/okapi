@@ -18,14 +18,14 @@ import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Operation
-import Okapi.Script
-import Okapi.Script.AddHeader (Response)
-import Okapi.Script.AddHeader qualified as AddHeaders
-import Okapi.Script.Body qualified as Body
-import Okapi.Script.Headers qualified as Headers
-import Okapi.Script.Path qualified as Path
-import Okapi.Script.Query qualified as Query
-import Okapi.Script.Responder qualified as Responder
+import Okapi.Parser
+import Okapi.Parser.AddHeader (Response)
+import Okapi.Parser.AddHeader qualified as AddHeaders
+import Okapi.Parser.Body qualified as Body
+import Okapi.Parser.Headers qualified as Headers
+import Okapi.Parser.Path qualified as Path
+import Okapi.Parser.Query qualified as Query
+import Okapi.Parser.Responder qualified as Responder
 import Prelude.Linear qualified as L
 import Test.Hspec
 import Web.HttpApiData qualified as Web
@@ -98,28 +98,28 @@ data Filter = Filter
   }
   deriving (Eq, Show)
 
-query1 :: Query.Script Filter
+query1 :: Query.Parser Filter
 query1 = do
   score <- Query.param @Int "score"
   byUser <- Query.param @Username "user"
   pure Filter {..}
 
-query2 :: Query.Script Username
+query2 :: Query.Parser Username
 query2 = do
   username <- Query.param @Username "user"
   Query.flag "active"
   pure username
 
-query3 :: Query.Script (Username, Maybe ())
+query3 :: Query.Parser (Username, Maybe ())
 query3 = do
   user <- Query.option (Username "Anon") $ Query.param "user"
   active <- Query.optional $ Query.flag "active"
   pure (user, active)
 
-path1 :: Path.Script ()
+path1 :: Path.Parser ()
 path1 = Path.static "index"
 
-path2 :: Path.Script Int
+path2 :: Path.Parser Int
 path2 = do
   Path.static "item"
   uuid <- Path.param @Int "uuid"
@@ -131,7 +131,7 @@ newtype Category = Category {unwrap :: Text.Text}
 newtype ProductID = ProductID {unwrap :: Int}
   deriving newtype (Eq, Show, Web.FromHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
-path3 :: Path.Script (Category, ProductID)
+path3 :: Path.Parser (Category, ProductID)
 path3 = do
   Path.static "product"
   category <- Path.param @Category "category"

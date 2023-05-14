@@ -18,7 +18,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Okapi.Operation where
+module Okapi.Server where
 
 import Control.Natural (type (~>))
 import Control.Object (Object (..), (#))
@@ -47,129 +47,44 @@ import Debug.Trace qualified as Debug
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Network.Wai.Parse qualified as WAI
+import Okapi.Parser
+import Okapi.Parser.Body qualified as Body
+import Okapi.Parser.Headers qualified as Headers
+import Okapi.Parser.Path qualified as Path
+import Okapi.Parser.Query qualified as Query
+import Okapi.Parser.Responder qualified as Responder
+import Okapi.Parser.Responder.AddHeader (Response, toWaiResponse)
+import Okapi.Parser.Security qualified as Security
+import Okapi.Parser.Security.Secure qualified as Secure
 import Okapi.Request (Request)
-import Okapi.Script
-import Okapi.Script.Body qualified as Body
-import Okapi.Script.Headers qualified as Headers
-import Okapi.Script.Path qualified as Path
-import Okapi.Script.Query qualified as Query
-import Okapi.Script.Responder qualified as Responder
-import Okapi.Script.Responder.AddHeader (Response, toWaiResponse)
-import Okapi.Script.Security qualified as Security
-import Okapi.Script.Security.Secure qualified as Secure
-
-type PathItems :: [Type] -> Type
-data PathItems resources where
-  Nil :: PathItems '[]
-  (:&) :: PathItem resource -> PathItems resources -> PathItems (resource ': resources)
-
-infixr 5 :&
-
-type Append :: forall a. [a] -> [a] -> [a] -- kind signature
-type family Append xs ys where -- header
-  Append '[] ys = ys -- clause 1
-  Append (x ': xs) ys = x ': Append xs ys -- clause 2
-
-appendPathItems :: PathItems resources1 -> PathItems resources2 -> PathItems (Append resources1 resources2)
-appendPathItems Nil pathItems = pathItems
-appendPathItems (h :& t) pathItems = h :& appendPathItems t pathItems
-
-data PathItem resource where
-  PathItem ::
-    { summary :: Maybe Text.Text,
-      description :: Maybe Text.Text,
-      path :: Path.Script resource,
-      get :: Maybe (GET m resource security query headers responder),
-      post :: Maybe (POST m resource security query body headers responder),
-      put :: Maybe (PUT m resource security query body headers responder),
-      delete :: Maybe (DELETE m resource security query headers responder)
-    } ->
-    PathItem resource
-
-data GET m resource security query headers responder where
-  GET ::
-    Monad m =>
-    { summary :: Maybe Text.Text,
-      description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script security),
-      query :: Query.Script query,
-      headers :: Headers.Script headers,
-      responder :: Responder.Script responder,
-      handler :: resource -> security -> query -> headers -> responder %1 -> m Response,
-      object :: Object m
-    } ->
-    GET m resource security query headers responder
-
-data POST m resource security query body headers responder where
-  POST ::
-    Monad m =>
-    { summary :: Maybe Text.Text,
-      description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script security),
-      query :: Query.Script query,
-      headers :: Headers.Script headers,
-      body :: NonEmpty (Body.Script body),
-      responder :: Responder.Script responder,
-      handler :: resource -> security -> query -> body -> headers -> responder %1 -> m Response,
-      object :: Object m
-    } ->
-    POST m resource security query body headers responder
-
-data PUT m resource security query body headers responder where
-  PUT ::
-    Monad m =>
-    { summary :: Maybe Text.Text,
-      description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script security),
-      query :: Query.Script query,
-      headers :: Headers.Script headers,
-      body :: NonEmpty (Body.Script body),
-      responder :: Responder.Script responder,
-      handler :: resource -> security -> query -> body -> headers -> responder %1 -> m Response,
-      object :: Object m
-    } ->
-    PUT m resource security query body headers responder
-
-data DELETE m resource security query headers responder where
-  DELETE ::
-    Monad m =>
-    { summary :: Maybe Text.Text,
-      description :: Maybe Text.Text,
-      security :: NonEmpty (Security.Script security),
-      query :: Query.Script query,
-      headers :: Headers.Script headers,
-      responder :: Responder.Script responder,
-      handler :: resource -> security -> query -> headers -> responder %1 -> m Response,
-      object :: Object m
-    } ->
-    DELETE m resource security query headers responder
+import Okapi.Route (DELETE (..), GET (..), POST (..), PUT (..), Route (..), Routes (..))
 
 data Server resources = Server
   { info :: OAPI.Info,
     url :: [Text.Text],
     description :: Maybe Text.Text,
-    pathItems :: PathItems resources
+    routes :: Routes resources
   }
 
 toApplication :: Server resources -> WAI.Application
-toApplication Server {url, pathItems} request respond = do
+toApplication Server {url, routes} request respond = do
   let reqPath = List.dropPrefix url $ WAI.pathInfo request
       reqQuery = WAI.queryString request
       reqHeaders = WAI.requestHeaders request
       reqSecurity = Secure.State reqQuery reqHeaders [] -- TODO: Get cookies out of headers here instead of empty list
   if reqPath == WAI.pathInfo request && not (null url)
     then respond $ WAI.responseLBS HTTP.status404 mempty mempty -- TODO: If the incoming request URL doesn't have correct prefix. 404?
-    else case getPathItemByPath reqPath pathItems of
+    else case getPathItemByPath reqPath routes of
       None -> respond $ WAI.responseLBS HTTP.status404 mempty mempty
-      Some (PathItem {get, post, put, delete}, resourceParam) -> case HTTP.parseMethod $ WAI.requestMethod request of
+      Some (Route {get, post, put, delete}, resourceParam) -> case HTTP.parseMethod $ WAI.requestMethod request of
         Left _ -> respond $ WAI.responseLBS HTTP.status501 mempty mempty -- TODO: Return 501 Not Implemented error
         Right reqMethod ->
           case reqMethod of
             HTTP.GET -> case get of
               Nothing -> respond $ WAI.responseLBS HTTP.status405 mempty mempty
-              Just (GET {security, query, headers, responder, handler, object}) ->
-                case evalSecurity (sortSecurity security) reqSecurity of
-                  (Ok securityParam, _) -> case (Query.eval query reqQuery, Headers.eval headers reqHeaders, Responder.eval responder ()) of
+              Just (GET {handler, object}) ->
+                case evalSecurity (sortSecurity Security.parser) reqSecurity of
+                  (Ok securityParam, _) -> case (Query.eval Query.parser reqQuery, Headers.eval Headers.parser reqHeaders, Responder.eval Responder.parser ()) of
                     ((Ok queryParam, _), (Ok headersParam, _), (Ok responderParam, _)) -> do
                       response <- object # handler resourceParam securityParam queryParam headersParam responderParam
                       respond $ toWaiResponse response
@@ -177,11 +92,11 @@ toApplication Server {url, pathItems} request respond = do
                   _ -> respond $ WAI.responseLBS HTTP.status401 mempty mempty -- TODO: Return 401 Unauthorized
             HTTP.POST -> case post of
               Nothing -> respond $ WAI.responseLBS HTTP.status405 mempty mempty
-              Just (POST {security, query, body, headers, responder, handler, object}) ->
-                case evalSecurity (sortSecurity security) reqSecurity of
-                  (Ok securityParam, _) -> case (Query.eval query reqQuery, Headers.eval headers reqHeaders, Responder.eval responder ()) of
+              Just (POST {handler, object}) ->
+                case evalSecurity (sortSecurity Security.parser) reqSecurity of
+                  (Ok securityParam, _) -> case (Query.eval Query.parser reqQuery, Headers.eval Headers.parser reqHeaders, Responder.eval Responder.parser ()) of
                     ((Ok queryParam, _), (Ok headersParam, _), (Ok responderParam, _)) -> do
-                      bodyResult <- evalBody (sortBody body) request
+                      bodyResult <- evalBody (sortBody Body.parser) request
                       case bodyResult of
                         (Ok bodyParam, _) -> do
                           response <- object # handler resourceParam securityParam queryParam bodyParam headersParam responderParam
@@ -191,11 +106,11 @@ toApplication Server {url, pathItems} request respond = do
                   _ -> respond $ WAI.responseLBS HTTP.status401 mempty mempty -- TODO: Return 401 Unauthorized
             HTTP.PUT -> case put of
               Nothing -> respond $ WAI.responseLBS HTTP.status405 mempty mempty
-              Just (PUT {security, query, body, headers, responder, handler, object}) ->
-                case evalSecurity (sortSecurity security) reqSecurity of
-                  (Ok securityParam, _) -> case (Query.eval query reqQuery, Headers.eval headers reqHeaders, Responder.eval responder ()) of
+              Just (PUT {handler, object}) ->
+                case evalSecurity (sortSecurity Security.parser) reqSecurity of
+                  (Ok securityParam, _) -> case (Query.eval Query.parser reqQuery, Headers.eval Headers.parser reqHeaders, Responder.eval Responder.parser ()) of
                     ((Ok queryParam, _), (Ok headersParam, _), (Ok responderParam, _)) -> do
-                      bodyResult <- evalBody (sortBody body) request
+                      bodyResult <- evalBody (sortBody Body.parser) request
                       case bodyResult of
                         (Ok bodyParam, _) -> do
                           response <- object # handler resourceParam securityParam queryParam bodyParam headersParam responderParam
@@ -205,9 +120,9 @@ toApplication Server {url, pathItems} request respond = do
                   _ -> respond $ WAI.responseLBS HTTP.status401 mempty mempty -- TODO: Return 401 Unauthorized
             HTTP.DELETE -> case delete of
               Nothing -> respond $ WAI.responseLBS HTTP.status405 mempty mempty
-              Just (DELETE {security, query, headers, responder, handler, object}) ->
-                case evalSecurity (sortSecurity security) reqSecurity of
-                  (Ok securityParam, _) -> case (Query.eval query reqQuery, Headers.eval headers reqHeaders, Responder.eval responder ()) of
+              Just (DELETE {handler, object}) ->
+                case evalSecurity (sortSecurity Security.parser) reqSecurity of
+                  (Ok securityParam, _) -> case (Query.eval Query.parser reqQuery, Headers.eval Headers.parser reqHeaders, Responder.eval Responder.parser ()) of
                     ((Ok queryParam, _), (Ok headersParam, _), (Ok responderParam, _)) -> do
                       response <- object # handler resourceParam securityParam queryParam headersParam responderParam
                       respond $ toWaiResponse response
@@ -217,15 +132,15 @@ toApplication Server {url, pathItems} request respond = do
 
 data Option where
   None :: Option
-  Some :: forall resource. (PathItem resource, resource) -> Option
+  Some :: forall resource. (Route resource, resource) -> Option
 
-getPathItemByPath :: [Text.Text] -> PathItems resources -> Option
+getPathItemByPath :: [Text.Text] -> Routes resources -> Option
 getPathItemByPath reqPath Nil = None
-getPathItemByPath reqPath (pathItem@PathItem {path} :& t) = case Path.eval path reqPath of
-  (Ok resourceParam, _) -> Some (pathItem, resourceParam)
+getPathItemByPath reqPath (route@(Route @resource _ _ _ _ _ _) :& t) = case Path.eval (Path.parser @resource) reqPath of
+  (Ok resourceParam, _) -> Some (route, resourceParam)
   _ -> getPathItemByPath reqPath t
 
-evalBody :: NonEmpty (Body.Script a) -> WAI.Request -> IO (Result [Body.Error] a, Body.RequestBody)
+evalBody :: NonEmpty (Body.Parser a) -> WAI.Request -> IO (Result [Body.Error] a, Body.RequestBody)
 evalBody (h :| t) request = do
   state <- case WAI.getRequestBodyType request of
     Just (WAI.Multipart _boundary) -> Body.RequestBodyMultipart <$> WAI.parseRequestBodyEx WAI.defaultParseRequestBodyOptions WAI.lbsBackEnd request
@@ -234,16 +149,16 @@ evalBody (h :| t) request = do
     (ok@(Ok _), s) -> return (ok, s)
     _ -> return $ loop state t
   where
-    loop :: Body.RequestBody -> [Body.Script a] -> (Result [Body.Error] a, Body.RequestBody)
+    loop :: Body.RequestBody -> [Body.Parser a] -> (Result [Body.Error] a, Body.RequestBody)
     loop state [] = (Fail [], state)
     loop state (h : t) = case first (first pure) $ Body.eval h state of
       (ok@(Ok _), state') -> (ok, state')
       _ -> loop state t
 
-sortBody :: NonEmpty (Body.Script a) -> NonEmpty (Body.Script a)
+sortBody :: NonEmpty (Body.Parser a) -> NonEmpty (Body.Parser a)
 sortBody = NonEmpty.sortBy comparer
   where
-    comparer :: Body.Script a -> Body.Script a -> Ordering
+    comparer :: Body.Parser a -> Body.Parser a -> Ordering
     comparer Body.None Body.None = EQ
     comparer (Body.FMap _ Body.None) (Body.FMap _ Body.None) = EQ
     comparer (Body.FMap _ Body.None) _ = GT
@@ -251,21 +166,21 @@ sortBody = NonEmpty.sortBy comparer
     comparer Body.None _body = GT
     comparer _body Body.None = LT
 
-evalSecurity :: NonEmpty (Security.Script a) -> Secure.State -> (Result Security.Error a, Secure.State)
+evalSecurity :: NonEmpty (Security.Parser a) -> Secure.State -> (Result Security.Error a, Secure.State)
 evalSecurity (h :| t) state = case Security.eval h state of
   (ok@(Ok _), s) -> (ok, s)
   _ -> loop state t
   where
-    loop :: Secure.State -> [Security.Script a] -> (Result Security.Error a, Secure.State)
+    loop :: Secure.State -> [Security.Parser a] -> (Result Security.Error a, Secure.State)
     loop state [] = (Fail $ Security.SecureError Secure.ParseFail, state)
     loop state (h : t) = case Security.eval h state of
       (ok@(Ok _), state') -> (ok, state')
       _ -> loop state t
 
-sortSecurity :: NonEmpty (Security.Script a) -> NonEmpty (Security.Script a)
+sortSecurity :: NonEmpty (Security.Parser a) -> NonEmpty (Security.Parser a)
 sortSecurity = NonEmpty.sortBy comparer
   where
-    comparer :: Security.Script a -> Security.Script a -> Ordering
+    comparer :: Security.Parser a -> Security.Parser a -> Ordering
     comparer Security.None Security.None = EQ
     comparer (Security.FMap _ Security.None) (Security.FMap _ Security.None) = EQ
     comparer Security.None _ = GT
@@ -276,7 +191,7 @@ sortSecurity = NonEmpty.sortBy comparer
 toOpenAPI ::
   Server resource ->
   OAPI.OpenApi
-toOpenAPI Server {info, description, pathItems, url} =
+toOpenAPI Server {info, description, routes, url} =
   mempty
     { OAPI._openApiInfo = info,
       OAPI._openApiServers =
@@ -285,77 +200,77 @@ toOpenAPI Server {info, description, pathItems, url} =
             description
             mempty
         ],
-      OAPI._openApiPaths = pathItemsToOpenAPIPaths pathItems,
+      OAPI._openApiPaths = pathItemsToOpenAPIPaths routes,
       OAPI._openApiOpenapi = OpenApiSpecVersion {getVersion = Version.Version [3, 0, 3] []}
     }
 
-pathItemsToOpenAPIPaths :: PathItems resources -> InsOrdHashMap.InsOrdHashMap FilePath OAPI.PathItem
+pathItemsToOpenAPIPaths :: Routes resources -> InsOrdHashMap.InsOrdHashMap FilePath OAPI.PathItem
 pathItemsToOpenAPIPaths Nil = InsOrdHashMap.fromList []
 pathItemsToOpenAPIPaths (h :& t) = let (filePath, pathItem) = toOpenAPIPathItem h in InsOrdHashMap.insert filePath pathItem $ pathItemsToOpenAPIPaths t
 
-toOpenAPIPathItem :: PathItem resource -> (FilePath, OAPI.PathItem)
-toOpenAPIPathItem PathItem {path, get, post, put, delete, summary, description} = (pathName, pathItem)
+toOpenAPIPathItem :: Route resource -> (FilePath, OAPI.PathItem)
+toOpenAPIPathItem (Route @resource summary description get post put delete) = (pathName, pathItem)
   where
     pathName :: FilePath
-    pathName = renderPath path
+    pathName = renderPath $ Path.parser @resource
 
     pathItem :: OAPI.PathItem
     pathItem =
       mempty
         { OAPI._pathItemSummary = summary,
           OAPI._pathItemDescription = description,
-          OAPI._pathItemGet = fmap (toGetOperation path) get,
-          OAPI._pathItemPost = fmap (toPostOperation path) post,
-          OAPI._pathItemPut = fmap (toPutOperation path) put,
-          OAPI._pathItemDelete = fmap (toDeleteOperation path) delete
+          OAPI._pathItemGet = fmap toGetOperation get,
+          OAPI._pathItemPost = fmap toPostOperation post,
+          OAPI._pathItemPut = fmap toPutOperation put,
+          OAPI._pathItemDelete = fmap toDeleteOperation delete
         }
 
-toGetOperation :: Path.Script resource -> GET m resource security query headers responder -> OAPI.Operation
-toGetOperation path GET {security, query, headers, responder, description, summary} =
+toGetOperation :: GET m resource security query headers responder -> OAPI.Operation
+toGetOperation (GET @_ @resource @security @query @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (path, query, headers),
-      OAPI._operationResponses = toResponses responder,
-      OAPI._operationSecurity = toSecurityRequirements security,
+    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+      OAPI._operationResponses = toResponses $ Responder.parser @responder,
+      OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
       OAPI._operationSummary = summary,
       OAPI._operationDescription = description
     }
 
-toPostOperation :: Path.Script resource -> POST m resource security query body headers responder -> OAPI.Operation
-toPostOperation path POST {security, query, body, headers, responder, description, summary} =
+toPostOperation :: POST m resource security query body headers responder -> OAPI.Operation
+toPostOperation (POST @_ @resource @security @query @body @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (path, query, headers),
-      OAPI._operationRequestBody = toOpenAPIRequestBody body,
-      OAPI._operationResponses = toResponses responder,
-      OAPI._operationSecurity = toSecurityRequirements security,
+    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+      OAPI._operationRequestBody = toOpenAPIRequestBody $ Body.parser @body,
+      OAPI._operationResponses = toResponses $ Responder.parser @responder,
+      OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
       OAPI._operationSummary = summary,
       OAPI._operationDescription = description
     }
 
-toPutOperation :: Path.Script resource -> PUT m resource security query body headers responder -> OAPI.Operation
-toPutOperation path PUT {security, query, body, headers, responder, summary, description} =
+toPutOperation :: PUT m resource security query body headers responder -> OAPI.Operation
+toPutOperation (PUT @_ @resource @security @query @body @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (path, query, headers),
-      OAPI._operationRequestBody = toOpenAPIRequestBody body,
-      OAPI._operationResponses = toResponses responder,
-      OAPI._operationSecurity = toSecurityRequirements security,
+    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+      OAPI._operationRequestBody = toOpenAPIRequestBody $ Body.parser @body,
+      OAPI._operationResponses = toResponses $ Responder.parser @responder,
+      OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
       OAPI._operationSummary = summary,
       OAPI._operationDescription = description
     }
 
-toDeleteOperation :: Path.Script resource -> DELETE m resource security query headers responder -> OAPI.Operation
-toDeleteOperation path DELETE {security, query, headers, responder, summary, description} =
+toDeleteOperation :: DELETE m resource security query headers responder -> OAPI.Operation
+toDeleteOperation (DELETE @_ @resource @security @query @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (path, query, headers),
-      OAPI._operationResponses = toResponses responder,
-      OAPI._operationSecurity = toSecurityRequirements security,
+    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+      OAPI._operationResponses = toResponses $ Responder.parser @responder,
+      OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
       OAPI._operationSummary = summary,
       OAPI._operationDescription = description
     }
 
-toParameters :: (Path.Script resource, Query.Script q, Headers.Script h) -> [OAPI.Referenced OAPI.Param]
+toParameters :: (Path.Parser resource, Query.Parser q, Headers.Parser h) -> [OAPI.Referenced OAPI.Param]
 toParameters (path, query, headers) = pathParameters path <> queryParameters query <> headersParameters headers
   where
-    pathParameters :: Path.Script resource -> [OAPI.Referenced OAPI.Param]
+    pathParameters :: Path.Parser resource -> [OAPI.Referenced OAPI.Param]
     pathParameters path = case path of
       Path.FMap f p -> pathParameters p
       Path.Pure _ -> mempty
@@ -371,7 +286,7 @@ toParameters (path, query, headers) = pathParameters path <> queryParameters que
               }
         ]
 
-    queryParameters :: Query.Script q -> [OAPI.Referenced OAPI.Param]
+    queryParameters :: Query.Parser q -> [OAPI.Referenced OAPI.Param]
     queryParameters query = case query of
       Query.FMap f q -> queryParameters q
       Query.Pure _ -> mempty
@@ -408,7 +323,7 @@ toParameters (path, query, headers) = pathParameters path <> queryParameters que
           pure $ fmap (\param -> param {OAPI._paramRequired = Just False, OAPI._paramSchema = fmap (fmap (\schema -> schema {OAPI._schemaDefault = Just $ Aeson.toJSON def})) param._paramSchema}) param
         _ -> queryParameters query'
 
-    headersParameters :: Headers.Script h -> [OAPI.Referenced OAPI.Param]
+    headersParameters :: Headers.Parser h -> [OAPI.Referenced OAPI.Param]
     headersParameters headers = case headers of
       Headers.FMap f h -> headersParameters h
       Headers.Pure _ -> mempty
@@ -448,16 +363,16 @@ toParameters (path, query, headers) = pathParameters path <> queryParameters que
           pure $ fmap (\param -> param {OAPI._paramRequired = Just False, OAPI._paramSchema = fmap (fmap (\schema -> schema {OAPI._schemaDefault = Just $ Aeson.toJSON def})) param._paramSchema}) param
         _ -> headersParameters headers'
 
-toSecurityRequirements :: NonEmpty (Security.Script s) -> [OAPI.SecurityRequirement]
+toSecurityRequirements :: NonEmpty (Security.Parser s) -> [OAPI.SecurityRequirement]
 toSecurityRequirements security = []
 
-toOpenAPIRequestBody :: NonEmpty (Body.Script b) -> Maybe (OAPI.Referenced OAPI.RequestBody)
+toOpenAPIRequestBody :: NonEmpty (Body.Parser b) -> Maybe (OAPI.Referenced OAPI.RequestBody)
 toOpenAPIRequestBody body = Nothing
 
-toResponses :: Responder.Script r -> OAPI.Responses
+toResponses :: Responder.Parser r -> OAPI.Responses
 toResponses responder = mempty
 
-renderPath :: Path.Script a -> FilePath
+renderPath :: Path.Parser a -> FilePath
 renderPath path = case path of
   Path.FMap f p -> renderPath p
   Path.Pure _ -> mempty

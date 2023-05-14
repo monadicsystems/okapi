@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Script.Security.Secure where
+module Okapi.Parser.Security where
 
 import Control.Applicative (Alternative ((<|>)), empty)
 import Data.Aeson qualified as Aeson
@@ -16,12 +16,13 @@ import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Data.CaseInsensitive qualified as CI
 import Data.List qualified as List
+import Data.List.NonEmpty (NonEmpty)
 import Data.OpenApi qualified as OAPI
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Script
+import Okapi.Parser
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -38,20 +39,20 @@ data In
   | Cookie
   deriving (Eq, Show)
 
-data Script a where
-  FMap :: (a -> b) -> Script a -> Script b
-  Pure :: a -> Script a
-  Apply :: Script (a -> b) -> Script a -> Script b
-  APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Script a
+data Parser a where
+  FMap :: (a -> b) -> Parser a -> Parser b
+  Pure :: a -> Parser a
+  Apply :: Parser (a -> b) -> Parser a -> Parser b
+  APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Parser a
 
-instance Functor Script where
+instance Functor Parser where
   fmap = FMap
 
-instance Applicative Script where
+instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
-apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Script a
+apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Parser a
 apiKey = APIKey
 
 data State = State
@@ -61,7 +62,7 @@ data State = State
   }
 
 eval ::
-  Script a ->
+  Parser a ->
   State ->
   (Result Error a, State)
 eval op state = case op of
@@ -108,3 +109,14 @@ findAPIKeyInQuery query name = case lookup name query of
     Just bs -> case Web.parseHeaderMaybe bs of
       Nothing -> (Fail $ APIKeyParseFailIn Header, query)
       Just value -> (Ok value, List.delete (name, Just bs) query)
+
+class Interface a where
+  parser :: NonEmpty (Parser a)
+
+-- countOps :: Parser a -> Int
+-- countOps path = case path of
+--   FMap _ opX -> countOps opX
+--   Pure _ -> 0
+--   Apply opF opX -> countOps opF + countOps opX
+--   Static _ -> 1
+--   Param _ -> 1

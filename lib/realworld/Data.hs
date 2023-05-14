@@ -10,13 +10,18 @@ module Data where
 
 import Crypto.JWT (SignedJWT)
 import Data.Aeson (FromJSON, ToJSON)
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
+import qualified Okapi.Parser.Body as Body
 import Web.HttpApiData (FromHttpApiData)
 
 data UserLogin = UserLogin
   deriving (Eq, Show, Generic, FromJSON)
+
+instance Body.Interface UserLogin where
+  body = Body.json :| []
 
 data UserRegistration = UserRegistration
   deriving (Eq, Show, Generic, FromJSON)
