@@ -41,6 +41,7 @@ library
       Okapi.Parser.Responder
       Okapi.Parser.Responder.AddHeader
       Okapi.Parser.Security
+      Okapi.Plug
   other-modules:
       Paths_okapi
   hs-source-dirs:
