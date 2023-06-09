@@ -50,23 +50,23 @@ import Network.Wai.Parse qualified as WAI
 import Okapi.Parser
 import Okapi.Parser.Body qualified as Body
 import Okapi.Parser.Headers qualified as Headers
-import Okapi.Parser.Path qualified as Path
 import Okapi.Parser.Query qualified as Query
 import Okapi.Parser.Responder qualified as Responder
 import Okapi.Parser.Responder.AddHeader (Response, toWaiResponse)
+import Okapi.Parser.Route qualified as Route
 import Okapi.Parser.Security qualified as Security
-import Okapi.Parser.Security.Secure qualified as Secure
+-- import Okapi.Parser.Security.Secure qualified as Secure
 import Okapi.Request (Request)
 import Okapi.Route (DELETE (..), GET (..), POST (..), PUT (..), Route (..), Routes (..))
 
-data Server resources = Server
+data Server routes = Server
   { info :: OAPI.Info,
     url :: [Text.Text],
     description :: Maybe Text.Text,
-    routes :: Routes resources
+    routes :: Routes routes
   }
 
-toApplication :: Server resources -> WAI.Application
+toApplication :: Server routes -> WAI.Application
 toApplication Server {url, routes} request respond = do
   let reqPath = List.dropPrefix url $ WAI.pathInfo request
       reqQuery = WAI.queryString request
@@ -132,11 +132,11 @@ toApplication Server {url, routes} request respond = do
 
 data Option where
   None :: Option
-  Some :: forall resource. (Route resource, resource) -> Option
+  Some :: forall route. (Route route, route) -> Option
 
-getPathItemByPath :: [Text.Text] -> Routes resources -> Option
+getPathItemByPath :: [Text.Text] -> Routes routes -> Option
 getPathItemByPath reqPath Nil = None
-getPathItemByPath reqPath (route@(Route @resource _ _ _ _ _ _) :& t) = case Path.eval (Path.parser @resource) reqPath of
+getPathItemByPath reqPath (route@(Route @route _ _ _ _ _ _) :& t) = case Route.eval (Route.parser @route) reqPath of
   (Ok resourceParam, _) -> Some (route, resourceParam)
   _ -> getPathItemByPath reqPath t
 
@@ -189,7 +189,7 @@ sortSecurity = NonEmpty.sortBy comparer
     comparer _ (Security.FMap _ Security.None) = LT
 
 toOpenAPI ::
-  Server resource ->
+  Server route ->
   OAPI.OpenApi
 toOpenAPI Server {info, description, routes, url} =
   mempty
@@ -204,15 +204,15 @@ toOpenAPI Server {info, description, routes, url} =
       OAPI._openApiOpenapi = OpenApiSpecVersion {getVersion = Version.Version [3, 0, 3] []}
     }
 
-pathItemsToOpenAPIPaths :: Routes resources -> InsOrdHashMap.InsOrdHashMap FilePath OAPI.PathItem
+pathItemsToOpenAPIPaths :: Routes routes -> InsOrdHashMap.InsOrdHashMap FilePath OAPI.PathItem
 pathItemsToOpenAPIPaths Nil = InsOrdHashMap.fromList []
 pathItemsToOpenAPIPaths (h :& t) = let (filePath, pathItem) = toOpenAPIPathItem h in InsOrdHashMap.insert filePath pathItem $ pathItemsToOpenAPIPaths t
 
-toOpenAPIPathItem :: Route resource -> (FilePath, OAPI.PathItem)
-toOpenAPIPathItem (Route @resource summary description get post put delete) = (pathName, pathItem)
+toOpenAPIPathItem :: Route route -> (FilePath, OAPI.PathItem)
+toOpenAPIPathItem (Route @route summary description get post put delete) = (pathName, pathItem)
   where
     pathName :: FilePath
-    pathName = renderPath $ Path.parser @resource
+    pathName = renderPath $ Route.parser @route
 
     pathItem :: OAPI.PathItem
     pathItem =
@@ -225,20 +225,20 @@ toOpenAPIPathItem (Route @resource summary description get post put delete) = (p
           OAPI._pathItemDelete = fmap toDeleteOperation delete
         }
 
-toGetOperation :: GET m resource security query headers responder -> OAPI.Operation
-toGetOperation (GET @_ @resource @security @query @headers @responder summary description _ _) =
+toGetOperation :: GET m route security query headers responder -> OAPI.Operation
+toGetOperation (GET @_ @route @security @query @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+    { OAPI._operationParameters = toParameters (Route.parser @route, Query.parser @query, Headers.parser @headers),
       OAPI._operationResponses = toResponses $ Responder.parser @responder,
       OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
       OAPI._operationSummary = summary,
       OAPI._operationDescription = description
     }
 
-toPostOperation :: POST m resource security query body headers responder -> OAPI.Operation
-toPostOperation (POST @_ @resource @security @query @body @headers @responder summary description _ _) =
+toPostOperation :: POST m route security query body headers responder -> OAPI.Operation
+toPostOperation (POST @_ @route @security @query @body @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+    { OAPI._operationParameters = toParameters (Route.parser @route, Query.parser @query, Headers.parser @headers),
       OAPI._operationRequestBody = toOpenAPIRequestBody $ Body.parser @body,
       OAPI._operationResponses = toResponses $ Responder.parser @responder,
       OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
@@ -246,10 +246,10 @@ toPostOperation (POST @_ @resource @security @query @body @headers @responder su
       OAPI._operationDescription = description
     }
 
-toPutOperation :: PUT m resource security query body headers responder -> OAPI.Operation
-toPutOperation (PUT @_ @resource @security @query @body @headers @responder summary description _ _) =
+toPutOperation :: PUT m route security query body headers responder -> OAPI.Operation
+toPutOperation (PUT @_ @route @security @query @body @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+    { OAPI._operationParameters = toParameters (Route.parser @route, Query.parser @query, Headers.parser @headers),
       OAPI._operationRequestBody = toOpenAPIRequestBody $ Body.parser @body,
       OAPI._operationResponses = toResponses $ Responder.parser @responder,
       OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
@@ -257,26 +257,26 @@ toPutOperation (PUT @_ @resource @security @query @body @headers @responder summ
       OAPI._operationDescription = description
     }
 
-toDeleteOperation :: DELETE m resource security query headers responder -> OAPI.Operation
-toDeleteOperation (DELETE @_ @resource @security @query @headers @responder summary description _ _) =
+toDeleteOperation :: DELETE m route security query headers responder -> OAPI.Operation
+toDeleteOperation (DELETE @_ @route @security @query @headers @responder summary description _ _) =
   mempty
-    { OAPI._operationParameters = toParameters (Path.parser @resource, Query.parser @query, Headers.parser @headers),
+    { OAPI._operationParameters = toParameters (Route.parser @route, Query.parser @query, Headers.parser @headers),
       OAPI._operationResponses = toResponses $ Responder.parser @responder,
       OAPI._operationSecurity = toSecurityRequirements $ Security.parser @security,
       OAPI._operationSummary = summary,
       OAPI._operationDescription = description
     }
 
-toParameters :: (Path.Parser resource, Query.Parser q, Headers.Parser h) -> [OAPI.Referenced OAPI.Param]
+toParameters :: (Route.Parser route, Query.Parser q, Headers.Parser h) -> [OAPI.Referenced OAPI.Param]
 toParameters (path, query, headers) = pathParameters path <> queryParameters query <> headersParameters headers
   where
-    pathParameters :: Path.Parser resource -> [OAPI.Referenced OAPI.Param]
+    pathParameters :: Route.Parser route -> [OAPI.Referenced OAPI.Param]
     pathParameters path = case path of
-      Path.FMap f p -> pathParameters p
-      Path.Pure _ -> mempty
-      Path.Apply pf px -> pathParameters pf <> pathParameters px
-      Path.Static _ -> mempty
-      Path.Param @p name ->
+      Route.FMap f p -> pathParameters p
+      Route.Pure _ -> mempty
+      Route.Apply pf px -> pathParameters pf <> pathParameters px
+      Route.Static _ -> mempty
+      Route.Param @p name ->
         [ OAPI.Inline $
             mempty
               { OAPI._paramName = name,
@@ -372,10 +372,10 @@ toOpenAPIRequestBody body = Nothing
 toResponses :: Responder.Parser r -> OAPI.Responses
 toResponses responder = mempty
 
-renderPath :: Path.Parser a -> FilePath
+renderPath :: Route.Parser a -> FilePath
 renderPath path = case path of
-  Path.FMap f p -> renderPath p
-  Path.Pure _ -> mempty
-  Path.Apply pf px -> renderPath pf <> renderPath px
-  Path.Static t -> "/" <> Text.unpack t
-  Path.Param @p name -> "/{" <> Text.unpack name <> "}"
+  Route.FMap f p -> renderPath p
+  Route.Pure _ -> mempty
+  Route.Apply pf px -> renderPath pf <> renderPath px
+  Route.Static t -> "/" <> Text.unpack t
+  Route.Param @p name -> "/{" <> Text.unpack name <> "}"

@@ -37,26 +37,20 @@ data Error
   | MultipartError Multipart.Error
   deriving (Eq, Show, Generics.Generic)
 
-data ContentType a where
-  JSON :: Aeson.FromJSON a => ContentType a
-  URLEncoded :: Web.FromForm a => ContentType a
-  Multipart :: Multipart.Parser a -> ContentType a
+data Content a where
+  JSON :: Aeson.FromJSON a => Content a
+  URLEncoded :: Web.FromForm a => Content a
+  Multipart :: Multipart.Parser a -> Content a
 
-instance Eq (ContentType a) where
-  JSON == JSON = True
-  URLEncoded == UrlEncoded = True
-  Multipart _ == Multipart _ = True
-  _ == _ = False
-
-instance Functor ContentType
+instance Functor Content
 
 data Parser a where
   FMap :: (a -> b) -> Parser a -> Parser b
   Pure :: a -> Parser a
   Apply :: Parser (a -> b) -> Parser a -> Parser b
   None :: Parser ()
-  Optional :: NESet (ContentType a) -> Parser (Maybe a)
-  Required :: NESet (ContentType a) -> Parser a
+  Optional :: NonEmpty (Content a) -> Parser (Maybe a)
+  Required :: NonEmpty (Content a) -> Parser a
 
 instance Functor Parser where
   fmap :: (a -> b) -> Parser a -> Parser b
@@ -85,7 +79,7 @@ eval op state = case op of
       (Ok x, state'') -> (Ok $ f x, state'')
       (Fail e, state'') -> (Fail e, state'')
     (Fail e, state') -> (Fail e, state')
-  -- None -> (Ok (), state)
+  None -> (Ok (), state)
   JSON -> case state of
     RequestBodyRaw bs -> case Aeson.decode bs of
       Nothing -> (Fail JSONParseFail, state)
@@ -127,7 +121,7 @@ class Interface a where
   parser :: NonEmpty (Parser a)
 
 -- TODO: Add optional for body
-
+{-
 countOps :: Parser a -> Int
 countOps path = case path of
   FMap _ opX -> countOps opX
@@ -136,3 +130,4 @@ countOps path = case path of
   JSON -> 1
   URLEncoded -> 1
   Multipart -> undefined
+-}

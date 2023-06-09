@@ -18,6 +18,7 @@ import Data.CaseInsensitive qualified as CI
 import Data.List qualified as List
 import Data.List.NonEmpty (NonEmpty)
 import Data.OpenApi qualified as OAPI
+import Data.Set.NonEmpty (NESet)
 import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
@@ -25,6 +26,11 @@ import Network.HTTP.Types qualified as HTTP
 import Okapi.Parser
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
+
+data Parser a where
+  None :: Parser ()
+  Lenient :: NonEmpty (Product a) -> Parser (Maybe a)
+  Strict :: NonEmpty (Product a) -> Parser a
 
 data Error
   = ParseFail
@@ -39,20 +45,20 @@ data In
   | Cookie
   deriving (Eq, Show)
 
-data Parser a where
-  FMap :: (a -> b) -> Parser a -> Parser b
-  Pure :: a -> Parser a
-  Apply :: Parser (a -> b) -> Parser a -> Parser b
-  APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Parser a
+data Product a where
+  FMap :: (a -> b) -> Product a -> Product b
+  Pure :: a -> Product a
+  Apply :: Product (a -> b) -> Product a -> Product b
+  APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Product a
 
-instance Functor Parser where
+instance Functor Product where
   fmap = FMap
 
-instance Applicative Parser where
+instance Applicative Product where
   pure = Pure
   (<*>) = Apply
 
-apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Parser a
+apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Product a
 apiKey = APIKey
 
 data State = State
@@ -62,7 +68,7 @@ data State = State
   }
 
 eval ::
-  Parser a ->
+  Product a ->
   State ->
   (Result Error a, State)
 eval op state = case op of
@@ -111,7 +117,7 @@ findAPIKeyInQuery query name = case lookup name query of
       Just value -> (Ok value, List.delete (name, Just bs) query)
 
 class Interface a where
-  parser :: NonEmpty (Parser a)
+  parser :: Parser a
 
 -- countOps :: Parser a -> Int
 -- countOps path = case path of

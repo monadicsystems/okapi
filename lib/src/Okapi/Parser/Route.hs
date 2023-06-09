@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Okapi.Parser.Path where
+module Okapi.Parser.Route where
 
 import Control.Monad.Par qualified as Par
 import Data.Functor.Classes qualified as Functor

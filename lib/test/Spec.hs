@@ -23,36 +23,36 @@ import Okapi.Parser.AddHeader (Response)
 import Okapi.Parser.AddHeader qualified as AddHeaders
 import Okapi.Parser.Body qualified as Body
 import Okapi.Parser.Headers qualified as Headers
-import Okapi.Parser.Path qualified as Path
 import Okapi.Parser.Query qualified as Query
 import Okapi.Parser.Responder qualified as Responder
+import Okapi.Parser.Route qualified as Route
 import Prelude.Linear qualified as L
 import Test.Hspec
 import Web.HttpApiData qualified as Web
 
 main :: IO ()
 main = hspec $ do
-  describe "Path Operations" $ do
+  describe "Route Operations" $ do
     it "returns the first element of a list" $ do
-      Path.eval path1 ["index"] `shouldBe` (Ok (), [])
+      Route.eval path1 ["index"] `shouldBe` (Ok (), [])
 
     it "returns the first element of a list" $ do
-      Path.eval path1 ["index", "about"] `shouldBe` (Fail Path.NotEnoughOperations, ["index", "about"])
+      Route.eval path1 ["index", "about"] `shouldBe` (Fail Route.NotEnoughOperations, ["index", "about"])
 
     it "returns the first element of a list" $ do
-      Path.eval path2 ["item", "5"] `shouldBe` (Ok 5, [])
+      Route.eval path2 ["item", "5"] `shouldBe` (Ok 5, [])
 
     it "returns the first element of a list" $ do
-      Path.eval path2 ["item"] `shouldBe` (Fail Path.TooManyOperations, ["item"])
+      Route.eval path2 ["item"] `shouldBe` (Fail Route.TooManyOperations, ["item"])
 
     it "returns the first element of a list" $ do
-      Path.eval path3 ["product", "books", "56708"] `shouldBe` (Ok (Category "books", ProductID 56708), [])
+      Route.eval path3 ["product", "books", "56708"] `shouldBe` (Ok (Category "books", ProductID 56708), [])
 
     it "returns the first element of a list" $ do
-      Path.eval path3 ["product", "books", "56708", "info"] `shouldBe` (Fail Path.NotEnoughOperations, ["product", "books", "56708", "info"])
+      Route.eval path3 ["product", "books", "56708", "info"] `shouldBe` (Fail Route.NotEnoughOperations, ["product", "books", "56708", "info"])
 
     it "returns the first element of a list" $ do
-      Path.eval path3 ["product", "books"] `shouldBe` (Fail Path.TooManyOperations, ["product", "books"])
+      Route.eval path3 ["product", "books"] `shouldBe` (Fail Route.TooManyOperations, ["product", "books"])
 
   describe "Query Operations" $ do
     it "returns the first element of a list" $ do
@@ -116,13 +116,13 @@ query3 = do
   active <- Query.optional $ Query.flag "active"
   pure (user, active)
 
-path1 :: Path.Parser ()
-path1 = Path.static "index"
+path1 :: Route.Parser ()
+path1 = Route.static "index"
 
-path2 :: Path.Parser Int
+path2 :: Route.Parser Int
 path2 = do
-  Path.static "item"
-  uuid <- Path.param @Int "uuid"
+  Route.static "item"
+  uuid <- Route.param @Int "uuid"
   pure uuid
 
 newtype Category = Category {unwrap :: Text.Text}
@@ -131,11 +131,11 @@ newtype Category = Category {unwrap :: Text.Text}
 newtype ProductID = ProductID {unwrap :: Int}
   deriving newtype (Eq, Show, Web.FromHttpApiData, OAPI.ToSchema, Aeson.ToJSON)
 
-path3 :: Path.Parser (Category, ProductID)
+path3 :: Route.Parser (Category, ProductID)
 path3 = do
-  Path.static "product"
-  category <- Path.param @Category "category"
-  productID <- Path.param @ProductID "productID"
+  Route.static "product"
+  category <- Route.param @Category "category"
+  productID <- Route.param @ProductID "productID"
   pure (category, productID)
 
 testPlan =
@@ -144,8 +144,8 @@ testPlan =
     ( Operation
         HTTP.GET
         do
-          Path.static "index"
-          magicNumber <- Path.param @Int "magicNumber"
+          Route.static "index"
+          magicNumber <- Route.param @Int "magicNumber"
           pure magicNumber
         do
           x <- Query.param @Int "x"

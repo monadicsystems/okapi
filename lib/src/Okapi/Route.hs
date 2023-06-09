@@ -50,18 +50,17 @@ import Network.Wai.Parse qualified as WAI
 import Okapi.Parser
 import Okapi.Parser.Body qualified as Body
 import Okapi.Parser.Headers qualified as Headers
-import Okapi.Parser.Path qualified as Path
 import Okapi.Parser.Query qualified as Query
 import Okapi.Parser.Responder qualified as Responder
 import Okapi.Parser.Responder.AddHeader (Response, toWaiResponse)
+import Okapi.Parser.Route qualified as Route
 import Okapi.Parser.Security qualified as Security
-import Okapi.Parser.Security.Secure qualified as Secure
 import Okapi.Request (Request)
 
 type Routes :: [Type] -> Type
-data Routes resources where
+data Routes routes where
   Nil :: Routes '[]
-  (:&) :: Path.Interface resource => Route resource -> Routes resources -> Routes (resource ': resources)
+  (:&) :: Route.Interface route => Route route -> Routes routes -> Routes (route ': routes)
 
 infixr 5 :&
 
@@ -74,54 +73,91 @@ appendRoutes :: Routes resources1 -> Routes resources2 -> Routes (Append resourc
 appendRoutes Nil pathItems = pathItems
 appendRoutes (h :& t) pathItems = h :& appendRoutes t pathItems
 
-data Route resource where
+data Route route where
   Route ::
-    Path.Interface resource =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      get :: Maybe (GET m resource security query headers responder),
-      post :: Maybe (POST m resource security query body headers responder),
-      put :: Maybe (PUT m resource security query body headers responder),
-      delete :: Maybe (DELETE m resource security query headers responder)
+      get :: Maybe (GET security route query headers responder),
+      post :: Maybe (POST security route query body headers responder),
+      put :: Maybe (PUT security route query body headers responder),
+      delete :: Maybe (DELETE security route query headers responder)
     } ->
-    Route resource
+    Route route
 
-data GET m resource security query headers responder where
+data GET m security route query headers responder where
   GET ::
-    (Monad m, Path.Interface resource, Security.Interface security, Query.Interface query, Headers.Interface headers, Responder.Interface responder) =>
+    IOable m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      object :: Object m,
-      handler :: resource -> security -> query -> headers -> responder -> m Response
+      handler :: GETParams security route query headers responder -> m Response
     } ->
-    GET m resource security query headers responder
+    GET m security route query headers responder
 
-data POST m resource security query body headers responder where
+data GETParams security route query headers responder where
+  GETParams ::
+    (Security.Interface security, Route.Interface route, Query.Interface query, Headers.Interface headers, Responder.Interface responder) =>
+    { security :: security,
+      route :: route,
+      query :: query,
+      headers :: headers,
+      responder :: responder
+    }
+
+data POST m security route query body headers responder where
   POST ::
-    (Monad m, Path.Interface resource, Security.Interface security, Query.Interface query, Body.Interface body, Headers.Interface headers, Responder.Interface responder) =>
+    IOable m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      object :: Object m,
-      handler :: resource -> security -> query -> body -> headers -> responder -> m Response
+      handler :: POSTParams security route query headers responder -> m Response
     } ->
-    POST m resource security query body headers responder
+    POST m security route query body headers responder
 
-data PUT m resource security query body headers responder where
+data POSTParams security route query body headers responder where
+  POSTParams ::
+    (Security.Interface security, Route.Interface route, Query.Interface query, Body.Interface body, Headers.Interface headers, Responder.Interface responder) =>
+    { security :: security,
+      route :: route,
+      query :: query,
+      body :: body,
+      headers :: headers,
+      responder :: responder
+    }
+
+data PUT m security route query body headers responder where
   PUT ::
-    (Monad m, Path.Interface resource, Security.Interface security, Query.Interface query, Body.Interface body, Headers.Interface headers, Responder.Interface responder) =>
+    IOable m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      object :: Object m,
-      handler :: resource -> security -> query -> body -> headers -> responder -> m Response
+      handler :: PUTParams security route query headers responder -> m Response
     } ->
-    PUT m resource security query body headers responder
+    PUT m security route query body headers responder
 
-data DELETE m resource security query headers responder where
+data PUTParams security route query body headers responder where
+  PUTParams ::
+    (Security.Interface security, Route.Interface route, Query.Interface query, Body.Interface body, Headers.Interface headers, Responder.Interface responder) =>
+    { security :: security,
+      route :: route,
+      query :: query,
+      body :: body,
+      headers :: headers,
+      responder :: responder
+    }
+
+data DELETE m security route query headers responder where
   DELETE ::
-    (Monad m, Path.Interface resource, Security.Interface security, Query.Interface query, Headers.Interface headers, Responder.Interface responder) =>
+    IOable m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      object :: Object m,
-      handler :: resource -> security -> query -> headers -> responder -> m Response
+      handler :: DELETEParams security route query headers responder -> m Response
     } ->
-    DELETE m resource security query headers responder
+    DELETE m security route query headers responder
+
+data DELETEParams security route query headers responder where
+  DELETEParams ::
+    (Security.Interface security, Route.Interface route, Query.Interface query, Headers.Interface headers, Responder.Interface responder) =>
+    { security :: security,
+      route :: route,
+      query :: query,
+      headers :: headers,
+      responder :: responder
+    }

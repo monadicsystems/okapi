@@ -39,12 +39,12 @@ import Network.Wai.Handler.Warp qualified as Warp
 import Okapi.Operation
 import Okapi.Parser.Body qualified as Body
 import Okapi.Parser.Headers qualified as Headers
-import Okapi.Parser.Path qualified as Path
 import Okapi.Parser.Query qualified as Query
 import Okapi.Parser.Responder qualified as Responder
 import Okapi.Parser.Responder.AddHeader qualified as AddHeader
+import Okapi.Parser.Route qualified as Route
 import Okapi.Parser.Security qualified as Security
-import Okapi.Parser.Security.Secure qualified as Secure
+-- import Okapi.Parser.Security.Secure qualified as Secure
 import Resource qualified
 import Text.Pretty.Simple (pPrint)
 import Web.HttpApiData qualified as Web

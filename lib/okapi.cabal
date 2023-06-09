@@ -33,7 +33,7 @@ library
       Okapi.Parser
       Okapi.Request
       Okapi.Route
-      Okapi.Parser.Path
+      Okapi.Parser.Route
       Okapi.Parser.Query
       Okapi.Parser.Headers
       Okapi.Parser.Body
