@@ -29,7 +29,6 @@ library
   exposed-modules:
       Okapi
       Okapi.Server
-      Okapi.Matchpoint
       Okapi.Parser
       Okapi.Request
       Okapi.Route
@@ -145,7 +144,7 @@ executable realworld
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
     build-depends:
-      base ^>=4.16.4.0
+      base >=4.7 && <5
       , okapi
       , text
       , http-api-data
