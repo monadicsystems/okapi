@@ -15,7 +15,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Okapi.Parser.Route where
+module Okapi.Spec.Request.Path where
 
 import Control.Monad.Par qualified as Par
 import Data.Functor.Classes qualified as Functor
@@ -26,7 +26,7 @@ import Debug.Trace qualified as Debug
 import GHC.Generics qualified as Generics
 import Generics.Kind
 import Generics.Kind.TH
-import Okapi.Parser
+import Okapi.Spec
 import Web.HttpApiData qualified as Web
 
 data Error
@@ -37,31 +37,31 @@ data Error
   | NotEnoughOperations
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
-data Parser a where
-  FMap :: (a -> b) -> Parser a -> Parser b
-  Pure :: a -> Parser a
-  Apply :: Parser (a -> b) -> Parser a -> Parser b
-  Static :: Text.Text -> Parser ()
-  Param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Parser a
+data Spec a where
+  FMap :: (a -> b) -> Spec a -> Spec b
+  Pure :: a -> Spec a
+  Apply :: Spec (a -> b) -> Spec a -> Spec b
+  Static :: Text.Text -> Spec ()
+  Param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Spec a
 
-instance Functor Parser where
+instance Functor Spec where
   fmap = FMap
 
-instance Applicative Parser where
+instance Applicative Spec where
   pure = Pure
   (<*>) = Apply
 
 -- TODO: Try using Rebindable Syntax and QualifiedDo to get rid of
 -- the need for Functor and Applicative instances.
 
-static :: Text.Text -> Parser ()
+static :: Text.Text -> Spec ()
 static = Static
 
-param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Parser a
+param :: (Typeable.Typeable a, Web.FromHttpApiData a, OAPI.ToSchema a) => Text.Text -> Spec a
 param = Param
 
 eval ::
-  Parser a ->
+  Spec a ->
   [Text.Text] ->
   (Result Error a, [Text.Text])
 eval path state = case compare (countOps path) (length state) of
@@ -70,7 +70,7 @@ eval path state = case compare (countOps path) (length state) of
   EQ -> loop path state
   where
     loop ::
-      Parser a ->
+      Spec a ->
       [Text.Text] ->
       (Result Error a, [Text.Text])
     loop path state = case path of
@@ -96,7 +96,7 @@ eval path state = case compare (countOps path) (length state) of
           Nothing -> (Fail ParseFail, state)
           Just v -> (Ok v, t)
 
-countOps :: Parser a -> Int
+countOps :: Spec a -> Int
 countOps path = case path of
   FMap _ opX -> countOps opX
   Pure _ -> 0
@@ -104,7 +104,7 @@ countOps path = case path of
   Static _ -> 1
   Param _ -> 1
 
-renderPath :: Parser a -> Text.Text
+renderPath :: Spec a -> Text.Text
 renderPath path = case path of
   FMap f p -> renderPath p
   Pure _ -> mempty
@@ -113,4 +113,4 @@ renderPath path = case path of
   Param @p name -> "/{" <> name <> ":" <> Text.pack (show $ Typeable.typeOf @p undefined) <> "}"
 
 class Interface a where
-  parser :: Parser a
+  parser :: Spec a

@@ -5,7 +5,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Parser.Query where
+module Okapi.Spec.Request.Query where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -16,7 +16,7 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Parser
+import Okapi.Spec
 import Web.HttpApiData qualified as Web
 
 data Error
@@ -26,36 +26,36 @@ data Error
   | ParamNoValue
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
-data Parser a where
-  FMap :: (a -> b) -> Parser a -> Parser b
-  Pure :: a -> Parser a
-  Apply :: Parser (a -> b) -> Parser a -> Parser b
-  Param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Parser a
-  Flag :: BS.ByteString -> Parser ()
-  Optional :: Parser a -> Parser (Maybe a)
-  Option :: a -> Parser a -> Parser a
+data Spec a where
+  FMap :: (a -> b) -> Spec a -> Spec b
+  Pure :: a -> Spec a
+  Apply :: Spec (a -> b) -> Spec a -> Spec b
+  Param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Spec a
+  Flag :: BS.ByteString -> Spec ()
+  Optional :: Spec a -> Spec (Maybe a)
+  Option :: a -> Spec a -> Spec a
 
-instance Functor Parser where
+instance Functor Spec where
   fmap = FMap
 
-instance Applicative Parser where
+instance Applicative Spec where
   pure = Pure
   (<*>) = Apply
 
-param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Parser a
+param :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => BS.ByteString -> Spec a
 param = Param
 
-flag :: BS.ByteString -> Parser ()
+flag :: BS.ByteString -> Spec ()
 flag = Flag
 
-optional :: (Web.FromHttpApiData a, OAPI.ToSchema a) => Parser a -> Parser (Maybe a)
+optional :: (Web.FromHttpApiData a, OAPI.ToSchema a) => Spec a -> Spec (Maybe a)
 optional = Optional
 
-option :: (Web.FromHttpApiData a, OAPI.ToSchema a) => a -> Parser a -> Parser a
+option :: (Web.FromHttpApiData a, OAPI.ToSchema a) => a -> Spec a -> Spec a
 option = Option
 
 eval ::
-  Parser a ->
+  Spec a ->
   HTTP.Query ->
   (Result Error a, HTTP.Query)
 eval op state = case op of
@@ -99,4 +99,4 @@ eval op state = case op of
     _ -> eval op' state
 
 class Interface a where
-  parser :: Parser a
+  parser :: Spec a

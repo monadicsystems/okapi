@@ -8,12 +8,12 @@ import Control.Object (Object)
 import qualified Data
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Okapi.Operation (GET (..), POST (..), PathItem (..))
-import qualified Okapi.Parser.Body as Body
-import qualified Okapi.Parser.Headers as Headers
-import qualified Okapi.Parser.Query as Query
-import qualified Okapi.Parser.Responder as Responder
-import qualified Okapi.Parser.Responder.AddHeader as AddHeader
-import qualified Okapi.Parser.Security as Security
+import qualified Okapi.Spec.Request.Body as Body
+import qualified Okapi.Spec.Request.Headers as Headers
+import qualified Okapi.Spec.Request.Query as Query
+import qualified Okapi.Spec.Response as Response
+import qualified Okapi.Spec.Response.Headers as Headers
+import qualified Okapi.Spec.Request.Security as Security
 import qualified Resource
 
 toLogin :: Object Context -> PathItem Resource.Login
@@ -27,7 +27,7 @@ toLogin object =
       delete = Nothing
     }
 
-postOperation :: Object Context -> POST Context Resource.Login Security Query Data.UserLogin Headers Responder
+postOperation :: Object Context -> POST Context Resource.Login Security Query Data.UserLogin Headers Response
 postOperation object =
   POST
     { summary = Nothing,
@@ -39,7 +39,7 @@ postOperation object =
 newtype Security = Security ()
 
 instance Security.Interface Security where
-  security :: NonEmpty (Security.Parser Security)
+  security :: NonEmpty (Security.Spec Security)
   security = (Security <$> Security.None) :| []
 
 newtype Query = Query ()
@@ -52,11 +52,11 @@ newtype Headers = Headers ()
 instance Headers.Interface Headers where
   headers = pure (Headers ())
 
-newtype Responder = Responder ()
+newtype Response = Response ()
 
-instance Responder.Interface Responder where
-  responder :: Responder.Parser Responder
-  responder = pure (Responder ())
+instance Response.Interface Response where
+  responder :: Response.Spec Response
+  responder = pure (Response ())
 
-postHandler :: Resource.Login -> Security -> Query -> Data.UserLogin -> Headers -> Responder -> Context AddHeader.Response
+postHandler :: Resource.Login -> Security -> Query -> Data.UserLogin -> Headers -> Response -> Context Headers.Response
 postHandler = pure undefined

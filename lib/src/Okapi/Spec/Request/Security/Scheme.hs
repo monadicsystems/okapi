@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Parser.Security where
+module Okapi.Spec.Request.Security.Scheme where
 
 import Control.Applicative (Alternative ((<|>)), empty)
 import Data.Aeson qualified as Aeson
@@ -23,14 +23,9 @@ import Data.Text qualified as Text
 import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Parser
+import Okapi.Spec
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
-
-data Parser a where
-  None :: Parser ()
-  Lenient :: NonEmpty (Product a) -> Parser (Maybe a)
-  Strict :: NonEmpty (Product a) -> Parser a
 
 data Error
   = ParseFail
@@ -41,24 +36,24 @@ data Error
 
 data In
   = Query
-  | Header
+  | Headers
   | Cookie
   deriving (Eq, Show)
 
-data Product a where
-  FMap :: (a -> b) -> Product a -> Product b
-  Pure :: a -> Product a
-  Apply :: Product (a -> b) -> Product a -> Product b
-  APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Product a
+data Spec a where
+  FMap :: (a -> b) -> Spec a -> Spec b
+  Pure :: a -> Spec a
+  Apply :: Spec (a -> b) -> Spec a -> Spec b
+  APIKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Spec a
 
-instance Functor Product where
+instance Functor Spec where
   fmap = FMap
 
-instance Applicative Product where
+instance Applicative Spec where
   pure = Pure
   (<*>) = Apply
 
-apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Product a
+apiKey :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => In -> BS.ByteString -> Spec a
 apiKey = APIKey
 
 data State = State
@@ -68,7 +63,7 @@ data State = State
   }
 
 eval ::
-  Product a ->
+  Spec a ->
   State ->
   (Result Error a, State)
 eval op state = case op of
@@ -86,7 +81,7 @@ eval op state = case op of
     Query -> case findAPIKeyInQuery state.query name of
       (err@(Fail e), _) -> (err, state)
       (ok, newQuery) -> (ok, state {query = newQuery})
-    Header -> case findAPIKeyInHeader state.headers name of
+    Headers -> case findAPIKeyInHeader state.headers name of
       (err@(Fail e), _) -> (err, state)
       (ok, newHeaders) -> (ok, state {headers = newHeaders})
     Cookie -> case findAPIKeyInCookie state.cookies name of
@@ -102,24 +97,24 @@ findAPIKeyInCookie cookies name = case lookup name cookies of
 
 findAPIKeyInHeader :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.RequestHeaders -> BS.ByteString -> (Result Error a, HTTP.RequestHeaders)
 findAPIKeyInHeader headers name = case lookup (CI.mk name) headers of
-  Nothing -> (Fail $ APIKeyNotFoundIn Header name, headers)
+  Nothing -> (Fail $ APIKeyNotFoundIn Headers name, headers)
   Just bs -> case Web.parseHeaderMaybe bs of
-    Nothing -> (Fail $ APIKeyParseFailIn Header, headers)
+    Nothing -> (Fail $ APIKeyParseFailIn Headers, headers)
     Just value -> (Ok value, List.delete (CI.mk name, bs) headers)
 
 findAPIKeyInQuery :: (Web.FromHttpApiData a, OAPI.ToSchema a, Aeson.ToJSON a) => HTTP.Query -> BS.ByteString -> (Result Error a, HTTP.Query)
 findAPIKeyInQuery query name = case lookup name query of
-  Nothing -> (Fail $ APIKeyNotFoundIn Header name, query)
+  Nothing -> (Fail $ APIKeyNotFoundIn Headers name, query)
   Just maybeBS -> case maybeBS of
     Nothing -> undefined
     Just bs -> case Web.parseHeaderMaybe bs of
-      Nothing -> (Fail $ APIKeyParseFailIn Header, query)
+      Nothing -> (Fail $ APIKeyParseFailIn Headers, query)
       Just value -> (Ok value, List.delete (name, Just bs) query)
 
 class Interface a where
-  parser :: Parser a
+  parser :: Spec a
 
--- countOps :: Parser a -> Int
+-- countOps :: Spec a -> Int
 -- countOps path = case path of
 --   FMap _ opX -> countOps opX
 --   Pure _ -> 0

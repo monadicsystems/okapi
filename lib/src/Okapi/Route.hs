@@ -47,20 +47,20 @@ import Debug.Trace qualified as Debug
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
 import Network.Wai.Parse qualified as WAI
-import Okapi.Parser
-import Okapi.Parser.Body qualified as Body
-import Okapi.Parser.Headers qualified as Headers
-import Okapi.Parser.Query qualified as Query
-import Okapi.Parser.Responder qualified as Responder
-import Okapi.Parser.Responder.AddHeader (Response, toWaiResponse)
-import Okapi.Parser.Route qualified as Route
-import Okapi.Parser.Security qualified as Security
-import Okapi.Request (Request)
+import Okapi.Spec
+import Okapi.Spec.Request.Body qualified as Body
+import Okapi.Spec.Request.Headers qualified as Headers
+import Okapi.Spec.Request.Query qualified as Query
+import Okapi.Spec.Response qualified as Response
+import Okapi.Spec.Response.Headers (Response, toWaiResponse)
+import Okapi.Spec.Request.Path qualified as Path
+import Okapi.Spec.Request.Security qualified as Security
+import Okapi.Spec.Request (Request)
 
 type Routes :: [Type] -> Type
 data Routes routes where
   Nil :: Routes '[]
-  (:&) :: Route.Interface route => Route route -> Routes routes -> Routes (route ': routes)
+  (:&) :: Path.Interface route => Route route -> Routes routes -> Routes (route ': routes)
 
 infixr 5 :&
 
@@ -77,10 +77,10 @@ data Route route where
   Route ::
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      get :: Maybe (GET security route query headers responder),
-      post :: Maybe (POST security route query body headers responder),
-      put :: Maybe (PUT security route query body headers responder),
-      delete :: Maybe (DELETE security route query headers responder)
+      get :: Maybe (GET m security route query headers responder),
+      post :: Maybe (POST m security route query body headers responder),
+      put :: Maybe (PUT m security route query body headers responder),
+      delete :: Maybe (DELETE m security route query headers responder)
     } ->
     Route route
 
@@ -95,53 +95,56 @@ data GET m security route query headers responder where
 
 data GETParams security route query headers responder where
   GETParams ::
-    (Security.Interface security, Route.Interface route, Query.Interface query, Headers.Interface headers, Responder.Interface responder) =>
+    (Security.Interface security, Path.Interface route, Query.Interface query, Headers.Interface headers, Response.Interface responder) =>
     { security :: security,
       route :: route,
       query :: query,
       headers :: headers,
       responder :: responder
     }
+    -> GETParams security route query headers responder
 
 data POST m security route query body headers responder where
   POST ::
     IOable m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      handler :: POSTParams security route query headers responder -> m Response
+      handler :: POSTParams security route query body headers responder -> m Response
     } ->
     POST m security route query body headers responder
 
 data POSTParams security route query body headers responder where
   POSTParams ::
-    (Security.Interface security, Route.Interface route, Query.Interface query, Body.Interface body, Headers.Interface headers, Responder.Interface responder) =>
+    (Security.Interface security, Path.Interface route, Query.Interface query, Body.Interface body, Headers.Interface headers, Response.Interface responder) =>
     { security :: security,
       route :: route,
       query :: query,
       body :: body,
       headers :: headers,
       responder :: responder
-    }
+    } ->
+    POSTParams security route query body headers responder
 
 data PUT m security route query body headers responder where
   PUT ::
     IOable m =>
     { summary :: Maybe Text.Text,
       description :: Maybe Text.Text,
-      handler :: PUTParams security route query headers responder -> m Response
+      handler :: PUTParams security route query body headers responder -> m Response
     } ->
     PUT m security route query body headers responder
 
 data PUTParams security route query body headers responder where
   PUTParams ::
-    (Security.Interface security, Route.Interface route, Query.Interface query, Body.Interface body, Headers.Interface headers, Responder.Interface responder) =>
+    (Security.Interface security, Path.Interface route, Query.Interface query, Body.Interface body, Headers.Interface headers, Response.Interface responder) =>
     { security :: security,
       route :: route,
       query :: query,
       body :: body,
       headers :: headers,
       responder :: responder
-    }
+    } ->
+    PUTParams security route query body headers responder
 
 data DELETE m security route query headers responder where
   DELETE ::
@@ -154,10 +157,15 @@ data DELETE m security route query headers responder where
 
 data DELETEParams security route query headers responder where
   DELETEParams ::
-    (Security.Interface security, Route.Interface route, Query.Interface query, Headers.Interface headers, Responder.Interface responder) =>
+    (Security.Interface security, Path.Interface route, Query.Interface query, Headers.Interface headers, Response.Interface responder) =>
     { security :: security,
       route :: route,
       query :: query,
       headers :: headers,
       responder :: responder
     }
+    -> DELETEParams security route query headers responder
+
+class Monad m => IOable m where
+  transform :: m a -> IO a
+  -- TODO: Add function or list of tuples for turning IO exceptions to responses

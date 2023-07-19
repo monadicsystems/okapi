@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Parser.Responder.AddHeader where
+module Okapi.Spec.Response.Headers where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -20,7 +20,7 @@ import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as WAI
-import Okapi.Parser
+import Okapi.Spec
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -29,19 +29,19 @@ data Error
   | ParamNotFound
   | CookieHeaderNotFound
   | CookieNotFound
-  | ResponderHeadersError -- TODO: Parser shouldn't be able to fail...
+  | ResponderHeadersError -- TODO: Spec shouldn't be able to fail...
   deriving (Eq, Show, Generics.Generic)
 
-data Parser a where
-  FMap :: (a -> b) -> Parser a -> Parser b
-  Pure :: a -> Parser a
-  Apply :: Parser (a -> b) -> Parser a -> Parser b
-  Using :: Web.ToHttpApiData a => HTTP.HeaderName -> Parser (a -> (Response -> Response))
+data Spec a where
+  FMap :: (a -> b) -> Spec a -> Spec b
+  Pure :: a -> Spec a
+  Apply :: Spec (a -> b) -> Spec a -> Spec b
+  Using :: Web.ToHttpApiData a => HTTP.HeaderName -> Spec (a -> (Response -> Response))
 
-instance Functor Parser where
+instance Functor Spec where
   fmap = FMap
 
-instance Applicative Parser where
+instance Applicative Spec where
   pure = Pure
   (<*>) = Apply
 
@@ -57,7 +57,7 @@ toWaiResponse :: Response -> WAI.Response
 toWaiResponse = undefined
 
 eval ::
-  Parser a ->
+  Spec a ->
   () ->
   (Result Error a, ())
 eval op state = case op of
@@ -78,6 +78,6 @@ eval op state = case op of
 using ::
   Web.ToHttpApiData a =>
   HTTP.HeaderName ->
-  Parser
+  Spec
     (a -> Response -> Response)
 using = Using

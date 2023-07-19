@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE InstanceSigs #-}
 
-module Okapi.Parser where
+module Okapi.Spec where
 
 import Control.Applicative (Alternative, empty, (<|>))
 import Data.Bifoldable

@@ -4,7 +4,7 @@
 module Route where
 
 import qualified Data
-import qualified Okapi.Parser.Route as Route
+import qualified Okapi.Spec.Request.Route as Route
 
 data Login = Login
 

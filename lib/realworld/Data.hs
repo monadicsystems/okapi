@@ -14,7 +14,7 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import qualified Okapi.Parser.Body as Body
+import qualified Okapi.Spec.Request.Body as Body
 import Web.HttpApiData (FromHttpApiData)
 
 data UserLogin = UserLogin

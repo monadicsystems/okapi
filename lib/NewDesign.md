@@ -435,13 +435,13 @@ class Component a where
 
 ```haskell
 get
-  :: Parser a
+  :: Spec a
   -> (a -> m Response)
   -> ???
 ```
 
 ```haskell
-type Application m a = (Parser a, a -> m Response)
+type Application m a = (Spec a, a -> m Response)
 ```
 
 ### Server Pages
@@ -480,11 +480,11 @@ Plan.Plan
           headers = pure (),
           body = pure (),
           responder = do
-            itsOk <- Responder.json
+            itsOk <- Response.json
               @Int
               HTTP.status200
               do
-                addSecretNumber <- AddHeader.using @Int "X-SECRET"
+                addSecretNumber <- Headers.using @Int "X-SECRET"
                 pure addSecretNumber
             pure itsOk
         },
@@ -533,10 +533,10 @@ Plan.Plan
           -- Define the responder for this endpoint.
           responder = do
             -- Create a JSON responder with HTTP status 200 and an integer value.
-            itsOk <- Responder.json @Int HTTP.status200
+            itsOk <- Response.json @Int HTTP.status200
               do
                 -- Check for the presence of an "X-SECRET" header with an integer value.
-                addSecretNumber <- AddHeader.using @Int "X-SECRET"
+                addSecretNumber <- Headers.using @Int "X-SECRET"
                 pure addSecretNumber
 
             -- Return the configured responder.
@@ -574,9 +574,9 @@ Plan.Plan
       pure ()
       pure ()
       do
-        itsOk <- Responder.json @Int HTTP.status200
+        itsOk <- Response.json @Int HTTP.status200
           do
-            addSecretNumber <- AddHeader.using @Int "X-SECRET"
+            addSecretNumber <- Headers.using @Int "X-SECRET"
             pure addSecretNumber
         pure itsOk
     handler = \(Params.Params magicNumber (x, y) () () responder) -> do
@@ -600,12 +600,12 @@ Plan
       Query.pure (x, y)
     Headers.pure ()
     Body.pure ()
-    Responder.do
-      itsOk <- Responder.json @Int HTTP.status200
-        AddHeader.do
-          addSecretNumber <- AddHeader.using @Int "X-SECRET"
-          AddHeader.pure addSecretNumber
-      Responder.pure itsOk
+    Response.do
+      itsOk <- Response.json @Int HTTP.status200
+        Headers.do
+          addSecretNumber <- Headers.using @Int "X-SECRET"
+          Headers.pure addSecretNumber
+      Response.pure itsOk
   \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y
     print newNumber
@@ -627,12 +627,12 @@ Plan $$
       Query.pure (x, y)
     Headers.pure ()
     Body.pure ()
-    Responder.do
-      itsOk <- Responder.json @Int HTTP.status200
-        AddHeader.do
-          addSecretNumber <- AddHeader.using @Int "X-SECRET"
-          AddHeader.pure addSecretNumber
-      Responder.pure itsOk
+    Response.do
+      itsOk <- Response.json @Int HTTP.status200
+        Headers.do
+          addSecretNumber <- Headers.using @Int "X-SECRET"
+          Headers.pure addSecretNumber
+      Response.pure itsOk
   \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y
     print newNumber
@@ -655,9 +655,9 @@ Plan $$
     do pure ()
     do pure ()
     do
-      itsOk <- Responder.json @Int HTTP.status200 do
-        addSecretNumber <- AddHeader.using @Int "X-SECRET"
-        AddHeader.pure addSecretNumber
+      itsOk <- Response.json @Int HTTP.status200 do
+        addSecretNumber <- Headers.using @Int "X-SECRET"
+        Headers.pure addSecretNumber
       pure itsOk
   \magicNumber (x, y) () () responder -> do
     let newNumber = magicNumber + x * y
@@ -671,7 +671,7 @@ Plan $$
 ```haskell
 data Request = Request StdMethod [Text] Query BS.ByteString RequestHeaders
 data Server m r = Server
-  { responder :: Responder r
+  { responder :: Response r
   , handler :: Request -> r -> m Response
   }
 

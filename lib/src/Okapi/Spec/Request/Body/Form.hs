@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Okapi.Parser.Body.Multipart where
+module Okapi.Spec.Request.Body.Form where
 
 import Control.Monad.Par qualified as Par
 import Data.Aeson qualified as Aeson
@@ -19,7 +19,7 @@ import Data.Text.Encoding qualified as Text
 import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai.Parse qualified as WAI
-import Okapi.Parser
+import Okapi.Spec
 import Web.Cookie qualified as Web
 import Web.HttpApiData qualified as Web
 
@@ -28,22 +28,22 @@ data Error
   | FileNotFound
   deriving (Eq, Show, Generics.Generic, Par.NFData)
 
-data Parser a where
-  FMap :: (a -> b) -> Parser a -> Parser b
-  Pure :: a -> Parser a
-  Apply :: Parser (a -> b) -> Parser a -> Parser b
-  Param :: Web.FromHttpApiData a => BS.ByteString -> Parser a
-  File :: BS.ByteString -> Parser (WAI.FileInfo BS.ByteString)
+data Spec a where
+  FMap :: (a -> b) -> Spec a -> Spec b
+  Pure :: a -> Spec a
+  Apply :: Spec (a -> b) -> Spec a -> Spec b
+  Param :: Web.FromHttpApiData a => BS.ByteString -> Spec a
+  File :: BS.ByteString -> Spec (WAI.FileInfo BS.ByteString)
 
-instance Functor Parser where
+instance Functor Spec where
   fmap = FMap
 
-instance Applicative Parser where
+instance Applicative Spec where
   pure = Pure
   (<*>) = Apply
 
 eval ::
-  Parser a ->
+  Spec a ->
   ([WAI.Param], [WAI.File LBS.ByteString]) ->
   (Result Error a, ([WAI.Param], [WAI.File LBS.ByteString]))
 eval op state = case op of
@@ -66,8 +66,8 @@ eval op state = case op of
 --     Nothing -> (Fail FormParamParseFail, state)
 --     Just v -> (Ok v, List.delete (name, vBS) state)
 
-param :: Web.FromHttpApiData a => BS.ByteString -> Parser a
+param :: Web.FromHttpApiData a => BS.ByteString -> Spec a
 param = Param
 
-file :: BS.ByteString -> Parser (WAI.FileInfo BS.ByteString)
+file :: BS.ByteString -> Spec (WAI.FileInfo BS.ByteString)
 file = File
