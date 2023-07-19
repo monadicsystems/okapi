@@ -9,18 +9,18 @@ module Okapi.Pattern where
 import Data.Text qualified as Text
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as Wai
-import Web.HttpApiData qualified as HttpApiData
+import Web.HttpApiData qualified as Web
 import Network.HTTP.Types qualified as HTTP
 
-pattern Route :: HTTP.Method -> [Text.Text] -> Wai.Request
-pattern Route requestMethod pathInfo <- Wai.Request { Wai.requestMethod, Wai.pathInfo }
+pattern Endpoint :: HTTP.Method -> [Text.Text] -> Wai.Request
+pattern Endpoint requestMethod pathInfo <- Wai.Request { Wai.requestMethod, Wai.pathInfo }
   where
-    Route requestMethod pathInfo = Wai.defaultRequest { Wai.requestMethod = requestMethod, Wai.pathInfo = pathInfo }
+    Endpoint requestMethod pathInfo = Wai.defaultRequest { Wai.requestMethod = requestMethod, Wai.pathInfo = pathInfo }
 
-pattern Param :: (HttpApiData.FromHttpApiData a, HttpApiData.ToHttpApiData a) => a -> Text.Text
-pattern Param x <- (HttpApiData.parseUrlPiece -> Right x)
+pattern Param :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => a -> Text.Text
+pattern Param x <- (Web.parseUrlPiece -> Right x)
   where
-    Param x = HttpApiData.toUrlPiece x
+    Param x = Web.toUrlPiece x
 
 pattern GET :: HTTP.Method
 pattern GET = "GET"

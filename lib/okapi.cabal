@@ -28,14 +28,10 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Parser.Alt.Body
-      Okapi.Parser.Alt.Headers
-      Okapi.Parser.Alt.Path
-      Okapi.Parser.Alt.Query
-      Okapi.Parser.Ap.Body
-      Okapi.Parser.Ap.Headers
-      Okapi.Parser.Ap.Path
-      Okapi.Parser.Ap.Query
+      Okapi.Tree
+      Okapi.Parser.Query.Alt
+      Okapi.Parser.Query.Ap
+      Okapi.Parser.Query.Operation
       Okapi.Pattern
   other-modules:
       Paths_okapi
