@@ -69,7 +69,6 @@ eval (Or opA opB) state = case eval opA state of
     (Left l, state') -> case eval opB state' of
         (Right b, state'') -> (Right b, state'')
         (Left r, state'') -> (Left (l Tree.:|: r), state'')
-eval (Operation op) state = Bifunctor.first (Bifunctor.first Tree.Leaf) $ Operation.eval op state
 eval (Optional op) state = case op of
     Operation param@(Operation.Param _) -> case Operation.eval param state of
       (Right result, state') -> (Right $ Just result, state')
@@ -88,9 +87,10 @@ eval (Option def op) state = case op of
       (Right result, state') -> (Right result, state')
       (_, state') -> (Right def, state')
     _ -> eval op state
+eval (Operation op) state = Bifunctor.first (Bifunctor.first Tree.Leaf) $ Operation.eval op state
 
 class FromQuery a where
-    parser :: Parser a
+  parser :: Parser a
 
 parse :: FromQuery a => Wai.Request -> Either (Tree.Tree Operation.Error) a
 parse req = fst $ eval parser req

@@ -2,7 +2,7 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 
-module Okapi.Parser.Query.Ap where
+module Okapi.Parser.Headers.Ap where
 
 import Data.ByteString qualified as BS
 import Data.List qualified as List
@@ -12,7 +12,7 @@ import Network.HTTP.Types qualified as HTTP
 import Web.HttpApiData qualified as Web
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as Wai
-import Okapi.Parser.Query.Operation qualified as Operation
+import Okapi.Parser.Headers.Operation qualified as Operation
 
 data Parser a where
   FMap :: (a -> b) -> Parser a -> Parser b
@@ -29,11 +29,11 @@ instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
-param :: Web.FromHttpApiData a => BS.ByteString -> Parser a
+param :: Web.FromHttpApiData a => HTTP.HeaderName -> Parser a
 param = Operation . Operation.Param
 
-flag :: BS.ByteString -> Parser ()
-flag = Operation . Operation.Flag
+cookie :: BS.ByteString -> Parser ()
+cookie = Operation . Operation.Cookie
 
 optional :: Web.FromHttpApiData a => Parser a -> Parser (Maybe a)
 optional = Optional
@@ -58,7 +58,7 @@ eval (Optional op) state = case op of
     Operation param@(Operation.Param _) -> case Operation.eval param state of
       (Right result, state') -> (Right $ Just result, state')
       (_, state') -> (Right Nothing, state')
-    Operation flag@(Operation.Flag _) -> case Operation.eval flag state of
+    Operation cookie@(Operation.Cookie _) -> case Operation.eval cookie state of
       (Right result, state') -> (Right $ Just result, state')
       (_, state') -> (Right Nothing, state')
     _ -> case eval op state of
@@ -68,7 +68,7 @@ eval (Option def op) state = case op of
     Operation param@(Operation.Param _) -> case Operation.eval param state of
       (Right result, state') -> (Right result, state')
       (_, state') -> (Right def, state')
-    Operation flag@(Operation.Flag _) -> case Operation.eval flag state of
+    Operation cookie@(Operation.Cookie _) -> case Operation.eval cookie state of
       (Right result, state') -> (Right result, state')
       (_, state') -> (Right def, state')
     _ -> eval op state
