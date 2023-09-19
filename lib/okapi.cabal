@@ -33,7 +33,7 @@ library
       -- Okapi.DSL.Applicative
       -- Okapi.Parser.Body
       -- Okapi.Parser.Headers
-      -- Okapi.Parser.Path
+      Okapi.Parser.Path
       -- Okapi.Parser.Query
       -- Okapi.Parser.Request
       Okapi.NewDSL
