@@ -22,23 +22,23 @@ type State = [Text]
 data Error where
   Error :: Text -> Error
 
-interpreter :: Interpreter Expr State Error a
-interpreter state expr = case expr of
-  Static @t x -> undefined
-  Param @t -> undefined
-  End -> undefined
+instance Evalable Expr State Error where
+  eval state expr = case expr of
+    Static @t x -> undefined
+    Param @t -> undefined
+    End -> undefined
 
-embed :: Expr a -> DSL Expr State Error a
-embed = Eval interpreter
+-- embed :: Expr a -> DSL Expr State Error a
+-- embed = Eval interpreter
 
 static :: Web.ToHttpApiData a => a -> DSL Expr State Error ()
-static x = embed $ Static x
+static = Eval . Static
 
 param :: Web.FromHttpApiData a => DSL Expr State Error a
-param = embed Param
+param = Eval Param
 
 end :: Web.FromHttpApiData a => DSL Expr State Error ()
-end = embed End
+end = Eval End
 
 -- instance DSL Expr [Text] Error where
 --   eval :: Expr -> [Text] -> (Either Error Result, [Text])
