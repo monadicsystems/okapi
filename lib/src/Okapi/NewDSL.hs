@@ -9,6 +9,7 @@
 
 module Okapi.NewDSL where
 import Data.Kind (Type)
+import Data.Typeable
 
 -- type Interpreter (expr :: * -> *) state error a = state -> expr a -> (Either error a, state)
 
@@ -16,12 +17,13 @@ class Context (expr :: * -> *) state error where
   eval :: state -> expr a -> (Either error a, state)
 
 data DSL (expr :: * -> *) state error a where
-  FMap :: (a -> a') -> DSL expr state error a -> DSL expr state error a'
+  FMap :: (a -> b) -> DSL expr state error a -> DSL expr state error b
   Pure :: a -> DSL expr state error a
   Apply :: DSL expr state error (a -> b) -> DSL expr state error a -> DSL expr state error b
 --   Eval :: Interpreter expr state error a -> expr a -> DSL expr state error a
   Expr :: Context expr state error => expr a -> DSL expr state error a -- Call Quote?
   -- Add constructor for Combinator??
+  -- deriving (Typeable)
 
 instance Functor (DSL expr state error) where
   fmap = FMap

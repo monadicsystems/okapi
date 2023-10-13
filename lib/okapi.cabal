@@ -36,9 +36,11 @@ library
       Okapi.Parser.Path
       -- Okapi.Parser.Query
       -- Okapi.Parser.Request
+      -- Okapi.Parser.Path
       Okapi.NewDSL
       Okapi.Pattern
       Okapi.Tree
+      Okapi.Route
   other-modules:
       Paths_okapi
   hs-source-dirs:
@@ -54,6 +56,7 @@ library
     , extra
     , http-api-data
     , http-types
+    , natural-transformation
     , network
     , pretty-simple
     , text
