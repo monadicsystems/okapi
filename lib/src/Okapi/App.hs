@@ -23,6 +23,7 @@ module Okapi.App where
 import Control.Natural qualified as Natural
 import Data.Functor.Identity qualified as Identity
 import Data.List qualified as List
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
 import Data.Tree qualified as Tree
 import Data.Typeable qualified as Typeable
@@ -38,9 +39,10 @@ type Handler env = Wai.Request -> env Wai.Response
 data App where
   Match :: Text.Text -> [App] -> App
   Capture :: forall a. (Web.FromHttpApiData a, Typeable.Typeable a) => (Secret.Secret a -> [App]) -> App
-  Splat :: (Secret.Secret [Text.Text] -> [App]) -> App
+  Splat :: (Secret.Secret (NonEmpty.NonEmpty Text.Text) -> [App]) -> App
   Router :: forall a. Route.Route a -> (Secret.Secret a -> [App]) -> App
   Method :: forall env. (HTTP.StdMethod -> Bool) -> (env Natural.~> IO) -> Handler env -> App
+  Scope :: Wai.Middleware -> [Text.Text] -> [App] -> App
 
 match :: Text.Text -> [App] -> App
 match = Match
@@ -51,7 +53,7 @@ literal l = Match (Web.toUrlPiece l)
 capture :: forall a. (Web.FromHttpApiData a, Typeable.Typeable a) => (Secret.Secret a -> [App]) -> App
 capture = Capture
 
-splat :: (Secret.Secret [Text.Text] -> [App]) -> App
+splat :: (Secret.Secret (NonEmpty.NonEmpty Text.Text) -> [App]) -> App
 splat = Splat
 
 router :: forall a. Route.Route a -> (Secret.Secret a -> [App]) -> App
@@ -72,6 +74,9 @@ getPure = get (return . Identity.runIdentity)
 any :: forall env. (env Natural.~> IO) -> Handler env -> App
 any = Method (const True)
 
+scope :: Wai.Middleware -> [Text.Text] -> [App] -> App
+scope = Scope
+
 release :: Wai.Request -> Secret.Secret a -> a
 release req (Secret.Secret key) = case Vault.lookup key $ Wai.vault req of
   Nothing -> error "IMPOSSIBLE"
@@ -87,7 +92,7 @@ middleware app backup req resp = do
           if pathHead == text
             then do
               let newReq = req {Wai.pathInfo = pathTail}
-              middleware' apps backup newReq resp
+              middleware' id apps backup newReq resp
             else backup req resp
     Capture @ty genApps ->
       case Wai.pathInfo req of
@@ -99,12 +104,16 @@ middleware app backup req resp = do
               key <- Vault.newKey @ty
               let newVault = Vault.insert key value (Wai.vault req)
                   newReq = req {Wai.pathInfo = pathTail, Wai.vault = newVault}
-              middleware' (genApps $ Secret.Secret key) backup newReq resp
+              middleware' id (genApps $ Secret.Secret key) backup newReq resp
     Splat genApps -> do
-      key <- Vault.newKey @[Text.Text]
-      let newVault = Vault.insert key (Wai.pathInfo req) (Wai.vault req)
-          newReq = req {Wai.pathInfo = [], Wai.vault = newVault}
-      middleware' (genApps $ Secret.Secret key) backup newReq resp
+      case Wai.pathInfo req of
+        [] -> backup req resp
+        (pathHead : pathTail) -> do
+          let nonEmptyPath = pathHead NonEmpty.:| pathTail
+          key <- Vault.newKey @(NonEmpty.NonEmpty Text.Text)
+          let newVault = Vault.insert key nonEmptyPath (Wai.vault req)
+              newReq = req {Wai.pathInfo = [], Wai.vault = newVault}
+          middleware' id (genApps $ Secret.Secret key) backup newReq resp
     Router @ty route genApps -> do
       case Route.exec route $ Wai.pathInfo req of
         (Left _, _) -> backup req resp
@@ -112,7 +121,7 @@ middleware app backup req resp = do
           key <- Vault.newKey @ty
           let newVault = Vault.insert key value (Wai.vault req)
               newReq = req {Wai.pathInfo = newPathInfo, Wai.vault = newVault}
-          middleware' (genApps $ Secret.Secret key) backup newReq resp
+          middleware' id (genApps $ Secret.Secret key) backup newReq resp
     Method pred trans handler ->
       case HTTP.parseMethod $ Wai.requestMethod req of
         Left _ -> backup req resp
@@ -122,55 +131,65 @@ middleware app backup req resp = do
               res <- trans $ handler req
               resp res
             else backup req resp
+    Scope middlewareToApply prefix apps ->
+      if prefix `List.isPrefixOf` Wai.pathInfo req
+        then middleware' middlewareToApply apps backup req resp
+        else backup req resp
 
-middleware' :: [App] -> Wai.Middleware
-middleware' [] backup req resp = backup req resp
-middleware' (appsHead : appsTail) backup req resp =
+middleware' :: Wai.Middleware -> [App] -> Wai.Middleware
+middleware' _ [] backup req resp = backup req resp
+middleware' middlewareToApply (appsHead : appsTail) backup req resp =
   case appsHead of
     Match text apps ->
       case Wai.pathInfo req of
-        [] -> middleware' appsTail backup req resp
+        [] -> middleware' middlewareToApply appsTail backup req resp
         (pathHead : pathTail) ->
           if pathHead == text
             then do
               let newReq = req {Wai.pathInfo = pathTail}
-              middleware' apps backup newReq resp
-            else middleware' appsTail backup req resp
+              middleware' middlewareToApply apps backup newReq resp
+            else middleware' middlewareToApply appsTail backup req resp
     Capture @ty genApps ->
       case Wai.pathInfo req of
-        [] -> middleware' appsTail backup req resp
+        [] -> middleware' middlewareToApply appsTail backup req resp
         (pathHead : pathTail) ->
           case Web.parseUrlPiece @ty pathHead of
-            Left _ -> middleware' appsTail backup req resp
+            Left _ -> middleware' middlewareToApply appsTail backup req resp
             Right value -> do
               key <- Vault.newKey @ty
               let newVault = Vault.insert key value (Wai.vault req)
                   newReq = req {Wai.pathInfo = pathTail, Wai.vault = newVault}
-              middleware' (genApps $ Secret.Secret key) backup newReq resp
+              middleware' middlewareToApply (genApps $ Secret.Secret key) backup newReq resp
     Splat genApps -> do
-      key <- Vault.newKey @[Text.Text]
-      let newVault = Vault.insert key (Wai.pathInfo req) (Wai.vault req)
-          newReq = req {Wai.pathInfo = [], Wai.vault = newVault}
-      middleware' (genApps $ Secret.Secret key) backup newReq resp
+      case Wai.pathInfo req of
+        [] -> middleware' middlewareToApply appsTail backup req resp
+        (pathHead : pathTail) -> do
+          let nonEmptyPath = pathHead NonEmpty.:| pathTail
+          key <- Vault.newKey @(NonEmpty.NonEmpty Text.Text)
+          let newVault = Vault.insert key nonEmptyPath (Wai.vault req)
+              newReq = req {Wai.pathInfo = [], Wai.vault = newVault}
+          middleware' middlewareToApply (genApps $ Secret.Secret key) backup newReq resp
     Router @ty route genApps -> do
       case Route.exec route $ Wai.pathInfo req of
-        (Left _, _) -> middleware' appsTail backup req resp
+        (Left _, _) -> middleware' middlewareToApply appsTail backup req resp
         (Right value, newPathInfo) -> do
           key <- Vault.newKey @ty
           let newVault = Vault.insert key value (Wai.vault req)
               newReq = req {Wai.pathInfo = newPathInfo, Wai.vault = newVault}
-          middleware' (genApps $ Secret.Secret key) backup newReq resp
+          middleware' middlewareToApply (genApps $ Secret.Secret key) backup newReq resp
     Method pred trans handler ->
       case Wai.pathInfo req of
         [] -> case HTTP.parseMethod $ Wai.requestMethod req of
-          Left _ -> middleware' appsTail backup req resp
+          Left _ -> middleware' middlewareToApply appsTail backup req resp
           Right stdMethod ->
             if pred stdMethod
-              then do
-                res <- trans $ handler req
-                resp res
-              else middleware' appsTail backup req resp
-        _ -> middleware' appsTail backup req resp
+              then middlewareToApply (\req' resp' -> do res <- trans $ handler req'; resp' res) req resp
+              else middleware' middlewareToApply appsTail backup req resp
+        _ -> middleware' middlewareToApply appsTail backup req resp
+    Scope otherMiddlewareToApply prefix apps ->
+      if prefix `List.isPrefixOf` Wai.pathInfo req
+        then middleware' (middlewareToApply . otherMiddlewareToApply) apps backup req resp
+        else middleware' middlewareToApply appsTail backup req resp
 
 tree :: App -> IO (Tree.Tree String)
 tree (Match text apps) = do
@@ -181,7 +200,7 @@ tree (Capture @ty genApps) = do
   forest <- mapM tree $ genApps secret
   return $ Tree.Node ("/:" <> showType @ty) forest
 tree (Splat genApps) = do
-  secret <- Secret.newSecret @[Text.Text]
+  secret <- Secret.newSecret @(NonEmpty.NonEmpty Text.Text)
   forest <- mapM tree $ genApps secret
   return $ Tree.Node "/*" forest
 tree (Router @ty route genApps) = do
@@ -190,6 +209,9 @@ tree (Router @ty route genApps) = do
   return $ Tree.Node (Text.unpack (Route.rep route)) forest
 tree (Method pred _ _) = do
   return $ Tree.Node (List.intercalate " | " (map show $ filter pred [minBound ..])) []
+tree (Scope _ prefix apps) = do
+    forest <- mapM tree apps
+    return $ Tree.Node ("/(" <> (List.intercalate "/" $ map Text.unpack prefix) <> ")") forest
 
 showType :: forall a. (Typeable.Typeable a) => String
 showType = show . Typeable.typeRep $ Typeable.Proxy @a
@@ -205,6 +227,14 @@ myApp =
                 let text' = release req text
                     age' = release req age
                 undefined
+            ],
+          scope id ["lol", "hello"]
+            [ get id \req -> do
+                undefined
+            , match "null"
+                [ get id \req -> do
+                    undefined
+                ]
             ]
         ],
       match
