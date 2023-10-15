@@ -28,19 +28,9 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Tree
-      -- Okapi.DSL
-      -- Okapi.DSL.Alternative
-      -- Okapi.DSL.Applicative
-      -- Okapi.Parser.Body
-      -- Okapi.Parser.Headers
-      Okapi.Parser.Path
-      -- Okapi.Parser.Query
-      -- Okapi.Parser.Request
-      -- Okapi.Parser.Path
-      Okapi.NewDSL
       Okapi.Pattern
-      Okapi.Tree
+      Okapi.Secret
+      Okapi.App
       Okapi.Route
   other-modules:
       Paths_okapi

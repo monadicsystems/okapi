@@ -16,14 +16,8 @@ data Route a where
   FMap :: (a -> b) -> Route a -> Route b
   Pure :: a -> Route a
   Apply :: Route (a -> b) -> Route a -> Route b
-  Static :: Text -> Route ()
+  Match :: Text -> Route ()
   Param :: (Typeable a, Web.FromHttpApiData a) => Route a
-
-param :: (Typeable a, Web.FromHttpApiData a) => Route a
-param = Param
-
-static :: Text -> Route ()
-static = Static
 
 instance Functor Route where
   fmap = FMap
@@ -31,6 +25,19 @@ instance Functor Route where
 instance Applicative Route where
   pure = Pure
   (<*>) = Apply
+
+param :: (Typeable a, Web.FromHttpApiData a) => Route a
+param = Param
+
+match :: Text -> Route ()
+match = Match
+
+rep :: Route a -> Text
+rep (FMap _ dsl) = rep dsl
+rep (Pure x) = ""
+rep (Apply aF aX) = rep aF <> rep aX
+rep (Match t) = "/" <> t
+rep (Param @p) = "/:" <> pack (show . typeRep $ Proxy @p)
 
 -- equals :: Route a -> Route b -> Bool
 -- equals (FMap _ r) (FMap _ r') = equals r r'
@@ -41,13 +48,6 @@ instance Applicative Route where
 --   Nothing -> False
 --   Just HRefl -> True
 -- equals _ _ = False
-
-rep :: Route a -> Text
-rep (FMap _ dsl) = rep dsl
-rep (Pure x) = ""
-rep (Apply aF aX) = rep aF <> rep aX
-rep (Static t) = "/" <> t
-rep (Param @p) = "/{:" <> pack (show . typeRep $ Proxy @p) <> "}"
 
 data Error = Error
 
