@@ -1,4 +1,4 @@
-cabal-version: 2.0
+cabal-version: 3.6
 
 -- This file has been generated from package.yaml by hpack version 0.34.4.
 --
@@ -14,7 +14,7 @@ bug-reports:    https://github.com/monadicsystems/okapi/issues
 author:         Monadic Systems LLC
 maintainer:     tech@monadic.systems
 copyright:      2022 Monadic Systems LLC
-license:        BSD3
+license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -46,7 +46,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      aeson >=1.4.7
+      aeson
     , base >=4.7 && <5
     , base64
     , bytestring
@@ -62,7 +62,7 @@ library
     , text
     , vault
     , wai
-    , wai-extra
+    -- , wai-extra
     , warp
   default-language: Haskell2010
 
