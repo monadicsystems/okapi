@@ -192,7 +192,7 @@ middleware' middlewareToApply (appsHead : appsTail) backup req resp =
       if prefix `List.isPrefixOf` Wai.pathInfo req
         then do
           let newReq = req {Wai.pathInfo = drop (length prefix) (Wai.pathInfo req)}
-          middleware' (middlewareToApply . otherMiddlewareToApply) apps backup newReq resp
+          middleware' (otherMiddlewareToApply . middlewareToApply) apps backup newReq resp
         else middleware' middlewareToApply appsTail backup req resp
 
 tree :: App -> IO (Tree.Tree String)
