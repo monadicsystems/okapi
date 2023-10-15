@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Okapi
+      Tree
       -- Okapi.DSL
       -- Okapi.DSL.Alternative
       -- Okapi.DSL.Applicative
