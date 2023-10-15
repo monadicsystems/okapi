@@ -133,7 +133,9 @@ middleware app backup req resp = do
             else backup req resp
     Scope middlewareToApply prefix apps ->
       if prefix `List.isPrefixOf` Wai.pathInfo req
-        then middleware' middlewareToApply apps backup req resp
+        then do
+          let newReq = req {Wai.pathInfo = drop (length prefix) (Wai.pathInfo req)}
+          middleware' middlewareToApply apps backup newReq resp
         else backup req resp
 
 middleware' :: Wai.Middleware -> [App] -> Wai.Middleware
@@ -188,7 +190,9 @@ middleware' middlewareToApply (appsHead : appsTail) backup req resp =
         _ -> middleware' middlewareToApply appsTail backup req resp
     Scope otherMiddlewareToApply prefix apps ->
       if prefix `List.isPrefixOf` Wai.pathInfo req
-        then middleware' (middlewareToApply . otherMiddlewareToApply) apps backup req resp
+        then do
+          let newReq = req {Wai.pathInfo = drop (length prefix) (Wai.pathInfo req)}
+          middleware' (middlewareToApply . otherMiddlewareToApply) apps backup newReq resp
         else middleware' middlewareToApply appsTail backup req resp
 
 tree :: App -> IO (Tree.Tree String)
@@ -210,8 +214,8 @@ tree (Router @ty route genApps) = do
 tree (Method pred _ _) = do
   return $ Tree.Node (List.intercalate " | " (map show $ filter pred [minBound ..])) []
 tree (Scope _ prefix apps) = do
-    forest <- mapM tree apps
-    return $ Tree.Node ("/(" <> (List.intercalate "/" $ map Text.unpack prefix) <> ")") forest
+  forest <- mapM tree apps
+  return $ Tree.Node ("/(" <> List.intercalate "/" (map Text.unpack prefix) <> ")") forest
 
 showType :: forall a. (Typeable.Typeable a) => String
 showType = show . Typeable.typeRep $ Typeable.Proxy @a
@@ -228,10 +232,13 @@ myApp =
                     age' = release req age
                 undefined
             ],
-          scope id ["lol", "hello"]
+          scope
+            id
+            ["lol", "hello"]
             [ get id \req -> do
-                undefined
-            , match "null"
+                undefined,
+              match
+                "null"
                 [ get id \req -> do
                     undefined
                 ]
