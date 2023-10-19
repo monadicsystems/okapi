@@ -18,17 +18,22 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Okapi.Secret where
+module Okapi.Response where
 
+import Control.Natural qualified as Natural
+import Data.Functor.Identity qualified as Identity
+import Data.List qualified as List
+import Data.List.NonEmpty qualified as NonEmpty
+import Data.Text qualified as Text
+import Data.Tree qualified as Tree
+import Data.Typeable qualified as Typeable
 import Data.Vault.Lazy qualified as Vault
+import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
+import Okapi.API qualified as API
+import Okapi.Headers qualified as Headers
+import Okapi.Route qualified as Route
+import Okapi.Secret qualified as Secret
+import Web.HttpApiData qualified as Web
 
-newtype Secret a = Secret (Vault.Key a)
 
-new :: forall a. IO (Secret a)
-new = Secret <$> Vault.newKey @a
-
-reveal :: Wai.Request -> Secret a -> a
-reveal req (Secret key) = case Vault.lookup key $ Wai.vault req of
-  Nothing -> error "IMPOSSIBLE"
-  Just val -> val
