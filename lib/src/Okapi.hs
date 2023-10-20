@@ -21,6 +21,8 @@
 module Okapi where
 
 import Control.Natural qualified as Natural
+import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Lazy.Char8 qualified as LBSChar8
 import Data.Functor.Identity qualified as Identity
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NonEmpty
@@ -28,17 +30,16 @@ import Data.Text qualified as Text
 import Data.Tree qualified as Tree
 import Data.Typeable qualified as Typeable
 import Data.Vault.Lazy qualified as Vault
-import Data.ByteString.Lazy qualified as LBS
-import Data.ByteString.Lazy.Char8 qualified as LBSChar8
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Network.Wai.Middleware.RequestLogger qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
+import Network.Wai.Middleware.RequestLogger qualified as Wai
 -- import Okapi.API qualified as API
 import Okapi.API
 import Okapi.Headers qualified as Headers
 import Okapi.Route qualified as Route
 import Okapi.Secret qualified as Secret
+import Text.Pretty.Simple qualified as Pretty
 import Web.HttpApiData qualified as Web
 
 test1 :: IO ()
@@ -120,8 +121,10 @@ test3 = do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match "numbers"
-          [ match "add"
+      [ match
+          "numbers"
+          [ match
+              "add"
               [ param @Int \xS ->
                   [ param @Int \yS ->
                       [ getIO_ \req -> do
@@ -131,8 +134,8 @@ test3 = do
                           return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show (x + y)
                       ]
                   ]
-              ]
-          , getIO_ \req -> do
+              ],
+            getIO_ \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
           ]
       ]
@@ -143,19 +146,21 @@ instance Web.FromHttpApiData Op where
   parseUrlPiece "add" = Right Add
   parseUrlPiece "sub" = Right Sub
   parseUrlPiece "mul" = Right Mul
-  parseUrlPiece _     = Left undefined
+  parseUrlPiece _ = Left undefined
 
 test4 :: IO ()
 test4 = do
   apiTreeRep <- forest testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  Warp.run 1234 $ Wai.logStdoutDev $ build testAPI id backupWaiApp
   where
+    -- Warp.run 1234 $ Wai.logStdoutDev $ build testAPI id backupWaiApp
+
     backupWaiApp = \_ resp -> do
       resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match "numbers"
+      [ match
+          "numbers"
           [ param @Op \opS ->
               [ param @Int \xS ->
                   [ param @Int \yS ->
@@ -168,14 +173,14 @@ test4 = do
                                 Mul -> x * y
                           return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show answer
                       ]
-                  ]
-              , getIO_ \req -> do
+                  ],
+                getIO_ \req -> do
                   return $ Wai.responseLBS HTTP.status200 [] $ case Secret.reveal req opS of
                     Add -> "Add two numbers."
                     Sub -> "Subtract one number from another."
                     Mul -> "Multiply two numbers."
-              ]
-          , getIO_ \req -> do
+              ],
+            getIO_ \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
           ]
       ]
@@ -188,39 +193,49 @@ instance Web.ToHttpApiData Op where
 test5 :: IO ()
 test5 = do
   apiTreeRep <- forest testAPI
+  apiEndpoints <- endpoints testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  Warp.run 1234 $ build testAPI id backupWaiApp
+  Pretty.pPrint $ map curl $ List.reverse apiEndpoints
   where
+    -- Warp.run 1234 $ build testAPI id backupWaiApp
+
     backupWaiApp = \_ resp -> do
       resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match "numbers"
-          [ opAPI Add
-          , wrap Wai.logStdoutDev $ opAPI Sub
-          , opAPI Mul
-          , getIO_ \req -> do
+      [ match "numbers" $
+          [ getIO_ \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
           ]
+            ++ map opAPI [Add, Sub, Mul]
       ]
 
 opAPI :: Op -> API
-opAPI op = lit op
-  [ getIO_ \req -> do
-      return $ Wai.responseLBS HTTP.status200 [] $ case op of
-        Add -> "Add two numbers."
-        Sub -> "Subtract one number from another."
-        Mul -> "Multiply two numbers."
-  , param @Int \xS ->
-      [ param @Int \yS ->
-          [ getIO_ \req -> do
-              let x = Secret.reveal req xS
-                  y = Secret.reveal req yS
-                  answer = case op of
-                    Add -> x + y
-                    Sub -> x - y
-                    Mul -> x * y
-              return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show answer
-          ]
-     ]
-  ]
+opAPI op =
+  lit
+    op
+    [ getIO_ \req -> do
+        return $ Wai.responseLBS HTTP.status200 [] $ case op of
+          Add -> "Add two numbers."
+          Sub -> "Subtract one number from another."
+          Mul -> "Multiply two numbers.",
+      param @Int \xS ->
+        [ param @Int \yS ->
+            [ getIO_ \req -> do
+                let x = Secret.reveal req xS
+                    y = Secret.reveal req yS
+                    answer = case op of
+                      Add -> x + y
+                      Sub -> x - y
+                      Mul -> x * y
+                return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show answer
+            ]
+        ]
+          ++ case op of
+            Mul ->
+              [ getIO_ \req -> do
+                  let x = Secret.reveal req xS
+                  return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show (x * x)
+              ]
+            _ -> []
+    ]

@@ -2,6 +2,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -28,6 +29,7 @@ import Data.Text qualified as Text
 import Data.Tree qualified as Tree
 import Data.Typeable qualified as Typeable
 import Data.Vault.Lazy qualified as Vault
+import GHC.Generics qualified as Generics
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Headers qualified as Headers
@@ -42,7 +44,7 @@ data API where
   Param :: forall a. (Web.FromHttpApiData a, Typeable.Typeable a) => (Secret.Secret a -> [API]) -> API
   Splat :: (Secret.Secret (NonEmpty.NonEmpty Text.Text) -> [API]) -> API
   Router :: forall a. Route.Route a -> (Secret.Secret a -> [API]) -> API
-  Meta :: Headers.Headers a -> (Secret.Secret a -> [API]) -> API
+  Meta :: forall a. Headers.Headers a -> (Secret.Secret a -> [API]) -> API
   Method :: forall env. (HTTP.StdMethod -> Bool) -> (env Natural.~> IO) -> Handler env -> API
   Wrap :: Wai.Middleware -> API -> API
 
@@ -224,29 +226,85 @@ forest :: [API] -> IO (Tree.Tree String)
 forest [] = return $ Tree.Node ":root:" []
 forest apis = do
   forest' <- mapM tree apis
-  return $ Tree.Node ":root:" forest'
-
-tree :: API -> IO (Tree.Tree String)
-tree (Match text apis) = do
-  forest <- mapM tree apis
-  return $ Tree.Node ("/" <> Text.unpack text) forest
-tree (Param @ty produce) = do
-  secret <- Secret.new @ty
-  forest <- mapM tree $ produce secret
-  return $ Tree.Node ("/:" <> showType @ty) forest
+  return $ Tree.Node "\ESC[31m:root:\ESC[0m" forest'
   where
-    showType :: forall a. (Typeable.Typeable a) => String
-    showType = show . Typeable.typeRep $ Typeable.Proxy @a
-tree (Splat produce) = do
-  secret <- Secret.new @(NonEmpty.NonEmpty Text.Text)
-  forest <- mapM tree $ produce secret
-  return $ Tree.Node "/*" forest
-tree (Router @ty route produce) = do
-  secret <- Secret.new @ty
-  forest <- mapM tree $ produce secret
-  return $ Tree.Node (Text.unpack (Route.rep route)) forest
-tree (Method pred _ _) = do
-  return $ Tree.Node (show $ filter pred [minBound ..]) []
-tree (Wrap _ api) = do
-  (Tree.Node root subTrees) <- tree api
-  return $ Tree.Node ("---" <> root <> "->>") subTrees
+    tree :: API -> IO (Tree.Tree String)
+    tree (Match text apis) = do
+      forest <- mapM tree apis
+      return $ Tree.Node ("/" <> Text.unpack text) forest
+    tree (Param @ty produce) = do
+      secret <- Secret.new @ty
+      forest <- mapM tree $ produce secret
+      return $ Tree.Node ("/:" <> showType @ty) forest
+    tree (Splat produce) = do
+      secret <- Secret.new @(NonEmpty.NonEmpty Text.Text)
+      forest <- mapM tree $ produce secret
+      return $ Tree.Node "/*" forest
+    tree (Router @ty route produce) = do
+      secret <- Secret.new @ty
+      forest <- mapM tree $ produce secret
+      return $ Tree.Node (Text.unpack (Route.rep route)) forest
+    tree (Method pred _ _) = do
+      return $ Tree.Node (show $ filter pred [minBound ..]) []
+    tree (Wrap _ api) = do
+      (Tree.Node root subTrees) <- tree api
+      return $ Tree.Node ("(" <> root <> ")") subTrees
+
+data Endpoint = Endpoint [Text.Text] HTTP.StdMethod
+  deriving (Generics.Generic, Eq, Show)
+
+curl :: Endpoint -> Text.Text
+curl (Endpoint [] method) = (Text.pack $ show method) <> " :root:"
+curl (Endpoint path method) = (Text.pack $ show method) <> " /" <> Text.intercalate "/" path
+
+endpoints :: [API] -> IO [Endpoint]
+endpoints [] = pure []
+endpoints (api : apis) = case api of
+  Match text children -> do
+    childrenEndpoints <- map (\(Endpoint path methods) -> Endpoint (text : path) methods) <$> endpoints children
+    siblingEndpoints <- endpoints apis
+    pure $ siblingEndpoints <> childrenEndpoints
+  Param @ty produce -> do
+    secret <- Secret.new @ty
+    childrenEndpoints <- map (\(Endpoint path methods) -> Endpoint (":" <> Text.pack (showType @ty) : path) methods) <$> (endpoints $ produce secret)
+    siblingEndpoints <- endpoints apis
+    pure $ siblingEndpoints <> childrenEndpoints
+  Splat produce -> do
+    secret <- Secret.new @(NonEmpty.NonEmpty Text.Text)
+    childrenEndpoints <- map (\(Endpoint path methods) -> Endpoint ("*" : path) methods) <$> (endpoints $ produce secret)
+    siblingEndpoints <- endpoints apis
+    pure $ siblingEndpoints <> childrenEndpoints
+  Router @ty route produce -> do
+    secret <- Secret.new @ty
+    let routeSegments = Text.split ('/' ==) $ Route.rep route
+    childrenEndpoints <- map (\(Endpoint path methods) -> Endpoint (routeSegments <> path) methods) <$> (endpoints $ produce secret)
+    siblingEndpoints <- endpoints apis
+    pure $ siblingEndpoints <> childrenEndpoints
+  Method pred _ _ -> do
+    siblingEndpoints <- endpoints apis
+    pure $ siblingEndpoints <> (map (Endpoint []) $ filter pred [minBound ..])
+  Wrap _ wrappedAPI -> endpoint wrappedAPI
+  where
+    endpoint :: API -> IO [Endpoint]
+    endpoint api = case api of
+      Match text children -> do
+        childrenEndpoints <- endpoints children
+        pure $ map (\(Endpoint path methods) -> Endpoint (text : path) methods) childrenEndpoints
+      Param @ty produce -> do
+        secret <- Secret.new @ty
+        childrenEndpoints <- endpoints $ produce secret
+        pure $ map (\(Endpoint path methods) -> Endpoint (":" <> Text.pack (showType @ty) : path) methods) childrenEndpoints
+      Splat produce -> do
+        secret <- Secret.new @(NonEmpty.NonEmpty Text.Text)
+        childrenEndpoints <- endpoints $ produce secret
+        pure $ map (\(Endpoint path methods) -> Endpoint ("*" : path) methods) childrenEndpoints
+      Router @ty route produce -> do
+        secret <- Secret.new @ty
+        childrenEndpoints <- endpoints $ produce secret
+        let routeSegments = Text.split ('/' ==) $ Route.rep route
+        pure $ map (\(Endpoint path methods) -> Endpoint (routeSegments <> path) methods) childrenEndpoints
+      Method pred _ _ -> pure (map (Endpoint []) $ filter pred [minBound ..])
+      Wrap _ wrappedAPI -> endpoint wrappedAPI
+
+showType :: forall a. (Typeable.Typeable a) => String
+showType = show . Typeable.typeRep $ Typeable.Proxy @a
