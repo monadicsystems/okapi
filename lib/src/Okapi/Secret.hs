@@ -28,7 +28,7 @@ newtype Secret a = Secret (Vault.Key a)
 new :: forall a. IO (Secret a)
 new = Secret <$> Vault.newKey @a
 
-reveal :: Wai.Request -> Secret a -> a
-reveal req (Secret key) = case Vault.lookup key $ Wai.vault req of
+tell :: Wai.Request -> Secret a -> a
+tell req (Secret key) = case Vault.lookup key $ Wai.vault req of
   Nothing -> error "IMPOSSIBLE"
   Just val -> val

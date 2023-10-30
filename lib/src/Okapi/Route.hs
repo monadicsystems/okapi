@@ -12,34 +12,34 @@ import Data.Text
 import Data.Typeable
 import Web.HttpApiData qualified as Web
 
-data Route a where
-  FMap :: (a -> b) -> Route a -> Route b
-  Pure :: a -> Route a
-  Apply :: Route (a -> b) -> Route a -> Route b
-  Match :: Text -> Route ()
-  Param :: (Typeable a, Web.FromHttpApiData a) => Route a
+data Parser a where
+  FMap :: (a -> b) -> Parser a -> Parser b
+  Pure :: a -> Parser a
+  Apply :: Parser (a -> b) -> Parser a -> Parser b
+  Match :: Text -> Parser ()
+  Param :: (Typeable a, Web.FromHttpApiData a) => Parser a
 
-instance Functor Route where
+instance Functor Parser where
   fmap = FMap
 
-instance Applicative Route where
+instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
-param :: (Typeable a, Web.FromHttpApiData a) => Route a
+param :: (Typeable a, Web.FromHttpApiData a) => Parser a
 param = Param
 
-match :: Text -> Route ()
+match :: Text -> Parser ()
 match = Match
 
-rep :: Route a -> Text
+rep :: Parser a -> Text
 rep (FMap _ dsl) = rep dsl
 rep (Pure x) = ""
 rep (Apply aF aX) = rep aF <> rep aX
 rep (Match t) = "/" <> t
 rep (Param @p) = "/:" <> pack (show . typeRep $ Proxy @p)
 
--- equals :: Route a -> Route b -> Bool
+-- equals :: Parser a -> Parser b -> Bool
 -- equals (FMap _ r) (FMap _ r') = equals r r'
 -- equals (Pure _) (Pure _) = True
 -- equals (Apply af ap) (Apply af' ap') = equals af af' && equals ap ap'
@@ -51,5 +51,5 @@ rep (Param @p) = "/:" <> pack (show . typeRep $ Proxy @p)
 
 data Error = Error
 
-exec :: Route a -> [Text] -> (Either Error a, [Text])
+exec :: Parser a -> [Text] -> (Either Error a, [Text])
 exec = undefined

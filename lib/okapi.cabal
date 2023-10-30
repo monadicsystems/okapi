@@ -42,6 +42,7 @@ library
       aeson
     , base >=4.7 && <5
     , base64
+    , binary
     , bytestring
     , case-insensitive
     , containers

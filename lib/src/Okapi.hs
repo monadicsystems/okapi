@@ -17,6 +17,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE QualifiedDo #-}
+-- {-# LANGUAGE RebindableSyntax #-}
 
 module Okapi where
 
@@ -34,7 +36,7 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Middleware.RequestLogger qualified as Wai
--- import Okapi.API qualified as API
+import Okapi.API qualified as API
 import Okapi.API
 import Okapi.Headers qualified as Headers
 import Okapi.Route qualified as Route
@@ -52,21 +54,21 @@ test1 = do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match
+      [ lit
           "" -- Won't be matched because you can't request http://localhost:1234/
           [ get_ id \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "The trailing slash"
           ],
-        match
+        lit
           "hello"
           [ get_ id \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "world",
-            match
+            lit
               ""
               [ get_ id \req -> do
                   return $ Wai.responseLBS HTTP.status200 [] "Trailing slash after \"hello\""
               ],
-            match
+            lit
               "world"
               [ get_ id \req -> do
                   return $ Wai.responseLBS HTTP.status200 [] "!"
@@ -86,21 +88,21 @@ test2 = do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      match
+      lit
         "" -- Won't be matched because you can't request http://localhost:1234/
         [ get_ id \req -> do
             return $ Wai.responseLBS HTTP.status200 [] "The trailing slash"
         ]
-        : match
+        : lit
           "hello"
           [ get_ id \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "world",
-            match
+            lit
               ""
               [ get_ id \req -> do
                   return $ Wai.responseLBS HTTP.status200 [] "Trailing slash after \"hello\""
               ],
-            match
+            lit
               "world"
               [ get_ id \req -> do
                   return $ Wai.responseLBS HTTP.status200 [] "!"
@@ -121,14 +123,14 @@ test3 = do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match
+      [ lit
           "numbers"
-          [ match
+          [ lit
               "add"
               [ param @Int \xS ->
                   [ param @Int \yS ->
                       [ getIO_ \req -> do
-                          let magic = Secret.reveal req
+                          let magic = Secret.tell req
                               x = magic xS
                               y = magic yS
                           return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show (x + y)
@@ -159,15 +161,15 @@ test4 = do
       resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match
+      [ lit
           "numbers"
           [ param @Op \opS ->
               [ param @Int \xS ->
                   [ param @Int \yS ->
                       [ getIO_ \req -> do
-                          let x = Secret.reveal req xS
-                              y = Secret.reveal req yS
-                              answer = case Secret.reveal req opS of
+                          let x = Secret.tell req xS
+                              y = Secret.tell req yS
+                              answer = case Secret.tell req opS of
                                 Add -> x + y
                                 Sub -> x - y
                                 Mul -> x * y
@@ -175,7 +177,7 @@ test4 = do
                       ]
                   ],
                 getIO_ \req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] $ case Secret.reveal req opS of
+                  return $ Wai.responseLBS HTTP.status200 [] $ case Secret.tell req opS of
                     Add -> "Add two numbers."
                     Sub -> "Subtract one number from another."
                     Mul -> "Multiply two numbers."
@@ -193,9 +195,9 @@ instance Web.ToHttpApiData Op where
 test5 :: IO ()
 test5 = do
   apiTreeRep <- forest testAPI
-  apiEndpoints <- endpoints testAPI
+  -- apiEndpoints <- endpoints testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  Pretty.pPrint $ map curl $ List.reverse apiEndpoints
+  -- Pretty.pPrint $ map curl $ List.reverse apiEndpoints
   where
     -- Warp.run 1234 $ build testAPI id backupWaiApp
 
@@ -203,7 +205,7 @@ test5 = do
       resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
     testAPI :: [API]
     testAPI =
-      [ match "numbers" $
+      [ lit "numbers" $
           [ getIO_ \req -> do
               return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
           ]
@@ -212,7 +214,7 @@ test5 = do
 
 opAPI :: Op -> API
 opAPI op =
-  lit
+  match
     op
     [ getIO_ \req -> do
         return $ Wai.responseLBS HTTP.status200 [] $ case op of
@@ -222,8 +224,8 @@ opAPI op =
       param @Int \xS ->
         [ param @Int \yS ->
             [ getIO_ \req -> do
-                let x = Secret.reveal req xS
-                    y = Secret.reveal req yS
+                let x = Secret.tell req xS
+                    y = Secret.tell req yS
                     answer = case op of
                       Add -> x + y
                       Sub -> x - y
@@ -234,7 +236,7 @@ opAPI op =
           ++ case op of
             Mul ->
               [ getIO_ \req -> do
-                  let x = Secret.reveal req xS
+                  let x = Secret.tell req xS
                   return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show (x * x)
               ]
             _ -> []
