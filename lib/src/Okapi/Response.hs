@@ -94,7 +94,7 @@ insertHeader = InsertHeader
 --     Nothing -> (deleteHeader @headerKey rest)
 --     Just Typeable.Refl -> rest
 
-data Key (k :: Exts.Symbol) = Key
+data HeaderKey (k :: Exts.Symbol) = HeaderKey
 
 -- instance Exts.KnownSymbol k => Show (Var k) where
 --     show = Exts.symbolVal
@@ -102,7 +102,7 @@ data Key (k :: Exts.Symbol) = Key
 -- | Membership test a type class (predicate)
 class IsMember (headerKey :: Exts.Symbol) (headerKeys :: [Exts.Symbol]) where
   -- | Value-level lookup of elements from a map, via type class predicate
-  lookupHeader :: Key headerKey -> Headers headerKeys -> LBS.ByteString
+  lookupHeader :: HeaderKey headerKey -> Headers headerKeys -> LBS.ByteString
 
 -- instance {-# OVERLAPS #-} IsMember v t ((v ':-> t) ': m) where
 --   lookp _ (Ext _ x _) = x

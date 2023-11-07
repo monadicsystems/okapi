@@ -17,8 +17,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE QualifiedDo #-}
--- {-# LANGUAGE RebindableSyntax #-}
 
 module Okapi where
 
@@ -36,23 +34,25 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Middleware.RequestLogger qualified as Wai
-import Okapi.API qualified as API
-import Okapi.API
+import Okapi.App
+import Okapi.App qualified as App
 import Okapi.Headers qualified as Headers
 import Okapi.Route qualified as Route
 import Okapi.Secret qualified as Secret
 import Text.Pretty.Simple qualified as Pretty
 import Web.HttpApiData qualified as Web
 
+{-
 test1 :: IO ()
 test1 = do
   apiTreeRep <- forest testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  Warp.run 1234 $ (build testAPI id) backupWaiApp
   where
+    -- Warp.run 1234 $ (build testAPI id) backupWaiApp
+
     backupWaiApp = \req resp -> do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
-    testAPI :: [API]
+    testAPI :: [App]
     testAPI =
       [ lit
           "" -- Won't be matched because you can't request http://localhost:1234/
@@ -82,11 +82,12 @@ test2 :: IO ()
 test2 = do
   apiTreeRep <- forest testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  Warp.run 1234 $ (build testAPI id) backupWaiApp
   where
+    -- Warp.run 1234 $ (build testAPI id) backupWaiApp
+
     backupWaiApp = \req resp -> do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
-    testAPI :: [API]
+    testAPI :: [App]
     testAPI =
       lit
         "" -- Won't be matched because you can't request http://localhost:1234/
@@ -117,11 +118,12 @@ test3 :: IO ()
 test3 = do
   apiTreeRep <- forest testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  Warp.run 1234 $ (build testAPI id) backupWaiApp
   where
+    -- Warp.run 1234 $ (build testAPI id) backupWaiApp
+
     backupWaiApp = \_ resp -> do
       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
-    testAPI :: [API]
+    testAPI :: [App]
     testAPI =
       [ lit
           "numbers"
@@ -159,7 +161,7 @@ test4 = do
 
     backupWaiApp = \_ resp -> do
       resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
-    testAPI :: [API]
+    testAPI :: [App]
     testAPI =
       [ lit
           "numbers"
@@ -197,13 +199,14 @@ test5 = do
   apiTreeRep <- forest testAPI
   -- apiEndpoints <- endpoints testAPI
   putStrLn $ Tree.drawTree apiTreeRep
-  -- Pretty.pPrint $ map curl $ List.reverse apiEndpoints
   where
+    -- Pretty.pPrint $ map curl $ List.reverse apiEndpoints
+
     -- Warp.run 1234 $ build testAPI id backupWaiApp
 
     backupWaiApp = \_ resp -> do
       resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
-    testAPI :: [API]
+    testAPI :: [App]
     testAPI =
       [ lit "numbers" $
           [ getIO_ \req -> do
@@ -212,7 +215,7 @@ test5 = do
             ++ map opAPI [Add, Sub, Mul]
       ]
 
-opAPI :: Op -> API
+opAPI :: Op -> App
 opAPI op =
   match
     op
@@ -241,3 +244,19 @@ opAPI op =
               ]
             _ -> []
     ]
+-}
+-- test6 :: IO ()
+-- test6 = do
+--   apiTreeRep <- forest testAPI
+--   putStrLn $ Tree.drawTree apiTreeRep
+--   where
+--     backupWaiApp = \req resp -> do
+--       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
+--     testAPI :: [App]
+--     testAPI =
+--       [ endpoint HTTP.GET (do Route.lit "user";) id \_ req -> do
+--           undefined
+--       , endpoint HTTP.POST (do Route.lit "user"; id' <- Route.param @Int; return id') id \userIDS req -> do
+--           let userID = Secret.tell req userIDS
+--           undefined
+--       ]

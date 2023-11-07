@@ -28,10 +28,10 @@ source-repository head
 library
   exposed-modules:
       Okapi
-      Okapi.Pattern
+      Okapi.Route.Pattern
       Okapi.Headers
       Okapi.Secret
-      Okapi.API
+      Okapi.App
       Okapi.Route
       Okapi.Response
   other-modules:
@@ -53,6 +53,8 @@ library
     , natural-transformation
     , network
     , pretty-simple
+    , recursion-schemes
+    , regex-tdfa
     , text
     , vault
     , wai

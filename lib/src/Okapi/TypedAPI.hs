@@ -22,7 +22,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.API where
+module Okapi.App where
 
 import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
