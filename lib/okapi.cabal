@@ -32,6 +32,7 @@ library
       Okapi.Headers
       Okapi.Secret
       Okapi.App
+      Okapi.App2
       Okapi.Route
       Okapi.Response
   other-modules:

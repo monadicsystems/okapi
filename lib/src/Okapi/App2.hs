@@ -23,7 +23,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.App where
+module Okapi.App2 where
 
 import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
@@ -53,20 +53,48 @@ import Okapi.Secret qualified as Secret
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
-type Tree r = [Node r]
+-- type Tree r s = [Node r s]
 
 type (:>) :: [Type] -> Type -> [Type]
 type family (:>) (a :: [Type]) (b :: Type) where
   (:>) '[] b = '[b]
   (:>) (aa : aas) b = aa : (aas :> b)
 
-data Node (r :: [Type]) where
-  Match :: forall a (r :: [Type]). (Web.ToHttpApiData a) => a -> Tree r -> Node r
-  Param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => Tree (r :> a) -> Node r
+type (:>>) :: [Datum] -> Datum -> [Datum]
+type family (:>>) (a :: [Datum]) (b :: Datum) where
+  (:>>) '[] b = '[b]
+  (:>>) (aa : aas) b = aa : (aas :>> b)
+
+type Null :: [Type] -> Bool
+type family Null (a :: [Type]) where
+  Null '[] = 'False
+  Null _   = 'True
+
+type Datum :: Type
+data Datum where
+  Seg :: Exts.Symbol -> Datum
+  Arg :: a -> Datum
+
+type NODE :: Type
+data NODE where
+--   ROOT :: [NODE] -> NODE
+  MATCH :: a -> [NODE] -> NODE
+  PARAM :: a -> [NODE] -> NODE
+  GET :: NODE
+  POST :: NODE
+  PUT :: NODE
+  DELETE :: NODE
+
+data Node (r :: [Type]) (p :: [Datum]) where -- r for args, p for path
+--   Root :: forall (r :: [Type]) (s :: [NODE]). [Node r s] -> Node '[] s
+  Match :: forall a (r :: [Type]) (p :: [Datum]). (Web.ToHttpApiData a) => a -> [Node r p] -> Node r (p :>> Arg a)
+  Param :: forall a (r :: [Type]) (p :: [Datum]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Node (r :> a) p] -> Node r (p :>> Arg a)
   -- Regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Tree (a : r) -> Node (a : r)
   -- Splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => Tree (NonEmpty.NonEmpty a : r) -> Node (NonEmpty.NonEmpty a : r)
   -- Route :: forall a (r :: [Type]). Route.Parser a -> Tree (a : r) -> Node (a : r)
-  Method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Node r
+  -- Method :: forall (env :: Type -> Type) (r :: [Type]) (s :: NODE). (env Natural.~> IO) -> Handler r env -> Node r ()
+--   Get :: forall (env :: Type -> Type) (r :: [Type]). (env Natural.~> IO) -> Handler r env -> Node r
+--   Post :: forall (env :: Type -> Type) (r :: [Type]). (env Natural.~> IO) -> Handler r env -> Node r
 
 -- Query :: forall a. Query.Parser a -> (Secret.Secret a -> Tree) -> Node
 -- Headers :: forall a. RequestHeaders.Parser a -> (Secret.Secret a -> Tree) -> Node
@@ -78,6 +106,14 @@ type family Handler args env where
   Handler '[] env = Wai.Request -> env Wai.Response
   Handler (arg : args) env = arg -> Handler args env
 
+typeTest = [Match @Int 5
+  [ Match @Float 6.9
+      []
+  , Param @Int
+      []
+  ]
+ ]
+{-
 argsTest :: Handler '[] IO
 argsTest = \request -> do
   return $ Wai.responseLBS HTTP.status200 [] "world"
@@ -99,26 +135,29 @@ lit = match @Text.Text
 param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => Tree (r :> a) -> Node r
 param = Param @a @r
 
+
+-- TODO: Add type level method to node???
 method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Node r
 method = Method
-
+-}
+{-
 type Root = '[]
 
 myTest = Warp.run 8080 $ test `withDefault` \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 
 test :: Tree Root
 test =
-  [ lit "hello"
-      [ lit "world"
-          [ param @Bool
-              [ method HTTP.GET id testHandler1
-              , param @Int
-                  [ method HTTP.GET id testHandler2
-                  , lit "foo"
-                      [ method HTTP.POST id testHandler2
+  [ lit @'[] "hello"
+      [ lit @'[] "world"
+          [ param @Bool @'[]
+              [ method @IO @'[Bool] HTTP.GET id testHandler1
+              , param @Int @'[Bool]
+                  [ method @IO @'[Bool, Int] HTTP.GET id testHandler2
+                  , lit @'[Bool, Int] "foo"
+                      [ method @IO @'[Bool, Int] HTTP.POST id testHandler2
                       ]
-                  , param @Float
-                      [ method HTTP.PUT id \bool1 -> \int2 -> \f3 -> \req -> do
+                  , param @Float @'[Bool, Int]
+                      [ method @IO @'[Bool, Int, Float] HTTP.PUT id \bool1 -> \int2 -> \f3 -> \req -> do
                           return $ Wai.responseLBS HTTP.status200 [] "many args"
                       ]
                   ]
@@ -169,7 +208,8 @@ myFunc = fillHandler handlerTest argsTest
 
     argsTest :: HList [Bool, Int, Float]
     argsTest = HCons True (HCons 5 (HCons 5.8 HNil))
-
+-}
+{-
 withDefault :: Tree Root -> Wai.Middleware
 withDefault = withDefaultLoop id HNil
 
@@ -210,9 +250,10 @@ withDefaultLoop middleware args tree backup request respond = case tree of
                   request
                   respond
               else withDefaultLoop middleware args remTree backup request respond
+-}
 {-
-url :: forall (args :: [Type]) (ah :: Type) (at :: [Type]). Tree args -> HList (ah : at) -> Text
-url tree a = case tree of
+url :: forall (args :: [Type]). HList args -> Tree args -> Text
+url a tree = case tree of
   [] -> ""
   (node : remTree) ->
     case node of
