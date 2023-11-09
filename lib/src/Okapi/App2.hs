@@ -25,6 +25,7 @@
 
 module Okapi.App2 where
 
+{-
 import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
@@ -566,4 +567,5 @@ endpoint ::
 endpoint stdMethod routeP trans handlerWithSecret = route routeP \routeS ->
   [ method stdMethod trans (handlerWithSecret routeS)
   ]
+-}
 -}

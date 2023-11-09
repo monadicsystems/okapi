@@ -149,3 +149,49 @@ data Response (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (content
     Headers headerKeys ->
     resultType ->
     Response status headerKeys contentType resultType
+
+data Builder a where
+  FMap :: (a -> b) -> Builder a -> Builder b
+  Pure :: a -> Builder a
+  Apply :: Builder (a -> b) -> Builder a -> Builder b
+  Has ::
+    forall
+      (status :: Natural.Natural)
+      (headerKeys :: [Exts.Symbol])
+      (contentType :: Type)
+      (resultType :: Type).
+    Builder
+      ( Headers headerKeys ->
+        resultType ->
+        Response status headerKeys contentType resultType
+      )
+
+instance Functor Builder where
+  fmap = FMap
+
+instance Applicative Builder where
+  pure = Pure
+  (<*>) = Apply
+
+has ::
+  forall
+    (status :: Natural.Natural)
+    (headerKeys :: [Exts.Symbol])
+    (contentType :: Type)
+    (resultType :: Type).
+  Builder
+    ( Headers headerKeys ->
+      resultType ->
+      Response status headerKeys contentType resultType
+    )
+has = Has
+
+-- equals :: Builder a -> Builder b -> Bool
+-- equals (FMap _ r) (FMap _ r') = equals r r'
+-- equals (Pure _) (Pure _) = True
+-- equals (Apply af ap) (Apply af' ap') = equals af af' && equals ap ap'
+-- equals (Has _) (Has _) = undefined
+-- equals _ _ = False
+
+build :: Builder a -> a
+build = undefined
