@@ -62,17 +62,52 @@ type family (:>) (a :: [Type]) (b :: Type) where
   (:>) (aa : aas) b = aa : (aas :> b)
 
 data Atom (r :: [Type]) where
-  Match :: forall a (r :: [Type]). (Web.ToHttpApiData a) => a -> [Atom r] -> Atom r
-  Param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> a)] -> Atom r
-  Regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> [Atom (r :> a)] -> Atom r
-  Splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> NonEmpty.NonEmpty a)] -> Atom r
-  Route :: forall a (r :: [Type]). (Route.From a) => [Atom (r :> a)] -> Atom r
-  Query :: forall a (r :: [Type]). (Query.From a) => [Atom (r :> a)] -> Atom r
-  Headers :: forall a (r :: [Type]). (Headers.From a) => [Atom (r :> a)] -> Atom r
-  Body :: forall a (r :: [Type]). (Body.From a) => [Atom (r :> a)] -> Atom r
-  Apply :: forall t (r :: [Type]). (Middleware.Tag t) => t -> Atom r -> Atom r
-  Respond :: forall a (r :: [Type]). (Response.To a) => [Atom (r :> a)] -> Atom r
-  Method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
+  Match :: forall a (r :: [Type]). (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) => a -> [Atom r] -> Atom r
+  Param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
+  Regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) => Text.Text -> [Atom (r :> a)] -> Atom r
+  Splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> NonEmpty.NonEmpty a)] -> Atom r
+  Route :: forall a (r :: [Type]). (Route.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
+  Query :: forall a (r :: [Type]). (Query.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
+  Headers :: forall a (r :: [Type]). (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
+  Body :: forall a (r :: [Type]). (Body.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
+  Apply :: forall t (r :: [Type]). (Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) => t -> Atom r -> Atom r
+  Respond :: forall a (r :: [Type]). (Response.To a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
+  Method :: forall env (r :: [Type]). (Typeable.Typeable r) => HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
+
+instance Eq (Atom r) where
+  a1 == a2 = case (a1, a2) of
+    (Match @a1 @r1 x _, Match @a2 @r2 y _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> x == y
+      (_, _) -> False
+    (Param @a1 @r1 _, Param @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    (Regex @a1 @r1 regex1 _, Regex @a2 @r2 regex2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> regex1 == regex2
+      (_, _) -> False
+    (Splat @a1 @r1 _, Splat @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    (Route @a1 @r1 _, Route @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    (Query @a1 @r1 _, Query @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    (Headers @a1 @r1 _, Headers @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    (Body @a1 @r1 _, Body @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    (Apply @t1 @r1 tag1 atom1, Apply @t2 @r2 tag2 atom2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> tag1 == tag2 && atom1 == atom2
+      (_, _) -> False
+    (Respond @a1 @r1 _, Respond @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+      (Just Typeable.Refl, Just Typeable.Refl) -> True
+      (_, _) -> False
+    -- Method is not comparable
+    (_, _) -> False
 
 type Handler :: [Type] -> (Type -> Type) -> Type
 type family Handler args env where
@@ -91,55 +126,55 @@ argsTest2 :: Handler '[Int, Int] IO
 argsTest2 = \x -> \y -> \request -> do
   return $ Wai.responseLBS HTTP.status200 [] "world"
 
-match :: forall a (r :: [Type]). (Web.ToHttpApiData a) => a -> [Atom r] -> Atom r
+match :: forall a (r :: [Type]). (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) => a -> [Atom r] -> Atom r
 match = Match @a @r
 
-lit :: forall (r :: [Type]). Text.Text -> [Atom r] -> Atom r
+lit :: forall (r :: [Type]). (Typeable.Typeable r) => Text.Text -> [Atom r] -> Atom r
 lit = match @Text.Text
 
-param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> a)] -> Atom r
+param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
 param = Param @a @r
 
-regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> [Atom (r :> a)] -> Atom r
+regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) => Text.Text -> [Atom (r :> a)] -> Atom r
 regex = Regex @a @r
 
-splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> NonEmpty.NonEmpty a)] -> Atom r
+splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> NonEmpty.NonEmpty a)] -> Atom r
 splat = Splat @a @r
 
-route :: forall a (r :: [Type]). (Route.From a) => [Atom (r :> a)] -> Atom r
+route :: forall a (r :: [Type]). (Route.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
 route = Route @a @r
 
-query :: forall a (r :: [Type]). (Query.From a) => [Atom (r :> a)] -> Atom r
+query :: forall a (r :: [Type]). (Query.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
 query = Query @a @r
 
-headers :: forall a (r :: [Type]). (Headers.From a) => [Atom (r :> a)] -> Atom r
+headers :: forall a (r :: [Type]). (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
 headers = Headers @a @r
 
-body :: forall a (r :: [Type]). (Body.From a) => [Atom (r :> a)] -> Atom r
+body :: forall a (r :: [Type]). (Body.From a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
 body = Body @a @r
 
-apply :: forall t (r :: [Type]). (Middleware.Tag t) => t -> Atom r -> Atom r
+apply :: forall t (r :: [Type]). (Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) => t -> Atom r -> Atom r
 apply = Apply @t @r
 
-scope :: forall a t (r :: [Type]). (Route.From a, Middleware.Tag t) => t -> [Atom (r :> a)] -> Atom r
-scope middlewareTag children = apply @t @r middlewareTag $ route @a @r children
+scope :: forall a t (r :: [Type]). (Route.From a, Typeable.Typeable a, Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) => t -> [Atom (r :> a)] -> Atom r
+scope tag children = apply @t @r tag $ route @a @r children
 
-respond :: forall a (r :: [Type]). (Response.To a) => [Atom (r :> a)] -> Atom r
+respond :: forall a (r :: [Type]). (Response.To a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
 respond = Respond @a @r
 
-method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
+method :: forall env (r :: [Type]). (Typeable.Typeable r) => HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
 method = Method @env @r
 
 endpoint ::
   forall a env (r :: [Type]).
-  (Route.From a) =>
+  (Route.From a, Typeable.Typeable a, Typeable.Typeable r, Typeable.Typeable (r :> a)) =>
   HTTP.StdMethod ->
   (env Natural.~> IO) ->
   Handler (r :> a) env ->
   Atom r
 endpoint stdMethod transformation handler =
   route @a
-    [ method stdMethod transformation handler
+    [ method @env @(r :> a) stdMethod transformation handler
     ]
 
 myTest = Warp.run 8080 $ test `withDefault` \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
