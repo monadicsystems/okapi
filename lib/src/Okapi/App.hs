@@ -22,6 +22,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Use if" #-}
 
 module Okapi.App where
 
@@ -61,6 +64,11 @@ type family (:>) (a :: [Type]) (b :: Type) where
   (:>) '[] b = '[b]
   (:>) (aa : aas) b = aa : (aas :> b)
 
+type Handler :: [Type] -> (Type -> Type) -> Type
+type family Handler args env where
+  Handler '[] env = Wai.Request -> env Wai.Response
+  Handler (arg : args) env = arg -> Handler args env
+
 data Atom (r :: [Type]) where
   Match :: forall a (r :: [Type]). (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) => a -> [Atom r] -> Atom r
   Param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
@@ -74,6 +82,7 @@ data Atom (r :: [Type]) where
   Respond :: forall a (r :: [Type]). (Response.To a, Typeable.Typeable a, Typeable.Typeable r) => [Atom (r :> a)] -> Atom r
   Method :: forall env (r :: [Type]). (Typeable.Typeable r) => HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
 
+{-
 instance Eq (Atom r) where
   a1 == a2 = case (a1, a2) of
     (Match @a1 @r1 x _, Match @a2 @r2 y _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
@@ -108,11 +117,58 @@ instance Eq (Atom r) where
       (_, _) -> False
     -- Method is not comparable
     (_, _) -> False
+-}
 
-type Handler :: [Type] -> (Type -> Type) -> Type
-type family Handler args env where
-  Handler '[] env = Wai.Request -> env Wai.Response
-  Handler (arg : args) env = arg -> Handler args env
+smush :: Atom r -> Atom r -> Maybe (Atom r)
+smush a1 a2 = case (a1, a2) of
+  (Match @a1 @r1 x children1, Match @a2 @r2 y children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ match @a1 @r1 x $ children1 <> children2
+    (_, _) -> Nothing
+  (Param @a1 @r1 children1, Param @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ param @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  (Regex @a1 @r1 regex1 children1, Regex @a2 @r2 regex2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2, regex1 == regex2) of
+    (Just Typeable.Refl, Just Typeable.Refl, True) -> Just $ regex @a1 @r1 regex1 $ children1 <> children2
+    (_, _, _) -> Nothing
+  (Splat @a1 @r1 children1, Splat @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ splat @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  (Route @a1 @r1 children1, Route @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ route @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  (Query @a1 @r1 children1, Query @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ query @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  (Headers @a1 @r1 children1, Headers @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ headers @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  (Body @a1 @r1 children1, Body @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ body @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  (Apply @t1 @r1 tag1 atom1, Apply @t2 @r2 tag2 atom2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> case tag1 == tag2 of
+      True -> case atom1 `smush` atom2 of
+        Just newAtom -> Just $ apply @t1 @r1 tag1 newAtom
+        Nothing -> Nothing
+      False -> Nothing
+    (_, _) -> Nothing
+  (Respond @a1 @r1 children1, Respond @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ respond @a1 @r1 $ children1 <> children2
+    (_, _) -> Nothing
+  -- Method is not comparable
+  (_, _) -> Nothing
+
+smushes :: [Atom r] -> [Atom r]
+smushes [] = []
+smushes singleton@[atom] = singleton
+smushes (atom1 : atom2 : atoms) = case atom1 `smush` atom2 of
+  Just newAtom -> smushes $ newAtom : atoms
+  Nothing ->
+    List.concat
+      [ smushes (atom1 : atoms)
+      , smushes (atom2 : atoms)
+      , smushes atoms
+      ]
 
 argsTest :: Handler '[] IO
 argsTest = \request -> do
