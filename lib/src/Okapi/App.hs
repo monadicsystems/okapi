@@ -55,20 +55,21 @@ import Okapi.Middleware qualified as Middleware
 import Okapi.Query qualified as Query
 import Okapi.Response qualified as Response
 import Okapi.Route qualified as Route
-import Okapi.Secret qualified as Secret
+
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
-type (:>) :: [Type] -> Type -> [Type]
-type family (:>) (a :: [Type]) (b :: Type) where
-  (:>) '[] b = '[b]
-  (:>) (aa : aas) b = aa : (aas :> b)
+type (:->) :: [Type] -> Type -> [Type]
+type family (:->) (a :: [Type]) (b :: Type) where
+  (:->) '[] b = '[b]
+  (:->) (aa : aas) b = aa : (aas :-> b)
 
 type Handler :: [Type] -> (Type -> Type) -> Type
 type family Handler args env where
   Handler '[] env = Wai.Request -> env Wai.Response
   Handler (arg : args) env = arg -> Handler args env
 
+-- TODO: Potentially add type parameter to constrain middleware enum type
 data Atom (r :: [Type]) where
   Match ::
     forall a (r :: [Type]).
@@ -79,38 +80,38 @@ data Atom (r :: [Type]) where
   Param ::
     forall a (r :: [Type]).
     (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> a)] ->
+    [Atom (r :-> a)] ->
     Atom r
   Regex ::
     forall a (r :: [Type]).
     (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) =>
     Text.Text ->
-    [Atom (r :> a)] ->
+    [Atom (r :-> a)] ->
     Atom r
   Splat ::
     forall a (r :: [Type]).
     (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> NonEmpty.NonEmpty a)] ->
+    [Atom (r :-> NonEmpty.NonEmpty a)] ->
     Atom r
   Route ::
     forall a (r :: [Type]).
     (Route.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> a)] ->
+    [Atom (r :-> a)] ->
     Atom r
   Query ::
     forall a (r :: [Type]).
     (Query.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> a)] ->
+    [Atom (r :-> a)] ->
     Atom r
   Headers ::
     forall a (r :: [Type]).
     (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> a)] ->
+    [Atom (r :-> a)] ->
     Atom r
   Body ::
     forall a (r :: [Type]).
     (Body.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> a)] ->
+    [Atom (r :-> a)] ->
     Atom r
   Apply ::
     forall t (r :: [Type]).
@@ -118,10 +119,15 @@ data Atom (r :: [Type]) where
     t ->
     Atom r ->
     Atom r
-  Respond ::
-    forall a (r :: [Type]).
-    (Response.To a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :> a)] ->
+  -- Response ::
+  --   forall a (r :: [Type]).
+  --   (Response.To a, Typeable.Typeable a, Typeable.Typeable r) =>
+  --   [Atom (r :-> a)] ->
+  --   Atom r
+  Responses ::
+    forall t (r :: [Type]).
+    (Response.Tag t, Typeable.Typeable t, Typeable.Typeable r) =>
+    [Atom (r :-> (t -> Response.Response))] ->
     Atom r
   Method ::
     forall env (r :: [Type]).
@@ -161,10 +167,10 @@ instance Eq (Atom r) where
     (Apply @t1 @r1 tag1 atom1, Apply @t2 @r2 tag2 atom2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
       (Just Typeable.Refl, Just Typeable.Refl) -> tag1 == tag2 && atom1 == atom2
       (_, _) -> False
-    (Respond @a1 @r1 _, Respond @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Response @a1 @r1 _, Response @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
       (Just Typeable.Refl, Just Typeable.Refl) -> True
       (_, _) -> False
-    -- Method is not comparable TODO: ACTUALLY IT MAY BE POSSIBLE
+    -- Method is not comparable TODO: ACTUALLY IT MAY BE POSSIBLE. AT LEAST PARTIALLY
     (_, _) -> False
 -}
 
@@ -201,8 +207,8 @@ smush a1 a2 = case (a1, a2) of
         Nothing -> Nothing
       False -> Nothing
     (_, _) -> Nothing
-  (Respond @a1 @r1 children1, Respond @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ respond @a1 @r1 $ smushes (children1 <> children2)
+  (Responses @t1 @r1 children1, Responses @t2 @r2 children2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ responses @t1 @r1 $ smushes (children1 <> children2)
     (_, _) -> Nothing
   -- Method is not comparable
   (_, _) -> Nothing
@@ -250,7 +256,7 @@ lit = match @Text.Text
 param ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 param = Param @a @r
 
@@ -258,42 +264,42 @@ regex ::
   forall a (r :: [Type]).
   (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) =>
   Text.Text ->
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 regex = Regex @a @r
 
 splat ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> NonEmpty.NonEmpty a)] ->
+  [Atom (r :-> NonEmpty.NonEmpty a)] ->
   Atom r
 splat = Splat @a @r
 
 route ::
   forall a (r :: [Type]).
   (Route.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 route = Route @a @r
 
 query ::
   forall a (r :: [Type]).
   (Query.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 query = Query @a @r
 
 headers ::
   forall a (r :: [Type]).
   (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 headers = Headers @a @r
 
 body ::
   forall a (r :: [Type]).
   (Body.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 body = Body @a @r
 
@@ -309,16 +315,16 @@ scope ::
   forall a t (r :: [Type]).
   (Route.From a, Typeable.Typeable a, Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) =>
   t ->
-  [Atom (r :> a)] ->
+  [Atom (r :-> a)] ->
   Atom r
 scope tag children = apply @t @r tag $ route @a @r children
 
-respond ::
-  forall a (r :: [Type]).
-  (Response.To a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :> a)] ->
+responses ::
+  forall t (r :: [Type]).
+  (Response.Tag t, Typeable.Typeable t, Typeable.Typeable r) =>
+  [Atom (r :-> (t -> Response.Response))] ->
   Atom r
-respond = Respond @a @r
+responses = Responses @t @r
 
 method ::
   forall env (r :: [Type]).
@@ -331,17 +337,19 @@ method = Method @env @r
 
 endpoint ::
   forall a env (r :: [Type]).
-  (Route.From a, Typeable.Typeable a, Typeable.Typeable r, Typeable.Typeable (r :> a)) =>
+  (Route.From a, Typeable.Typeable a, Typeable.Typeable r, Typeable.Typeable (r :-> a)) =>
   HTTP.StdMethod ->
   (env Natural.~> IO) ->
-  Handler (r :> a) env ->
+  Handler (r :-> a) env ->
   Atom r
 endpoint stdMethod transformation handler =
   route @a
-    [ method @env @(r :> a) stdMethod transformation handler
+    [ method @env @(r :-> a) stdMethod transformation handler
     ]
 
-myTest = Warp.run 8080 $ test `withDefault` \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+myTest =
+  Warp.run 8080 $ test `withDefault` \_ resp ->
+    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 
 test =
   [ lit
@@ -357,7 +365,7 @@ test =
                       [ method HTTP.POST id testHandler2
                       ]
                   , param @Float
-                      [ method HTTP.PUT id \bool1 -> \int2 -> \f3 -> \req -> do
+                      [ method HTTP.PUT id \bool1 int2 f3 req -> do
                           return $ Wai.responseLBS HTTP.status200 [] "many args"
                       ]
                   ]
@@ -369,6 +377,11 @@ test =
       [ method HTTP.GET id \req -> do
           return $ Wai.responseLBS HTTP.status200 [] "world"
       , method HTTP.HEAD id \req -> do
+          return $ Wai.responseLBS HTTP.status200 [] "dub"
+      ]
+  , lit
+      "world"
+      [ method HTTP.POST id \req -> do
           return $ Wai.responseLBS HTTP.status200 [] "dub"
       ]
   , method HTTP.GET id \req -> do
@@ -387,7 +400,7 @@ data HList (l :: [Type]) where
   HNil :: HList '[]
   HCons :: e -> HList l -> HList (e ': l)
 
-snoc :: forall (l :: [Type]) (e :: Type). HList l -> e -> HList (l :> e)
+snoc :: forall (l :: [Type]) (e :: Type). HList l -> e -> HList (l :-> e)
 snoc HNil x = HCons x HNil
 snoc (HCons h t) x = HCons h (snoc t x)
 
@@ -445,6 +458,7 @@ withDefaultLoop middleware args tree backup request respond = case tree of
                   request
                   respond
               else withDefaultLoop middleware args remTree backup request respond
+      Responses @t subTree -> undefined
 
 {-
 withDefault :: Tree -> Wai.Middleware

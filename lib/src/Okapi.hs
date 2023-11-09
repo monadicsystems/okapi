@@ -38,7 +38,7 @@ import Okapi.App
 import Okapi.App qualified as App
 import Okapi.Headers qualified as Headers
 import Okapi.Route qualified as Route
-import Okapi.Secret qualified as Secret
+
 import Text.Pretty.Simple qualified as Pretty
 import Web.HttpApiData qualified as Web
 

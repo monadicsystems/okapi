@@ -43,7 +43,7 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Headers qualified as Headers
 import Okapi.Route qualified as Route
-import Okapi.Secret qualified as Secret
+
 import Web.HttpApiData qualified as Web
 
 class ToHeader a where
@@ -54,17 +54,6 @@ type family Elem x ys where
   Elem x '[] = 'False
   Elem x (x ': ys) = 'True
   Elem x (y ': ys) = Elem x ys
-
--- type Remove :: Exts.Symbol -> [Exts.Symbol] -> [Exts.Symbol]
--- type family Remove (headerKey :: Exts.Symbol) (headerKeys :: [Exts.Symbol]) where
---   Remove _ '[] = '[]
---   Remove headerKey (h : t) = If (headerKey Equality.== h) t (h : Remove headerKey t)
-
-type Remove :: Exts.Symbol -> [Exts.Symbol] -> [Exts.Symbol]
-type family Remove x ys where
-  Remove a '[] = '[]
-  Remove a (a ': ys) = ys
-  Remove a (y ': ys) = y ': (Remove a ys)
 
 data Headers (headerKeys :: [Exts.Symbol]) where
   NoHeaders :: Headers '[]
@@ -82,17 +71,6 @@ insertHeader ::
   Headers headerKeys ->
   Headers (headerKey : headerKeys)
 insertHeader = InsertHeader
-
--- deleteHeader ::
---   forall (headerKey :: Exts.Symbol) (headerKeys :: [Exts.Symbol]).
---   (Elem headerKey headerKeys ~ True) =>
---   Headers headerKeys ->
---   Headers (Remove headerKey headerKeys)
--- deleteHeader NoHeaders = NoHeaders
--- deleteHeader (InsertHeader @k v rest) =
---   case Typeable.eqT @headerKey @k of
---     Nothing -> (deleteHeader @headerKey rest)
---     Just Typeable.Refl -> rest
 
 data HeaderKey (k :: Exts.Symbol) = HeaderKey
 
@@ -142,49 +120,52 @@ class ContentType a where
 class (ContentType a) => ToContentType a b | b -> a where
   toContentType :: b -> a
 
-data Response (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) where
+data Response where
   Response ::
     forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type).
     (ContentType contentType, ToContentType contentType resultType) =>
     Headers headerKeys ->
     resultType ->
-    Response status headerKeys contentType resultType
+    Response
 
-data Builder a where
-  FMap :: (a -> b) -> Builder a -> Builder b
-  Pure :: a -> Builder a
-  Apply :: Builder (a -> b) -> Builder a -> Builder b
-  Has ::
-    forall
-      (status :: Natural.Natural)
-      (headerKeys :: [Exts.Symbol])
-      (contentType :: Type)
-      (resultType :: Type).
-    Builder
-      ( Headers headerKeys ->
-        resultType ->
-        Response status headerKeys contentType resultType
-      )
+class (Enum a) => Tag a where
+  fromTag :: a -> Response
 
-instance Functor Builder where
-  fmap = FMap
+-- data Builder a where
+--   FMap :: (a -> b) -> Builder a -> Builder b
+--   Pure :: a -> Builder a
+--   Apply :: Builder (a -> b) -> Builder a -> Builder b
+--   With ::
+--     forall
+--       (status :: Natural.Natural)
+--       (headerKeys :: [Exts.Symbol])
+--       (contentType :: Type)
+--       (resultType :: Type).
+--     Builder
+--       ( Headers headerKeys ->
+--         resultType ->
+--         Wai.Response
+--       )
 
-instance Applicative Builder where
-  pure = Pure
-  (<*>) = Apply
+-- instance Functor Builder where
+--   fmap = FMap
 
-has ::
-  forall
-    (status :: Natural.Natural)
-    (headerKeys :: [Exts.Symbol])
-    (contentType :: Type)
-    (resultType :: Type).
-  Builder
-    ( Headers headerKeys ->
-      resultType ->
-      Response status headerKeys contentType resultType
-    )
-has = Has
+-- instance Applicative Builder where
+--   pure = Pure
+--   (<*>) = Apply
+
+-- with ::
+--   forall
+--     (status :: Natural.Natural)
+--     (headerKeys :: [Exts.Symbol])
+--     (contentType :: Type)
+--     (resultType :: Type).
+--   Builder
+--     ( Headers headerKeys ->
+--       resultType ->
+--       Wai.Response
+--     )
+-- with = With
 
 -- equals :: Builder a -> Builder b -> Bool
 -- equals (FMap _ r) (FMap _ r') = equals r r'
@@ -193,6 +174,5 @@ has = Has
 -- equals (Has _) (Has _) = undefined
 -- equals _ _ = False
 
-class To a where
-  builder :: Builder a
-  build :: ()
+-- class To a where
+--   builder :: Builder a

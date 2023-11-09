@@ -33,7 +33,6 @@ library
       Okapi.Headers
       Okapi.Query
       Okapi.Body
-      Okapi.Secret
       Okapi.App
       Okapi.Route
       Okapi.Response
