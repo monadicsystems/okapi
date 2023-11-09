@@ -70,7 +70,7 @@ data Atom (r :: [Type]) where
   Query :: forall a (r :: [Type]). (Query.From a) => [Atom (r :> a)] -> Atom r
   Headers :: forall a (r :: [Type]). (Headers.From a) => [Atom (r :> a)] -> Atom r
   Body :: forall a (r :: [Type]). (Body.From a) => [Atom (r :> a)] -> Atom r
-  Apply :: forall a (r :: [Type]). (Middleware.To a) => Atom r -> Atom r
+  Apply :: forall t (r :: [Type]). (Middleware.Tag t) => t -> Atom r -> Atom r
   Respond :: forall a (r :: [Type]). (Response.To a) => [Atom (r :> a)] -> Atom r
   Method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
 
@@ -118,11 +118,11 @@ headers = Headers @a @r
 body :: forall a (r :: [Type]). (Body.From a) => [Atom (r :> a)] -> Atom r
 body = Body @a @r
 
-apply :: forall a (r :: [Type]). (Middleware.To a) => Atom r -> Atom r
-apply = Apply @a @r
+apply :: forall t (r :: [Type]). (Middleware.Tag t) => t -> Atom r -> Atom r
+apply = Apply @t @r
 
-scope :: forall a m (r :: [Type]). (Route.From a, Middleware.To m) => Wai.Middleware -> [Atom (r :> a)] -> Atom r
-scope middleware children = apply @m @r $ route @a @r children
+scope :: forall a t (r :: [Type]). (Route.From a, Middleware.Tag t) => t -> [Atom (r :> a)] -> Atom r
+scope middlewareTag children = apply @t @r middlewareTag $ route @a @r children
 
 respond :: forall a (r :: [Type]). (Response.To a) => [Atom (r :> a)] -> Atom r
 respond = Respond @a @r
