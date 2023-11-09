@@ -28,6 +28,10 @@ instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
+class From a where
+  parser :: Parser a
+  parse :: ()
+
 match :: forall a. (Web.ToHttpApiData a) => a -> Parser ()
 match = Match
 
@@ -59,6 +63,3 @@ rep (Regex @ty regex) = "/r(" <> regex <> ")"
 -- equals _ _ = False
 
 data Error = Error
-
-parse :: Parser a -> [Text.Text] -> (Either Error a, [Text.Text])
-parse = undefined

@@ -28,11 +28,13 @@ source-repository head
 library
   exposed-modules:
       Okapi
+      Okapi.Middleware
       Okapi.Route.Pattern
       Okapi.Headers
+      Okapi.Query
+      Okapi.Body
       Okapi.Secret
       Okapi.App
-      Okapi.App2
       Okapi.Route
       Okapi.Response
   other-modules:

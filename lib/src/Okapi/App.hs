@@ -46,7 +46,10 @@ import GHC.Natural qualified as Natural
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
+import Okapi.Body qualified as Body
 import Okapi.Headers qualified as Headers
+import Okapi.Middleware qualified as Middleware
+import Okapi.Query qualified as Query
 import Okapi.Response qualified as Response
 import Okapi.Route qualified as Route
 import Okapi.Secret qualified as Secret
@@ -62,14 +65,14 @@ data Atom (r :: [Type]) where
   Match :: forall a (r :: [Type]). (Web.ToHttpApiData a) => a -> [Atom r] -> Atom r
   Param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> a)] -> Atom r
   Regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> [Atom (r :> a)] -> Atom r
-  Splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (NonEmpty.NonEmpty r :> a)] -> Atom r
-  Route :: forall a (r :: [Type]). Route.Parser a -> [Atom (r :> a)] -> Atom r
+  Splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> NonEmpty.NonEmpty a)] -> Atom r
+  Route :: forall a (r :: [Type]). (Route.From a) => [Atom (r :> a)] -> Atom r
+  Query :: forall a (r :: [Type]). (Query.From a) => [Atom (r :> a)] -> Atom r
+  Headers :: forall a (r :: [Type]). (Headers.From a) => [Atom (r :> a)] -> Atom r
+  Body :: forall a (r :: [Type]). (Body.From a) => [Atom (r :> a)] -> Atom r
+  Apply :: forall a (r :: [Type]). (Middleware.To a) => Atom r -> Atom r
+  Respond :: forall a (r :: [Type]). (Response.To a) => [Atom (r :> a)] -> Atom r
   Method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
-  Headers :: forall a (r :: [Type]). Headers.Parser a -> [Atom (r :> a)] -> Atom r
-  Query :: forall a (r :: [Type]). Query.Parser a -> [Atom (r :> a)] -> Atom r
-  Body :: forall a (r :: [Type]). Body.Parser a -> [Atom (r :> a)] -> Atom r
-  Apply :: forall (r :: [Type]). Wai.Middleware -> Atom r -> Atom r
-  Respond :: forall a (r :: [Type]). Response.Builder a -> [Atom (r :> a)] -> Atom r
 
 type Handler :: [Type] -> (Type -> Type) -> Type
 type family Handler args env where
@@ -89,40 +92,55 @@ argsTest2 = \x -> \y -> \request -> do
   return $ Wai.responseLBS HTTP.status200 [] "world"
 
 match :: forall a (r :: [Type]). (Web.ToHttpApiData a) => a -> [Atom r] -> Atom r
-match = Match
+match = Match @a @r
 
 lit :: forall (r :: [Type]). Text.Text -> [Atom r] -> Atom r
 lit = match @Text.Text
 
 param :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> a)] -> Atom r
-param = Param
+param = Param @a @r
 
 regex :: forall a (r :: [Type]). (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> [Atom (r :> a)] -> Atom r
-regex = Regex
+regex = Regex @a @r
 
-splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (NonEmpty.NonEmpty r :> a)] -> Atom r
-splat = Splat
+splat :: forall a (r :: [Type]). (Web.FromHttpApiData a, Typeable.Typeable a) => [Atom (r :> NonEmpty.NonEmpty a)] -> Atom r
+splat = Splat @a @r
 
-route :: forall a (r :: [Type]). Route.Parser a -> [Atom (r :> a)] -> Atom r
-route = Route
+route :: forall a (r :: [Type]). (Route.From a) => [Atom (r :> a)] -> Atom r
+route = Route @a @r
+
+query :: forall a (r :: [Type]). (Query.From a) => [Atom (r :> a)] -> Atom r
+query = Query @a @r
+
+headers :: forall a (r :: [Type]). (Headers.From a) => [Atom (r :> a)] -> Atom r
+headers = Headers @a @r
+
+body :: forall a (r :: [Type]). (Body.From a) => [Atom (r :> a)] -> Atom r
+body = Body @a @r
+
+apply :: forall a (r :: [Type]). (Middleware.To a) => Atom r -> Atom r
+apply = Apply @a @r
+
+scope :: forall a m (r :: [Type]). (Route.From a, Middleware.To m) => Wai.Middleware -> [Atom (r :> a)] -> Atom r
+scope middleware children = apply @m @r $ route @a @r children
+
+respond :: forall a (r :: [Type]). (Response.To a) => [Atom (r :> a)] -> Atom r
+respond = Respond @a @r
 
 method :: forall env (r :: [Type]). HTTP.StdMethod -> (env Natural.~> IO) -> Handler r env -> Atom r
-method = Method
+method = Method @env @r
 
-headers :: forall a (r :: [Type]). Headers.Parser a -> [Atom (r :> a)] -> Atom r
-headers = Headers
-
-query :: forall a (r :: [Type]). Query.Parser a -> [Atom (r :> a)] -> Atom r
-query = Query
-
-body :: forall a (r :: [Type]). Body.Parser a -> [Atom (r :> a)] -> Atom r
-body = Body
-
-apply :: forall (r :: [Type]). Wai.Middleware -> Atom r -> Atom r
-apply = Apply
-
-respond :: forall a (r :: [Type]). Response.Builder a -> [Atom (r :> a)] -> Atom r
-respond = Respond
+endpoint ::
+  forall a env (r :: [Type]).
+  (Route.From a) =>
+  HTTP.StdMethod ->
+  (env Natural.~> IO) ->
+  Handler (r :> a) env ->
+  Atom r
+endpoint stdMethod transformation handler =
+  route @a
+    [ method stdMethod transformation handler
+    ]
 
 myTest = Warp.run 8080 $ test `withDefault` \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 

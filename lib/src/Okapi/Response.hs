@@ -193,5 +193,6 @@ has = Has
 -- equals (Has _) (Has _) = undefined
 -- equals _ _ = False
 
-build :: Builder a -> a
-build = undefined
+class To a where
+  builder :: Builder a
+  build :: ()
