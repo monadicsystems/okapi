@@ -123,56 +123,5 @@ class (ContentType a) => ToContentType a b | b -> a where
 data Response where
   Response ::
     forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type).
-    (ContentType contentType, ToContentType contentType resultType) =>
-    Headers headerKeys ->
-    resultType ->
+    (ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
     Response
-
-class (Enum a) => Tag a where
-  fromTag :: a -> Response
-
--- data Builder a where
---   FMap :: (a -> b) -> Builder a -> Builder b
---   Pure :: a -> Builder a
---   Apply :: Builder (a -> b) -> Builder a -> Builder b
---   With ::
---     forall
---       (status :: Natural.Natural)
---       (headerKeys :: [Exts.Symbol])
---       (contentType :: Type)
---       (resultType :: Type).
---     Builder
---       ( Headers headerKeys ->
---         resultType ->
---         Wai.Response
---       )
-
--- instance Functor Builder where
---   fmap = FMap
-
--- instance Applicative Builder where
---   pure = Pure
---   (<*>) = Apply
-
--- with ::
---   forall
---     (status :: Natural.Natural)
---     (headerKeys :: [Exts.Symbol])
---     (contentType :: Type)
---     (resultType :: Type).
---   Builder
---     ( Headers headerKeys ->
---       resultType ->
---       Wai.Response
---     )
--- with = With
-
--- equals :: Builder a -> Builder b -> Bool
--- equals (FMap _ r) (FMap _ r') = equals r r'
--- equals (Pure _) (Pure _) = True
--- equals (Apply af ap) (Apply af' ap') = equals af af' && equals ap ap'
--- equals (Has _) (Has _) = undefined
--- equals _ _ = False
-
--- class To a where
---   builder :: Builder a

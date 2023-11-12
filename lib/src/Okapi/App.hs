@@ -124,10 +124,17 @@ data Atom (r :: [Type]) where
   --   (Response.To a, Typeable.Typeable a, Typeable.Typeable r) =>
   --   [Atom (r :-> a)] ->
   --   Atom r
-  Responses ::
-    forall t (r :: [Type]).
-    (Response.Tag t, Typeable.Typeable t, Typeable.Typeable r) =>
-    [Atom (r :-> (t -> Response.Response))] ->
+  Responder ::
+    forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
+    ( Response.ContentType contentType
+    , Response.ToContentType contentType resultType
+    , Typeable.Typeable status
+    , Typeable.Typeable headerKeys
+    , Typeable.Typeable contentType
+    , Typeable.Typeable resultType
+    , Typeable.Typeable r
+    ) =>
+    [Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response))] ->
     Atom r
   Method ::
     forall env (r :: [Type]).
@@ -207,9 +214,9 @@ smush a1 a2 = case (a1, a2) of
         Nothing -> Nothing
       False -> Nothing
     (_, _) -> Nothing
-  (Responses @t1 @r1 children1, Responses @t2 @r2 children2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ responses @t1 @r1 $ smushes (children1 <> children2)
-    (_, _) -> Nothing
+  (Responder @s1 @hk1 @ct1 @rt1 @r1 children1, Responder @s2 @hk2 @ct2 @rt2 @r2 children2) -> case (Typeable.eqT @s1 @s2, Typeable.eqT @hk1 @hk2, Typeable.eqT @ct1 @ct2, Typeable.eqT @rt1 @rt2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl) -> Just $ responder @s1 @hk1 @ct1 @rt1 @r1 $ smushes (children1 <> children2)
+    (_, _, _, _, _) -> Nothing
   -- Method is not comparable
   (_, _) -> Nothing
 
@@ -319,12 +326,26 @@ scope ::
   Atom r
 scope tag children = apply @t @r tag $ route @a @r children
 
-responses ::
-  forall t (r :: [Type]).
-  (Response.Tag t, Typeable.Typeable t, Typeable.Typeable r) =>
-  [Atom (r :-> (t -> Response.Response))] ->
+-- responses ::
+--   forall t (headerKeys :: [Exts.Symbol]) resultType (r :: [Type]).
+--   (Response.Tag t, Typeable.Typeable t, Typeable.Typeable headerKeys, Typeable.Typeable resultType, Typeable.Typeable r) =>
+--   [Atom (r :-> (t -> (Response.Headers headerKeys -> resultType -> Wai.Response)))] ->
+--   Atom r
+-- responses = Responses @t @headerKeys @resultType @r
+
+responder ::
+  forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
+  ( Response.ContentType contentType
+  , Response.ToContentType contentType resultType
+  , Typeable.Typeable status
+  , Typeable.Typeable headerKeys
+  , Typeable.Typeable contentType
+  , Typeable.Typeable resultType
+  , Typeable.Typeable r
+  ) =>
+  [Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response))] ->
   Atom r
-responses = Responses @t @r
+responder = Responder @status @headerKeys @contentType @resultType @r
 
 method ::
   forall env (r :: [Type]).
@@ -351,6 +372,23 @@ myTest =
   Warp.run 8080 $ test `withDefault` \_ resp ->
     resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 
+data HelloWorldBody = HelloWorldBody deriving (Typeable.Typeable)
+
+data ByeWorldBody = ByeWorldBody {error :: Text.Text, randomN :: Int} deriving (Typeable.Typeable)
+
+textToBytes :: Text.Text -> LBSChar8.ByteString
+textToBytes = undefined
+
+instance Response.ContentType Text.Text where
+  contentTypeName = "text/plain"
+  contentTypeBody text = Response.BodyBytes $ textToBytes text
+
+instance Response.ToContentType Text.Text HelloWorldBody where
+  toContentType HelloWorldBody = "Hello World! :)"
+
+instance Response.ToContentType Text.Text ByeWorldBody where
+  toContentType (ByeWorldBody _error _randomN) = "Bye World... :("
+
 test =
   [ lit
       "hello"
@@ -373,20 +411,49 @@ test =
           ]
       ]
   , lit
-      "world"
+      "no"
       [ method HTTP.GET id \req -> do
           return $ Wai.responseLBS HTTP.status200 [] "world"
       , method HTTP.HEAD id \req -> do
           return $ Wai.responseLBS HTTP.status200 [] "dub"
       ]
   , lit
-      "world"
-      [ method HTTP.POST id \req -> do
-          return $ Wai.responseLBS HTTP.status200 [] "dub"
+      "some"
+      [ lit
+          "world"
+          [ myResponders
+              [ method HTTP.POST id \helloWorld byeWorld req -> do
+                  return $ Wai.responseLBS HTTP.status200 [] "dub"
+              ]
+          ]
       ]
   , method HTTP.GET id \req -> do
       return $ Wai.responseLBS HTTP.status200 [] "What's up??"
   ]
+
+-- myResponders ::
+--   forall (r :: [Type]).
+--   (Typeable.Typeable r) =>
+--   [ Atom
+--       ( r
+--           :-> (Response.Headers '["HELLO-HEADER"] -> HelloWorldBody -> Wai.Response)
+--           :-> (Response.Headers '["BYE-HEADER"] -> ByeWorldBody -> Wai.Response)
+--       )
+--   ] ->
+--   Atom r
+myResponders ::
+  [ Atom
+      '[ Response.Headers '["HELLO-HEADER"] ->
+         HelloWorldBody ->
+         Wai.Response
+       , Response.Headers '["BYE-HEADER"] -> ByeWorldBody -> Wai.Response
+       ]
+  ] ->
+  Atom '[]
+myResponders children =
+  responder @200 @'["HELLO-HEADER"] @Text.Text @HelloWorldBody
+    [ responder @204 @'["BYE-HEADER"] @Text.Text @ByeWorldBody children
+    ]
 
 testHandler1 :: Bool -> Wai.Request -> IO Wai.Response
 testHandler1 x request = do
@@ -458,7 +525,11 @@ withDefaultLoop middleware args tree backup request respond = case tree of
                   request
                   respond
               else withDefaultLoop middleware args remTree backup request respond
-      Responses @t subTree -> undefined
+      Responder @s @hk @ct @rt @r subTree -> undefined
+
+---- TODO: May need system for content-type negotiation???
+---- The accepted content types can be the same or more
+---- If Accept is less than the responseses content types, then I can't go down that tree
 
 {-
 withDefault :: Tree -> Wai.Middleware
