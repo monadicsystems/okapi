@@ -119,11 +119,6 @@ data Atom (r :: [Type]) where
     t ->
     Atom r ->
     Atom r
-  -- Response ::
-  --   forall a (r :: [Type]).
-  --   (Response.To a, Typeable.Typeable a, Typeable.Typeable r) =>
-  --   [Atom (r :-> a)] ->
-  --   Atom r
   Responder ::
     forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
     ( Response.ContentType contentType
@@ -134,7 +129,7 @@ data Atom (r :: [Type]) where
     , Typeable.Typeable resultType
     , Typeable.Typeable r
     ) =>
-    [Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response))] ->
+    Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
     Atom r
   Method ::
     forall env (r :: [Type]).
@@ -215,7 +210,9 @@ smush a1 a2 = case (a1, a2) of
       False -> Nothing
     (_, _) -> Nothing
   (Responder @s1 @hk1 @ct1 @rt1 @r1 children1, Responder @s2 @hk2 @ct2 @rt2 @r2 children2) -> case (Typeable.eqT @s1 @s2, Typeable.eqT @hk1 @hk2, Typeable.eqT @ct1 @ct2, Typeable.eqT @rt1 @rt2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl) -> Just $ responder @s1 @hk1 @ct1 @rt1 @r1 $ smushes (children1 <> children2)
+    (Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl) -> case children1 `smush` children2 of
+      Just newAtom -> Just $ responder @s1 @hk1 @ct1 @rt1 @r1 newAtom
+      Nothing -> Nothing
     (_, _, _, _, _) -> Nothing
   -- Method is not comparable
   (_, _) -> Nothing
@@ -343,7 +340,7 @@ responder ::
   , Typeable.Typeable resultType
   , Typeable.Typeable r
   ) =>
-  [Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response))] ->
+  Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
   Atom r
 responder = Responder @status @headerKeys @contentType @resultType @r
 
@@ -419,13 +416,11 @@ test =
       ]
   , lit
       "some"
-      [ lit
-          "world"
-          [ myResponders
-              [ method HTTP.POST id \helloWorld byeWorld req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] "dub"
-              ]
-          ]
+      [ myResponders
+          $ lit
+            "world"
+            [ method HTTP.POST id \helloWorld byeWorld req -> undefined
+            ]
       ]
   , method HTTP.GET id \req -> do
       return $ Wai.responseLBS HTTP.status200 [] "What's up??"
@@ -441,19 +436,18 @@ test =
 --       )
 --   ] ->
 --   Atom r
-myResponders ::
-  [ Atom
-      '[ Response.Headers '["HELLO-HEADER"] ->
-         HelloWorldBody ->
-         Wai.Response
-       , Response.Headers '["BYE-HEADER"] -> ByeWorldBody -> Wai.Response
-       ]
-  ] ->
-  Atom '[]
-myResponders children =
+-- myResponders ::
+--   [ Atom
+--       '[ Response.Headers '["HELLO-HEADER"] ->
+--          HelloWorldBody ->
+--          Wai.Response
+--        , Response.Headers '["BYE-HEADER"] -> ByeWorldBody -> Wai.Response
+--        ]
+--   ] ->
+--   Atom '[]
+myResponders =
   responder @200 @'["HELLO-HEADER"] @Text.Text @HelloWorldBody
-    [ responder @204 @'["BYE-HEADER"] @Text.Text @ByeWorldBody children
-    ]
+    . responder @204 @'["BYE-HEADER"] @Text.Text @ByeWorldBody
 
 testHandler1 :: Bool -> Wai.Request -> IO Wai.Response
 testHandler1 x request = do
@@ -525,7 +519,15 @@ withDefaultLoop middleware args tree backup request respond = case tree of
                   request
                   respond
               else withDefaultLoop middleware args remTree backup request respond
-      Responder @s @hk @ct @rt @r subTree -> undefined
+      Responder @s @hk @ct @rt @r child ->
+        let callback = Response.makeResponder @s @hk @ct @rt
+         in withDefaultLoop
+              middleware
+              (snoc args callback)
+              (child : [])
+              (withDefaultLoop middleware args remTree backup)
+              request
+              respond
 
 ---- TODO: May need system for content-type negotiation???
 ---- The accepted content types can be the same or more
