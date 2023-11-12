@@ -70,59 +70,60 @@ type family Handler args env where
   Handler (arg : args) env = arg -> Handler args env
 
 -- TODO: Potentially add type parameter to constrain middleware enum type
-data Atom (r :: [Type]) where
-  Choose ::
+data Node (r :: [Type]) where
+  Choice ::
     forall (r :: [Type]).
-    [Atom r] ->
-    Atom r
+    -- (Typeable.Typeable r) =>
+    [Node r] ->
+    Node r
   Match ::
     forall a (r :: [Type]).
     (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) =>
     a ->
-    Atom r ->
-    Atom r
+    Node r ->
+    Node r
   Param ::
     forall a (r :: [Type]).
     (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-    Atom (r :-> a) ->
-    Atom r
+    Node (r :-> a) ->
+    Node r
   Regex ::
     forall a (r :: [Type]).
     (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) =>
     Text.Text ->
-    Atom (r :-> a) ->
-    Atom r
+    Node (r :-> a) ->
+    Node r
   Splat ::
     forall a (r :: [Type]).
     (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-    Atom (r :-> NonEmpty.NonEmpty a) ->
-    Atom r
+    Node (r :-> NonEmpty.NonEmpty a) ->
+    Node r
   Route ::
     forall a (r :: [Type]).
     (Route.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    Atom (r :-> a) ->
-    Atom r
+    Node (r :-> a) ->
+    Node r
   Query ::
     forall a (r :: [Type]).
     (Query.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    Atom (r :-> a) ->
-    Atom r
+    Node (r :-> a) ->
+    Node r
   Headers ::
     forall a (r :: [Type]).
     (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    Atom (r :-> a) ->
-    Atom r
+    Node (r :-> a) ->
+    Node r
   Body ::
     forall a (r :: [Type]).
     (Body.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    Atom (r :-> a) ->
-    Atom r
+    Node (r :-> a) ->
+    Node r
   Apply ::
     forall t (r :: [Type]).
     (Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) =>
     t ->
-    Atom r ->
-    Atom r
+    Node r ->
+    Node r
   Responder ::
     forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
     ( Response.ContentType contentType
@@ -133,109 +134,76 @@ data Atom (r :: [Type]) where
     , Typeable.Typeable resultType
     , Typeable.Typeable r
     ) =>
-    Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
-    Atom r
+    Node (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
+    Node r
   Method ::
     forall env (r :: [Type]).
     (Typeable.Typeable r) =>
     HTTP.StdMethod ->
     (env Natural.~> IO) ->
     Handler r env ->
-    Atom r
+    Node r
 
 {-
-instance Eq (Atom r) where
-  a1 == a2 = case (a1, a2) of
-    (Match @a1 @r1 x _, Match @a2 @r2 y _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> x == y
-      (_, _) -> False
-    (Param @a1 @r1 _, Param @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    (Regex @a1 @r1 regex1 _, Regex @a2 @r2 regex2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> regex1 == regex2
-      (_, _) -> False
-    (Splat @a1 @r1 _, Splat @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    (Route @a1 @r1 _, Route @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    (Query @a1 @r1 _, Query @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    (Headers @a1 @r1 _, Headers @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    (Body @a1 @r1 _, Body @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    (Apply @t1 @r1 tag1 atom1, Apply @t2 @r2 tag2 atom2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> tag1 == tag2 && atom1 == atom2
-      (_, _) -> False
-    (Response @a1 @r1 _, Response @a2 @r2 _) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-      (Just Typeable.Refl, Just Typeable.Refl) -> True
-      (_, _) -> False
-    -- Method is not comparable TODO: ACTUALLY IT MAY BE POSSIBLE. AT LEAST PARTIALLY
-    (_, _) -> False
--}
-
-{-
-smush :: Atom r -> Atom r -> Maybe (Atom r)
+smush ::
+  forall (r :: [Type]).
+  (Typeable.Typeable r) =>
+  Node r ->
+  Node r ->
+  Maybe (Node r)
 smush a1 a2 = case (a1, a2) of
-  (Match @a1 @r1 x children1, Match @a2 @r2 y children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ match @a1 @r1 x $ smushes (children1 <> children2)
+  (Choice @r1 children1, Choice @r2 children2) -> case (Typeable.eqT @r1 @r2) of
+    Just Typeable.Refl -> Just $ choice @r1 (children1 <> children2)
+    _ -> Nothing
+  (Match @a1 @r1 x child1, Match @a2 @r2 y child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> if x == y then Just $ match @a1 @r1 x $ choice @r1 [child1, child2] else Nothing
     (_, _) -> Nothing
-  (Param @a1 @r1 children1, Param @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ param @a1 @r1 $ smushes (children1 <> children2)
+  (Param @a1 @r1 child1, Param @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ param @a1 @r1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _) -> Nothing
-  (Regex @a1 @r1 regex1 children1, Regex @a2 @r2 regex2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2, regex1 == regex2) of
-    (Just Typeable.Refl, Just Typeable.Refl, True) -> Just $ regex @a1 @r1 regex1 $ smushes (children1 <> children2)
+  (Regex @a1 @r1 regex1 child1, Regex @a2 @r2 regex2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2, regex1 == regex2) of
+    (Just Typeable.Refl, Just Typeable.Refl, True) -> Just $ regex @a1 @r1 regex1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _, _) -> Nothing
-  (Splat @a1 @r1 children1, Splat @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ splat @a1 @r1 $ smushes (children1 <> children2)
+  (Splat @a1 @r1 child1, Splat @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ splat @a1 @r1 $ choice @(r1 :-> NonEmpty.NonEmpty a1) [child1, child2]
     (_, _) -> Nothing
-  (Route @a1 @r1 children1, Route @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ route @a1 @r1 $ smushes (children1 <> children2)
+  (Route @a1 @r1 child1, Route @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ route @a1 @r1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _) -> Nothing
-  (Query @a1 @r1 children1, Query @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ query @a1 @r1 $ smushes (children1 <> children2)
+  (Query @a1 @r1 child1, Query @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ query @a1 @r1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _) -> Nothing
-  (Headers @a1 @r1 children1, Headers @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ headers @a1 @r1 $ smushes (children1 <> children2)
+  (Headers @a1 @r1 child1, Headers @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ headers @a1 @r1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _) -> Nothing
-  (Body @a1 @r1 children1, Body @a2 @r2 children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ body @a1 @r1 $ smushes (children1 <> children2)
+  (Body @a1 @r1 child1, Body @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl) -> Just $ body @a1 @r1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _) -> Nothing
   (Apply @t1 @r1 tag1 atom1, Apply @t2 @r2 tag2 atom2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
     (Just Typeable.Refl, Just Typeable.Refl) -> case tag1 == tag2 of
-      True -> case atom1 `smush` atom2 of
-        Just newAtom -> Just $ apply @t1 @r1 tag1 newAtom
-        Nothing -> Nothing
+      True -> Just $ apply @t1 @r1 tag1 $ choice @r1 [atom1, atom2]
       False -> Nothing
     (_, _) -> Nothing
-  (Responder @s1 @hk1 @ct1 @rt1 @r1 children1, Responder @s2 @hk2 @ct2 @rt2 @r2 children2) -> case (Typeable.eqT @s1 @s2, Typeable.eqT @hk1 @hk2, Typeable.eqT @ct1 @ct2, Typeable.eqT @rt1 @rt2, Typeable.eqT @r1 @r2) of
-    (Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl) -> case children1 `smush` children2 of
-      Just newAtom -> Just $ responder @s1 @hk1 @ct1 @rt1 @r1 newAtom
-      Nothing -> Nothing
+  (Responder @s1 @hk1 @ct1 @rt1 @r1 child1, Responder @s2 @hk2 @ct2 @rt2 @r2 child2) -> case (Typeable.eqT @s1 @s2, Typeable.eqT @hk1 @hk2, Typeable.eqT @ct1 @ct2, Typeable.eqT @rt1 @rt2, Typeable.eqT @r1 @r2) of
+    (Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl) -> Just $ responder @s1 @hk1 @ct1 @rt1 @r1 $ choice @(r1 :-> (Response.Headers hk1 -> rt1 -> Wai.Response)) [child1, child2]
     (_, _, _, _, _) -> Nothing
+  (Choice @r1 children, a2') -> Just $ choice @r1 (children <> [a2'])
+  (a1', Choice @r2 children) -> Just $ choice @r2 (a1' : children)
   -- Method is not comparable
   (_, _) -> Nothing
 -}
-
-{-
-smushes :: [Atom r] -> [Atom r]
-smushes [] = []
-smushes singleton@[atom] = singleton
-smushes (atom1 : atom2 : atoms) = case atom1 `smush` atom2 of
-  Just newAtom -> smushes $ newAtom : atoms
-  Nothing ->
-    List.concat
-      [ smushes (atom1 : atoms)
-      , smushes (atom2 : atoms)
-      , smushes atoms
-      ]
--}
+-- smushes :: Node r -> Node r
+-- smushes (Choice []) = Choice []
+-- smushes (Choice singleton@[atom]) = Choice singleton
+-- smushes (Choice (atom1 : atom2 : atoms)) = case atom1 `smush` atom2 of
+--   Just newAtom -> smushes $ Choice (newAtom : atoms)
+--   Nothing ->
+--     List.concat
+--       [ smushes (atom1 : atoms)
+--       , smushes (atom2 : atoms)
+--       , smushes atoms
+--       ]
+-- smushes atom = atom
 
 argsTest :: Handler '[] IO
 argsTest = \request -> do
@@ -249,92 +217,93 @@ argsTest2 :: Handler '[Int, Int] IO
 argsTest2 = \x -> \y -> \request -> do
   return $ Wai.responseLBS HTTP.status200 [] "world"
 
-choose ::
+choice ::
   forall (r :: [Type]).
-  [Atom r] ->
-  Atom r
-choose = Choose @r
+  -- (Typeable.Typeable r) =>
+  [Node r] ->
+  Node r
+choice = Choice @r
 
 match ::
   forall a (r :: [Type]).
   (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) =>
   a ->
-  Atom r ->
-  Atom r
+  Node r ->
+  Node r
 match = Match @a @r
 
 lit ::
   forall (r :: [Type]).
   (Typeable.Typeable r) =>
   Text.Text ->
-  Atom r ->
-  Atom r
+  Node r ->
+  Node r
 lit = match @Text.Text
 
 param ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 param = Param @a @r
 
 regex ::
   forall a (r :: [Type]).
   (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) =>
   Text.Text ->
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 regex = Regex @a @r
 
 splat ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-  Atom (r :-> NonEmpty.NonEmpty a) ->
-  Atom r
+  Node (r :-> NonEmpty.NonEmpty a) ->
+  Node r
 splat = Splat @a @r
 
 route ::
   forall a (r :: [Type]).
   (Route.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 route = Route @a @r
 
 query ::
   forall a (r :: [Type]).
   (Query.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 query = Query @a @r
 
 headers ::
   forall a (r :: [Type]).
   (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 headers = Headers @a @r
 
 body ::
   forall a (r :: [Type]).
   (Body.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 body = Body @a @r
 
 apply ::
   forall t (r :: [Type]).
   (Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) =>
   t ->
-  Atom r ->
-  Atom r
+  Node r ->
+  Node r
 apply = Apply @t @r
 
 scope ::
   forall a t (r :: [Type]).
   (Route.From a, Typeable.Typeable a, Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) =>
   t ->
-  Atom (r :-> a) ->
-  Atom r
+  Node (r :-> a) ->
+  Node r
 scope tag children = apply @t @r tag $ route @a @r children
 
 responder ::
@@ -347,8 +316,8 @@ responder ::
   , Typeable.Typeable resultType
   , Typeable.Typeable r
   ) =>
-  Atom (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
-  Atom r
+  Node (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
+  Node r
 responder = Responder @status @headerKeys @contentType @resultType @r
 
 method ::
@@ -357,7 +326,7 @@ method ::
   HTTP.StdMethod ->
   (env Natural.~> IO) ->
   Handler r env ->
-  Atom r
+  Node r
 method = Method @env @r
 
 endpoint ::
@@ -366,12 +335,16 @@ endpoint ::
   HTTP.StdMethod ->
   (env Natural.~> IO) ->
   Handler (r :-> a) env ->
-  Atom r
+  Node r
 endpoint stdMethod transformation handler =
   route @a $ method @env @(r :-> a) stdMethod transformation handler
 
 myTest =
-  Warp.run 8080 $ test `withDefault` \_ resp ->
+  Warp.run 8081 $ test `withDefault` \_ resp ->
+    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+
+myTest2 =
+  Warp.run 8082 $ test2 `withDefault` \_ resp ->
     resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 
 data HelloWorldBody = HelloWorldBody deriving (Typeable.Typeable)
@@ -391,53 +364,50 @@ instance Response.ToContentType Text.Text HelloWorldBody where
 instance Response.ToContentType Text.Text ByeWorldBody where
   toContentType (ByeWorldBody _error _randomN) = "Bye World... :("
 
-{-
+-- test :: _
 test =
-  [ lit
-      "hello"
-      [ lit
-          "world"
-          [ param @Bool
-              [ method HTTP.GET id testHandler1
-              , param @Int
-                  [ method HTTP.GET id testHandler2
-                  , lit
-                      "foo"
-                      [ method HTTP.POST id testHandler2
-                      ]
-                  , param @Float
-                      [ method HTTP.PUT id \bool1 int2 f3 req -> do
-                          return $ Wai.responseLBS HTTP.status200 [] "many args"
-                      ]
-                  ]
-              ]
+  myResponders
+    . lit "some"
+    . lit "world"
+    . param @Float
+    $ method
+      HTTP.GET
+      id
+      \helloWorld byeWorld float req -> do
+        undefined
+
+test2 =
+  choice
+    [ lit "some"
+        . lit "path"
+        $ choice
+          [ method HTTP.GET id \req -> do
+              undefined
+          , method HTTP.POST id \req -> do
+              undefined
           ]
-      ]
-  , lit
-      "no"
-      [ method HTTP.GET id \req -> do
-          return $ Wai.responseLBS HTTP.status200 [] "world"
-      , method HTTP.HEAD id \req -> do
-          return $ Wai.responseLBS HTTP.status200 [] "dub"
-      ]
-  , lit
-      "some"
-      [ myResponders
-          $ lit
-            "world"
-            [ method HTTP.POST id \helloWorld byeWorld req -> undefined
-            ]
-      ]
-  , method HTTP.GET id \req -> do
-      return $ Wai.responseLBS HTTP.status200 [] "What's up??"
-  ]
--}
-test =
-  (myResponders . lit "some" . lit "world") $ method
-    HTTP.GET
-    id
-    \helloWorld byeWorld req -> do
-      undefined
+    , param @Float
+        $ method HTTP.PUT id \req -> do
+          undefined
+    , choice
+        [ lit "lol"
+            . lit "foo"
+            . param @Int
+            $ method HTTP.GET id \n req -> do
+              undefined
+        , lit "bar"
+            . match @Int 10
+            $ method HTTP.PATCH id \req -> do
+              undefined
+        , lit "baz"
+            $ choice
+              [ method HTTP.GET id \req -> do
+                  undefined
+              , param @Float $ method HTTP.PUT id \f req -> do
+                  undefined
+              ]
+        ]
+    ]
 
 myResponders =
   responder @200 @'["HELLO-HEADER"] @Text.Text @HelloWorldBody
@@ -473,12 +443,12 @@ myFunc = fillHandler handlerTest argsTest
   argsTest :: HList [Bool, Int, Float]
   argsTest = HCons True (HCons 5 (HCons 5.8 HNil))
 
-withDefault :: Atom '[] -> Wai.Middleware
+withDefault :: Node '[] -> Wai.Middleware
 withDefault = undefined
 
 -- withDefaultLoop id HNil
 
-withDefaultLoop :: Wai.Middleware -> HList args -> Atom args -> Wai.Middleware
+withDefaultLoop :: Wai.Middleware -> HList args -> Node args -> Wai.Middleware
 withDefaultLoop = undefined
 
 {-
@@ -621,72 +591,72 @@ withDefault = loop id
               respond
 -}
 {-
-stringify :: Tree -> IO (Atom.Tree String)
+stringify :: Tree -> IO (Node.Tree String)
 stringify [] = return []
 stringify (tree:remForest) = case tree of
   Match value subForest -> do
     stringSubForest <- stringify subForest
     stringRemForest <- stringify remForest
     let string = "/" <> (Text.unpack $ Web.toUrlPiece value)
-    return ((Tree.Atom string stringSubForest) : stringRemForest)
+    return ((Tree.Node string stringSubForest) : stringRemForest)
   Param @t growSubForest -> do
     secret <- Secret.new @t
     stringSubForest <- stringify $ growSubForest secret
     stringRemForest <- stringify remForest
     let string = "/:" <> showType @t
-    return ((Tree.Atom string stringSubForest) : stringRemForest)
+    return ((Tree.Node string stringSubForest) : stringRemForest)
   Regex @t regex growSubForest -> do
     secret <- Secret.new @t
     stringSubForest <- stringify $ growSubForest secret
     stringRemForest <- stringify remForest
     let string = "/<" <> Text.unpack regex <> ">"
-    return ((Tree.Atom string stringSubForest) : stringRemForest)
+    return ((Tree.Node string stringSubForest) : stringRemForest)
   Splat @t growSubForest -> do
     secret <- Secret.new @(NonEmpty.NonEmpty ty)
     forest <- mapM $ produce secret
-    return $ Tree.Atom ("/*" <> showType @ty) forest
+    return $ Tree.Node ("/*" <> showType @ty) forest
   (Route @ty route produce) = do
     secret <- Secret.new @ty
     forest <- mapM $ produce secret
-    return $ Tree.Atom (Text.unpack (Route.rep route)) forest
+    return $ Tree.Node (Text.unpack (Route.rep route)) forest
   (Method m _ _) = do
-    return $ Tree.Atom (show m) []
+    return $ Tree.Node (show m) []
   (Apply _ api) = do
-    (Tree.Atom root subTrees) <- api
-    return $ Tree.Atom ("(" <> root <> ")") subTrees
+    (Tree.Node root subTrees) <- api
+    return $ Tree.Node ("(" <> root <> ")") subTrees
 -}
 {-
-forest :: Tree -> IO (Tree.Atom String)
-forest [] = return $ Tree.Atom ":root:" []
+forest :: Tree -> IO (Tree.Node String)
+forest [] = return $ Tree.Node ":root:" []
 forest apis = do
   forest' <- mapM tree apis
-  return $ Tree.Atom "\ESC[31m:root:\ESC[0m" forest'
+  return $ Tree.Node "\ESC[31m:root:\ESC[0m" forest'
   where
-    tree :: Atom -> IO (Tree.Atom String)
+    tree :: Node -> IO (Tree.Node String)
     tree (Match value apis) = do
       forest <- mapM tree apis
-      return $ Tree.Atom ("/" <> (Text.unpack $ Web.toUrlPiece value)) forest
+      return $ Tree.Node ("/" <> (Text.unpack $ Web.toUrlPiece value)) forest
     tree (Param @ty produce) = do
       secret <- Secret.new @ty
       forest <- mapM tree $ produce secret
-      return $ Tree.Atom ("/:" <> showType @ty) forest
+      return $ Tree.Node ("/:" <> showType @ty) forest
     tree (Regex @ty regex produce) = do
       secret <- Secret.new @ty
       forest <- mapM tree $ produce secret
-      return $ Tree.Atom ("/r<" <> Text.unpack regex <> ">") forest
+      return $ Tree.Node ("/r<" <> Text.unpack regex <> ">") forest
     tree (Splat @ty produce) = do
       secret <- Secret.new @(NonEmpty.NonEmpty ty)
       forest <- mapM tree $ produce secret
-      return $ Tree.Atom ("/*" <> showType @ty) forest
+      return $ Tree.Node ("/*" <> showType @ty) forest
     tree (Route @ty route produce) = do
       secret <- Secret.new @ty
       forest <- mapM tree $ produce secret
-      return $ Tree.Atom (Text.unpack (Route.rep route)) forest
+      return $ Tree.Node (Text.unpack (Route.rep route)) forest
     tree (Method m _ _) = do
-      return $ Tree.Atom (show m) []
+      return $ Tree.Node (show m) []
     tree (Apply _ api) = do
-      (Tree.Atom root subTrees) <- tree api
-      return $ Tree.Atom ("(" <> root <> ")") subTrees
+      (Tree.Node root subTrees) <- tree api
+      return $ Tree.Node ("(" <> root <> ")") subTrees
 
 showType :: forall a. (Typeable.Typeable a) => String
 showType = show . Typeable.typeRep $ Typeable.Proxy @a
