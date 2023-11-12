@@ -71,47 +71,51 @@ type family Handler args env where
 
 -- TODO: Potentially add type parameter to constrain middleware enum type
 data Atom (r :: [Type]) where
+  Choose ::
+    forall (r :: [Type]).
+    [Atom r] ->
+    Atom r
   Match ::
     forall a (r :: [Type]).
     (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) =>
     a ->
-    [Atom r] ->
+    Atom r ->
     Atom r
   Param ::
     forall a (r :: [Type]).
     (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :-> a)] ->
+    Atom (r :-> a) ->
     Atom r
   Regex ::
     forall a (r :: [Type]).
     (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) =>
     Text.Text ->
-    [Atom (r :-> a)] ->
+    Atom (r :-> a) ->
     Atom r
   Splat ::
     forall a (r :: [Type]).
     (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :-> NonEmpty.NonEmpty a)] ->
+    Atom (r :-> NonEmpty.NonEmpty a) ->
     Atom r
   Route ::
     forall a (r :: [Type]).
     (Route.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :-> a)] ->
+    Atom (r :-> a) ->
     Atom r
   Query ::
     forall a (r :: [Type]).
     (Query.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :-> a)] ->
+    Atom (r :-> a) ->
     Atom r
   Headers ::
     forall a (r :: [Type]).
     (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :-> a)] ->
+    Atom (r :-> a) ->
     Atom r
   Body ::
     forall a (r :: [Type]).
     (Body.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-    [Atom (r :-> a)] ->
+    Atom (r :-> a) ->
     Atom r
   Apply ::
     forall t (r :: [Type]).
@@ -176,6 +180,7 @@ instance Eq (Atom r) where
     (_, _) -> False
 -}
 
+{-
 smush :: Atom r -> Atom r -> Maybe (Atom r)
 smush a1 a2 = case (a1, a2) of
   (Match @a1 @r1 x children1, Match @a2 @r2 y children2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
@@ -216,7 +221,9 @@ smush a1 a2 = case (a1, a2) of
     (_, _, _, _, _) -> Nothing
   -- Method is not comparable
   (_, _) -> Nothing
+-}
 
+{-
 smushes :: [Atom r] -> [Atom r]
 smushes [] = []
 smushes singleton@[atom] = singleton
@@ -228,6 +235,7 @@ smushes (atom1 : atom2 : atoms) = case atom1 `smush` atom2 of
       , smushes (atom2 : atoms)
       , smushes atoms
       ]
+-}
 
 argsTest :: Handler '[] IO
 argsTest = \request -> do
@@ -241,11 +249,17 @@ argsTest2 :: Handler '[Int, Int] IO
 argsTest2 = \x -> \y -> \request -> do
   return $ Wai.responseLBS HTTP.status200 [] "world"
 
+choose ::
+  forall (r :: [Type]).
+  [Atom r] ->
+  Atom r
+choose = Choose @r
+
 match ::
   forall a (r :: [Type]).
   (Web.ToHttpApiData a, Eq a, Typeable.Typeable a, Typeable.Typeable r) =>
   a ->
-  [Atom r] ->
+  Atom r ->
   Atom r
 match = Match @a @r
 
@@ -253,14 +267,14 @@ lit ::
   forall (r :: [Type]).
   (Typeable.Typeable r) =>
   Text.Text ->
-  [Atom r] ->
+  Atom r ->
   Atom r
 lit = match @Text.Text
 
 param ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 param = Param @a @r
 
@@ -268,42 +282,42 @@ regex ::
   forall a (r :: [Type]).
   (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a, Typeable.Typeable r) =>
   Text.Text ->
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 regex = Regex @a @r
 
 splat ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :-> NonEmpty.NonEmpty a)] ->
+  Atom (r :-> NonEmpty.NonEmpty a) ->
   Atom r
 splat = Splat @a @r
 
 route ::
   forall a (r :: [Type]).
   (Route.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 route = Route @a @r
 
 query ::
   forall a (r :: [Type]).
   (Query.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 query = Query @a @r
 
 headers ::
   forall a (r :: [Type]).
   (Headers.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 headers = Headers @a @r
 
 body ::
   forall a (r :: [Type]).
   (Body.From a, Typeable.Typeable a, Typeable.Typeable r) =>
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 body = Body @a @r
 
@@ -319,16 +333,9 @@ scope ::
   forall a t (r :: [Type]).
   (Route.From a, Typeable.Typeable a, Middleware.Tag t, Eq t, Typeable.Typeable t, Typeable.Typeable r) =>
   t ->
-  [Atom (r :-> a)] ->
+  Atom (r :-> a) ->
   Atom r
 scope tag children = apply @t @r tag $ route @a @r children
-
--- responses ::
---   forall t (headerKeys :: [Exts.Symbol]) resultType (r :: [Type]).
---   (Response.Tag t, Typeable.Typeable t, Typeable.Typeable headerKeys, Typeable.Typeable resultType, Typeable.Typeable r) =>
---   [Atom (r :-> (t -> (Response.Headers headerKeys -> resultType -> Wai.Response)))] ->
---   Atom r
--- responses = Responses @t @headerKeys @resultType @r
 
 responder ::
   forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
@@ -361,9 +368,7 @@ endpoint ::
   Handler (r :-> a) env ->
   Atom r
 endpoint stdMethod transformation handler =
-  route @a
-    [ method @env @(r :-> a) stdMethod transformation handler
-    ]
+  route @a $ method @env @(r :-> a) stdMethod transformation handler
 
 myTest =
   Warp.run 8080 $ test `withDefault` \_ resp ->
@@ -386,6 +391,7 @@ instance Response.ToContentType Text.Text HelloWorldBody where
 instance Response.ToContentType Text.Text ByeWorldBody where
   toContentType (ByeWorldBody _error _randomN) = "Bye World... :("
 
+{-
 test =
   [ lit
       "hello"
@@ -425,26 +431,14 @@ test =
   , method HTTP.GET id \req -> do
       return $ Wai.responseLBS HTTP.status200 [] "What's up??"
   ]
+-}
+test =
+  (myResponders . lit "some" . lit "world") $ method
+    HTTP.GET
+    id
+    \helloWorld byeWorld req -> do
+      undefined
 
--- myResponders ::
---   forall (r :: [Type]).
---   (Typeable.Typeable r) =>
---   [ Atom
---       ( r
---           :-> (Response.Headers '["HELLO-HEADER"] -> HelloWorldBody -> Wai.Response)
---           :-> (Response.Headers '["BYE-HEADER"] -> ByeWorldBody -> Wai.Response)
---       )
---   ] ->
---   Atom r
--- myResponders ::
---   [ Atom
---       '[ Response.Headers '["HELLO-HEADER"] ->
---          HelloWorldBody ->
---          Wai.Response
---        , Response.Headers '["BYE-HEADER"] -> ByeWorldBody -> Wai.Response
---        ]
---   ] ->
---   Atom '[]
 myResponders =
   responder @200 @'["HELLO-HEADER"] @Text.Text @HelloWorldBody
     . responder @204 @'["BYE-HEADER"] @Text.Text @ByeWorldBody
@@ -479,10 +473,15 @@ myFunc = fillHandler handlerTest argsTest
   argsTest :: HList [Bool, Int, Float]
   argsTest = HCons True (HCons 5 (HCons 5.8 HNil))
 
-withDefault :: [Atom '[]] -> Wai.Middleware
-withDefault = withDefaultLoop id HNil
+withDefault :: Atom '[] -> Wai.Middleware
+withDefault = undefined
 
-withDefaultLoop :: Wai.Middleware -> HList args -> [Atom args] -> Wai.Middleware
+-- withDefaultLoop id HNil
+
+withDefaultLoop :: Wai.Middleware -> HList args -> Atom args -> Wai.Middleware
+withDefaultLoop = undefined
+
+{-
 withDefaultLoop middleware args tree backup request respond = case tree of
   [] -> backup request respond
   (node : remTree) ->
@@ -528,7 +527,7 @@ withDefaultLoop middleware args tree backup request respond = case tree of
               (withDefaultLoop middleware args remTree backup)
               request
               respond
-
+-}
 ---- TODO: May need system for content-type negotiation???
 ---- The accepted content types can be the same or more
 ---- If Accept is less than the responseses content types, then I can't go down that tree
