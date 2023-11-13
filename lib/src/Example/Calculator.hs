@@ -26,7 +26,7 @@
 
 {-# HLINT ignore "Use if" #-}
 
-module Example where
+module Example.Calculator where
 
 import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
