@@ -45,7 +45,7 @@ import Data.Typeable qualified as Typeable
 import Data.Vault.Lazy qualified as Vault
 import GHC.Exts qualified as Exts
 import GHC.Generics qualified as Generics
-import GHC.Natural qualified as Natural
+import GHC.TypeNats qualified as Nat
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
@@ -125,9 +125,10 @@ data Node (r :: [Type]) where
     Node r ->
     Node r
   Responder ::
-    forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
+    forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
     ( Response.ContentType contentType
     , Response.ToContentType contentType resultType
+    , Nat.KnownNat status
     , Typeable.Typeable status
     , Typeable.Typeable headerKeys
     , Typeable.Typeable contentType
@@ -144,14 +145,13 @@ data Node (r :: [Type]) where
     Handler r env ->
     Node r
 
-{-
-smush ::
+combine ::
   forall (r :: [Type]).
   (Typeable.Typeable r) =>
   Node r ->
   Node r ->
   Maybe (Node r)
-smush a1 a2 = case (a1, a2) of
+combine n1 n2 = case (n1, n2) of
   (Choice @r1 children1, Choice @r2 children2) -> case (Typeable.eqT @r1 @r2) of
     Just Typeable.Refl -> Just $ choice @r1 (children1 <> children2)
     _ -> Nothing
@@ -179,9 +179,9 @@ smush a1 a2 = case (a1, a2) of
   (Body @a1 @r1 child1, Body @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2, Typeable.eqT @r1 @r2) of
     (Just Typeable.Refl, Just Typeable.Refl) -> Just $ body @a1 @r1 $ choice @(r1 :-> a1) [child1, child2]
     (_, _) -> Nothing
-  (Apply @t1 @r1 tag1 atom1, Apply @t2 @r2 tag2 atom2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
+  (Apply @t1 @r1 tag1 node1, Apply @t2 @r2 tag2 node2) -> case (Typeable.eqT @t1 @t2, Typeable.eqT @r1 @r2) of
     (Just Typeable.Refl, Just Typeable.Refl) -> case tag1 == tag2 of
-      True -> Just $ apply @t1 @r1 tag1 $ choice @r1 [atom1, atom2]
+      True -> Just $ apply @t1 @r1 tag1 $ choice @r1 [node1, node2]
       False -> Nothing
     (_, _) -> Nothing
   (Responder @s1 @hk1 @ct1 @rt1 @r1 child1, Responder @s2 @hk2 @ct2 @rt2 @r2 child2) -> case (Typeable.eqT @s1 @s2, Typeable.eqT @hk1 @hk2, Typeable.eqT @ct1 @ct2, Typeable.eqT @rt1 @rt2, Typeable.eqT @r1 @r2) of
@@ -191,19 +191,18 @@ smush a1 a2 = case (a1, a2) of
   (a1', Choice @r2 children) -> Just $ choice @r2 (a1' : children)
   -- Method is not comparable
   (_, _) -> Nothing
--}
--- smushes :: Node r -> Node r
--- smushes (Choice []) = Choice []
--- smushes (Choice singleton@[atom]) = Choice singleton
--- smushes (Choice (atom1 : atom2 : atoms)) = case atom1 `smush` atom2 of
---   Just newAtom -> smushes $ Choice (newAtom : atoms)
---   Nothing ->
---     List.concat
---       [ smushes (atom1 : atoms)
---       , smushes (atom2 : atoms)
---       , smushes atoms
---       ]
--- smushes atom = atom
+
+flatten :: (Typeable.Typeable r) => Node r -> Node r
+flatten (Choice [node]) = node
+flatten (Choice (node1 : node2 : nodes)) = case node1 `combine` node2 of
+  Just newNode -> flatten $ choice (newNode : nodes)
+  Nothing ->
+    choice
+      [ flatten $ choice (node1 : nodes)
+      , flatten $ choice (node2 : nodes)
+      , flatten $ choice nodes
+      ]
+flatten node = node
 
 argsTest :: Handler '[] IO
 argsTest = \request -> do
@@ -307,9 +306,10 @@ scope ::
 scope tag children = apply @t @r tag $ route @a @r children
 
 responder ::
-  forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
+  forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
   ( Response.ContentType contentType
   , Response.ToContentType contentType resultType
+  , Nat.KnownNat status
   , Typeable.Typeable status
   , Typeable.Typeable headerKeys
   , Typeable.Typeable contentType
@@ -351,13 +351,6 @@ data HelloWorldBody = HelloWorldBody deriving (Typeable.Typeable)
 
 data ByeWorldBody = ByeWorldBody {error :: Text.Text, randomN :: Int} deriving (Typeable.Typeable)
 
-textToBytes :: Text.Text -> LBSChar8.ByteString
-textToBytes = undefined
-
-instance Response.ContentType Text.Text where
-  contentTypeName = "text/plain"
-  contentTypeBody text = Response.BodyBytes $ textToBytes text
-
 instance Response.ToContentType Text.Text HelloWorldBody where
   toContentType HelloWorldBody = "Hello World! :)"
 
@@ -366,15 +359,18 @@ instance Response.ToContentType Text.Text ByeWorldBody where
 
 -- test :: _
 test =
-  myResponders
-    . lit "some"
+  lit "some"
+    . myOtherResponders
     . lit "world"
     . param @Float
     $ method
       HTTP.GET
       id
-      \helloWorld byeWorld float req -> do
-        undefined
+      testHandle
+
+-- testHandle :: _
+testHandle = \helloWorld byeWorld watWorld float (req :: Wai.Request) -> do
+  undefined
 
 test2 =
   choice
@@ -387,18 +383,15 @@ test2 =
               undefined
           ]
     , param @Float
-        $ method HTTP.PUT id \req -> do
+        $ method HTTP.PUT id \float req -> do
           undefined
     , choice
-        [ lit "lol"
-            . lit "foo"
-            . param @Int
-            $ method HTTP.GET id \n req -> do
-              undefined
+        [ somePath $ method HTTP.GET id \helloWorld byeWorld n -> do
+            undefined
         , lit "bar"
             . match @Int 10
-            $ method HTTP.PATCH id \req -> do
-              undefined
+            . somePath
+            $ method HTTP.PATCH id undefined
         , lit "baz"
             $ choice
               [ method HTTP.GET id \req -> do
@@ -408,10 +401,72 @@ test2 =
               ]
         ]
     ]
+ where
+  somePath =
+    lit "lol"
+      . lit "foo"
+      . myResponders
+      . param @Int
 
 myResponders =
   responder @200 @'["HELLO-HEADER"] @Text.Text @HelloWorldBody
     . responder @204 @'["BYE-HEADER"] @Text.Text @ByeWorldBody
+
+myOtherResponders =
+  responder @200 @'["HELLO-HEADER"] @Text.Text @HelloWorldBody
+    . responder @500 @'["BYE-HEADER"] @Text.Text @ByeWorldBody
+    . responder @404 @'["WAT-HEADER"] @Text.Text @HelloWorldBody
+
+helloWorldApp =
+  helloWorld `withDefault` \_ resp ->
+    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+
+helloWorld = (lit "hello" . lit "world" . responder @200 @'[] @Text.Text @Text.Text . method HTTP.GET id) \greeting req -> undefined
+
+helloWorldApp' =
+  helloWorld' `withDefault` \_ resp ->
+    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+
+helloWorld' =
+  (responder @200 @'[] @Text.Text @Text.Text . method HTTP.GET id) \greet _req -> do
+    return $ greet Response.NoHeaders "Hello World!"
+
+helloWorldApp'' =
+  helloWorld'' `withDefault` \_ resp ->
+    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+
+helloWorldPath'' =
+  lit "hello"
+    . lit "world"
+    . responder @200 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+
+helloWorld'' = helloWorldPath'' \greeting _req -> do
+  return $ greeting Response.NoHeaders "Hello World!"
+
+worldApp =
+  world `withDefault` \_ resp ->
+    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+
+world =
+  choice
+    [ helloWorldPathz \hi _req -> do
+        return $ hi Response.NoHeaders "Hello World!"
+    , byeWorldPathz \bye _req -> do
+        return $ bye Response.NoHeaders "Bye World..."
+    ]
+
+helloWorldPathz =
+  lit "hello"
+    . lit "world"
+    . responder @200 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+
+byeWorldPathz =
+  lit "bye"
+    . lit "world"
+    . responder @500 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
 
 testHandler1 :: Bool -> Wai.Request -> IO Wai.Response
 testHandler1 x request = do
@@ -444,13 +499,98 @@ myFunc = fillHandler handlerTest argsTest
   argsTest = HCons True (HCons 5 (HCons 5.8 HNil))
 
 withDefault :: Node '[] -> Wai.Middleware
-withDefault = undefined
-
--- withDefaultLoop id HNil
+withDefault = withDefaultLoop id HNil
 
 withDefaultLoop :: Wai.Middleware -> HList args -> Node args -> Wai.Middleware
-withDefaultLoop = undefined
-
+withDefaultLoop middleware args root backup request respond = case root of
+  Choice [] -> backup request respond
+  Choice (node : nodes) -> case node of
+    Choice subNodes -> withDefaultLoop middleware args (choice (subNodes <> nodes)) backup request respond
+    Match value subNode ->
+      case Wai.pathInfo request of
+        [] -> withDefaultLoop middleware args (choice nodes) backup request respond
+        (pathHead : pathTail) ->
+          if pathHead == Web.toUrlPiece value
+            then do
+              let newRequest = request{Wai.pathInfo = pathTail}
+              withDefaultLoop middleware args subNode backup newRequest respond
+            else withDefaultLoop middleware args (choice nodes) backup request respond
+    Param @p subNode ->
+      case Wai.pathInfo request of
+        [] -> withDefaultLoop middleware args (choice nodes) backup request respond
+        (pathHead : pathTail) ->
+          case Web.parseUrlPiece @p pathHead of
+            Left _ -> withDefaultLoop middleware args (choice nodes) backup request respond
+            Right value -> do
+              let newRequest = request{Wai.pathInfo = pathTail}
+              withDefaultLoop middleware (snoc args value) subNode backup newRequest respond
+    Responder @s @hk @ct @rt @r subNode ->
+      let callback = Response.makeResponder @s @hk @ct @rt
+       in withDefaultLoop
+            middleware
+            (snoc args callback)
+            (choice [subNode])
+            (withDefaultLoop middleware args (choice nodes) backup)
+            request
+            respond
+    Method stdMethod transformation handler ->
+      case HTTP.parseMethod $ Wai.requestMethod request of
+        Left _ -> withDefaultLoop middleware args (choice nodes) backup request respond
+        Right stdMethod' ->
+          if stdMethod == stdMethod' && List.null (Wai.pathInfo request)
+            then
+              middleware
+                ( \request' respond' -> do
+                    response <- transformation $ fillHandler handler args request'
+                    respond' response
+                )
+                request
+                respond
+            else withDefaultLoop middleware args (choice nodes) backup request respond
+  root' -> withDefaultLoop middleware args (choice [root']) backup request respond
+{-
+  Match value subNode ->
+    case Wai.pathInfo request of
+      [] -> withDefaultLoop middleware args (choice nodes) backup request respond
+      (pathHead : pathTail) ->
+        if pathHead == Web.toUrlPiece value
+          then do
+            let newRequest = request{Wai.pathInfo = pathTail}
+            withDefaultLoop middleware args subNode backup newRequest respond
+          else withDefaultLoop middleware args (choice nodes) backup request respond
+  Param @p subNode ->
+    case Wai.pathInfo request of
+      [] -> withDefaultLoop middleware args (choice nodes) backup request respond
+      (pathHead : pathTail) ->
+        case Web.parseUrlPiece @p pathHead of
+          Left _ -> withDefaultLoop middleware args (choice nodes) backup request respond
+          Right value -> do
+            let newRequest = request{Wai.pathInfo = pathTail}
+            withDefaultLoop middleware (snoc args value) subNode backup newRequest respond
+  Responder @s @hk @ct @rt @r subNode ->
+    let callback = Response.makeResponder @s @hk @ct @rt
+     in withDefaultLoop
+          middleware
+          (snoc args callback)
+          (choice [subNode])
+          (withDefaultLoop middleware args (choice nodes) backup)
+          request
+          respond
+  Method stdMethod transformation handler ->
+    case HTTP.parseMethod $ Wai.requestMethod request of
+      Left _ -> withDefaultLoop middleware args (choice nodes) backup request respond
+      Right stdMethod' ->
+        if stdMethod == stdMethod' && List.null (Wai.pathInfo request)
+          then
+            middleware
+              ( \request' respond' -> do
+                  response <- transformation $ fillHandler handler args request'
+                  respond' response
+              )
+              request
+              respond
+          else withDefaultLoop middleware args (choice nodes) backup request respond
+-}
 {-
 withDefaultLoop middleware args tree backup request respond = case tree of
   [] -> backup request respond
