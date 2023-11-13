@@ -78,6 +78,7 @@ binaryF =
         . responder @403 @'[] @Text.Text @Text.Text
         . method HTTP.GET id
 
+calc :: Node '[]
 calc =
     lit "calc"
         . param @Operator
@@ -101,6 +102,29 @@ calc =
                         _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs one argument."
             ]
 
+calc' =
+    lit "calc"
+        . param @Operator
+        . param @Int
+        $ choice
+            [ binaryF \operator x y ok wrongArgs divByZeroErr _req -> do
+                return
+                    $ case operator of
+                        Add -> ok noHeaders (x + y)
+                        Sub -> ok noHeaders (x - y)
+                        Mul -> ok noHeaders (x * y)
+                        Div ->
+                            if y == 0
+                                then divByZeroErr noHeaders "You can't divide by 0."
+                                else ok noHeaders (div x y)
+                        _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs one argument."
+            , unaryF \operator x ok wrongArgs _req -> return
+                $ case operator of
+                    Sq -> ok noHeaders (x * x)
+                    Neg -> ok noHeaders (x * (-1))
+                    _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs two arguments."
+            ]
+
 main =
-    Warp.run 8003 $ calc `withDefault` \_ resp ->
+    Warp.run 8003 $ calc' `withDefault` \_ resp ->
         resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
