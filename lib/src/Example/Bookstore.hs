@@ -74,13 +74,6 @@ data UserPreference = UserPreference
     }
     deriving (Generics.Generic, Aeson.ToJSON, Show)
 
--- User authentication (replace with actual authentication mechanism)
--- authenticateUser :: Text -> Text -> Handler ()
--- authenticateUser username password =
---     if username == "demo" && password == "password"
---         then return ()
---         else throwError unauthorized401 "Invalid credentials"
-
 -- API for listing books, authors, and genres
 bookstoreApi =
     choice
@@ -100,16 +93,6 @@ bookstoreApi =
                         return $ case findBook bookId of
                             Just book -> ok noHeaders book
                             Nothing -> bookNotFound noHeaders "Book not found"
-                            {-
-                                            , lit "search"
-                                                . queryParam "title" @Text
-                                                . queryParam "author" @Text
-                                                . queryParam "genre" @Text
-                                                . responder @200 @'[] @Aeson.Value @[Book]
-                                                . method HTTP.GET id
-                                                $ \mTitle mAuthor mGenre _req ->
-                                                    return $ searchBooks mTitle mAuthor mGenre
-                            -}
                 ]
         , lit "authors"
             . responder @200 @'[] @Aeson.Value @[Author]
@@ -147,18 +130,6 @@ findBook :: Int -> Maybe Book
 findBook 1 = Just $ Book 1 "The Hobbit" 1 1
 findBook 2 = Just $ Book 2 "1984" 2 2
 findBook _ = Nothing
-
--- Helper function to search for books based on criteria
-{-
-searchBooks :: Maybe Text.Text -> Maybe Text.Text -> Maybe Text.Text -> [Book]
-searchBooks mTitle mAuthor mGenre =
-    filter matchesCriteria sampleBooks
-  where
-    matchesCriteria book =
-        maybe True (\title' -> title book == title') mTitle
-            && maybe True (\author' -> author book == author') mAuthor
-            && maybe True (\genre' -> genre book == genre') mGenre
--}
 
 -- Helper function to get user preferences (replace with database query)
 getUserPreferences :: Int -> Maybe [Book]
