@@ -95,7 +95,7 @@ calc =
                 $ case operator of
                     Sq -> ok noHeaders (x * x)
                     Neg -> ok noHeaders (x * (-1))
-                    _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs two arguments."
+                    _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs two arguments."
             , binaryF \operator x y ok wrongArgs divByZeroErr _req -> do
                 return
                     $ case operator of
@@ -106,7 +106,7 @@ calc =
                             if y == 0
                                 then divByZeroErr noHeaders "You can't divide by 0."
                                 else ok noHeaders (div x y)
-                        _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs one argument."
+                        _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs one argument."
             ]
 
 calc' =
@@ -123,12 +123,12 @@ calc' =
                         if y == 0
                             then divByZeroErr noHeaders "You can't divide by 0."
                             else ok noHeaders (div x y)
-                    _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs one argument."
+                    _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs one argument."
             , unaryF \operator x ok wrongArgs _req ->
                 return $ case operator of
                     Sq -> ok noHeaders (x * x)
                     Neg -> ok noHeaders (x * (-1))
-                    _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs two arguments."
+                    _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs two arguments."
             ]
 
 main =
