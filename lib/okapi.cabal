@@ -57,7 +57,6 @@ library
     , natural-transformation
     , network
     , pretty-simple
-    , recursion-schemes
     , regex-tdfa
     , text
     , vault

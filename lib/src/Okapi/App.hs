@@ -32,9 +32,6 @@ import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBSChar8
-import Data.Functor.Base qualified as Base
-import Data.Functor.Foldable qualified as Foldable
-import Data.Functor.Identity qualified as Identity
 import Data.Kind
 import Data.List qualified as List
 import Data.List.NonEmpty qualified as NonEmpty
