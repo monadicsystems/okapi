@@ -167,13 +167,14 @@ makeResponder ::
   forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type).
   (Nat.KnownNat status, ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
   (Headers headerKeys -> resultType -> Wai.Response)
-makeResponder _ result =
+makeResponder headerMap result =
   let status = natToStatus $ Nat.natVal @status Typeable.Proxy
       contentType = toContentType @contentType @resultType result
       bodyType = contentTypeBody @contentType contentType
       name = contentTypeName @contentType
+      headers = toWaiResponseHeaders headerMap
    in case bodyType of
-        BodyBytes bytes -> Wai.responseLBS status [] bytes
-        BodyBuilder builder -> Wai.responseBuilder status [] builder
-        BodyStream stream -> Wai.responseStream status [] stream
-        BodyFile path part -> Wai.responseFile status [] path part
+        BodyBytes bytes -> Wai.responseLBS status headers bytes
+        BodyBuilder builder -> Wai.responseBuilder status headers builder
+        BodyStream stream -> Wai.responseStream status headers stream
+        BodyFile path part -> Wai.responseFile status headers path part

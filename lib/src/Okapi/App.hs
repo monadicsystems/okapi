@@ -329,6 +329,18 @@ endpoint ::
 endpoint stdMethod transformation handler =
   route @a $ method @env @(r :-> a) stdMethod transformation handler
 
+any ::
+  forall env (r :: [Type]).
+  (Typeable.Typeable r) =>
+  (env Natural.~> IO) ->
+  Handler r env ->
+  Node r
+any transformation handler =
+  choice
+    [ Method @env @r stdMethod transformation handler
+    | stdMethod <- [minBound ..]
+    ]
+
 data HList (l :: [Type]) where
   HNil :: HList '[]
   HCons :: e -> HList l -> HList (e ': l)
