@@ -78,7 +78,6 @@ binaryHandler operator x y ok wrongArgs divByZeroErr _req =
       else ok noHeaders (div x y)
     _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs one argument."
 
-calc :: Node '[]
 calc = shared $ choice
   [ unary unaryHandler
   , binary binaryHandler
