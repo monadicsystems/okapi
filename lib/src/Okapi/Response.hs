@@ -25,6 +25,7 @@
 module Okapi.Response where
 
 import Control.Natural qualified as Natural
+import Data.Aeson qualified as Aeson
 import Data.Binary.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBSChar8
@@ -131,7 +132,11 @@ instance ContentType Text.Text where
   contentTypeName = "text/plain"
   contentTypeBody = BodyBytes . Text.encodeUtf8 . LText.fromStrict
 
-class (ContentType a) => ToContentType a b | b -> a where
+instance ContentType Aeson.Value where
+  contentTypeName = "application/json"
+  contentTypeBody = BodyBytes . Aeson.encode
+
+class (ContentType a) => ToContentType a b where
   toContentType :: b -> a
 
 instance ToContentType Text.Text Text.Text where
@@ -139,6 +144,9 @@ instance ToContentType Text.Text Text.Text where
 
 instance ToContentType Text.Text Int where
   toContentType = Text.pack . show
+
+instance (Aeson.ToJSON a) => ToContentType Aeson.Value a where
+  toContentType = Aeson.toJSON
 
 data Response where
   Response ::
@@ -159,10 +167,10 @@ makeResponder ::
   forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type).
   (Nat.KnownNat status, ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
   (Headers headerKeys -> resultType -> Wai.Response)
-makeResponder = \_ result ->
+makeResponder _ result =
   let status = natToStatus $ Nat.natVal @status Typeable.Proxy
-      contentType = toContentType result
-      bodyType = contentTypeBody contentType
+      contentType = toContentType @contentType @resultType result
+      bodyType = contentTypeBody @contentType contentType
       name = contentTypeName @contentType
    in case bodyType of
         BodyBytes bytes -> Wai.responseLBS status [] bytes

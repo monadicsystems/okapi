@@ -48,7 +48,14 @@ import Okapi.App {- qualified as App -}
 import Okapi.Response {- qualified as Response -}
 import Web.HttpApiData qualified as Web
 
-data Operator = Add | Sub | Mul | Div | Sq | Neg deriving (Show)
+data Operator
+    = Add
+    | Sub
+    | Mul
+    | Div
+    | Sq
+    | Neg
+    deriving (Show)
 
 isUnary :: Operator -> Bool
 isUnary Sq = True
@@ -107,19 +114,18 @@ calc' =
         . param @Operator
         . param @Int
         $ choice
-            [ binaryF \operator x y ok wrongArgs divByZeroErr _req -> do
-                return
-                    $ case operator of
-                        Add -> ok noHeaders (x + y)
-                        Sub -> ok noHeaders (x - y)
-                        Mul -> ok noHeaders (x * y)
-                        Div ->
-                            if y == 0
-                                then divByZeroErr noHeaders "You can't divide by 0."
-                                else ok noHeaders (div x y)
-                        _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs one argument."
-            , unaryF \operator x ok wrongArgs _req -> return
-                $ case operator of
+            [ binaryF \operator x y ok wrongArgs divByZeroErr _req ->
+                return $ case operator of
+                    Add -> ok noHeaders (x + y)
+                    Sub -> ok noHeaders (x - y)
+                    Mul -> ok noHeaders (x * y)
+                    Div ->
+                        if y == 0
+                            then divByZeroErr noHeaders "You can't divide by 0."
+                            else ok noHeaders (div x y)
+                    _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs one argument."
+            , unaryF \operator x ok wrongArgs _req ->
+                return $ case operator of
                     Sq -> ok noHeaders (x * x)
                     Neg -> ok noHeaders (x * (-1))
                     _ -> wrongArgs noHeaders $ (Text.pack $ show operator) <> " needs two arguments."

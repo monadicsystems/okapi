@@ -145,6 +145,8 @@ data Node (r :: [Type]) where
     Handler r env ->
     Node r
 
+-- TODO: Add tags to method/handlers like in reitit (Clojure)
+
 combine ::
   forall (r :: [Type]).
   (Typeable.Typeable r) =>

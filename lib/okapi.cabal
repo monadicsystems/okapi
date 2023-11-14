@@ -37,6 +37,7 @@ library
       Okapi.Route
       Okapi.Response
       Example.Calculator
+      Example.Bookstore
   other-modules:
       Paths_okapi
   hs-source-dirs:
