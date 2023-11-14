@@ -75,13 +75,6 @@ insertHeader ::
   Headers (headerKey : headerKeys)
 insertHeader = InsertHeader
 
-popHeader ::
-  forall (headerKey :: Exts.Symbol) headerValue (headerKeys :: [Exts.Symbol]).
-  (TypeLits.KnownSymbol headerKey, Web.ToHttpApiData headerValue) =>
-  Headers (headerKey : headerKeys) ->
-  (BS.ByteString, Headers headerKeys)
-popHeader (InsertHeader v rem) = (Web.toHeader v, rem)
-
 data HeaderKey (k :: Exts.Symbol) = HeaderKey
 
 -- | Membership test a type class (predicate)
