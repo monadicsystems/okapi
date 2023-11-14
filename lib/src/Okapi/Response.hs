@@ -27,8 +27,11 @@ module Okapi.Response where
 import Control.Natural qualified as Natural
 import Data.Aeson qualified as Aeson
 import Data.Binary.Builder qualified as Builder
+import Data.ByteString qualified as BS
+import Data.ByteString.Char8 qualified as Char8
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBSChar8
+import Data.CaseInsensitive qualified as CI
 import Data.Functor.Identity qualified as Identity
 import Data.Kind
 import Data.List qualified as List
@@ -43,6 +46,7 @@ import Data.Vault.Lazy qualified as Vault
 import GHC.Exts qualified as Exts
 import GHC.Generics qualified as Generics
 import GHC.Natural qualified as Natural
+import GHC.TypeLits qualified as TypeLits
 import GHC.TypeNats qualified as Nat
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
@@ -51,23 +55,11 @@ import Okapi.Route qualified as Route
 
 import Web.HttpApiData qualified as Web
 
-class ToHeader a where
-  toHeader :: a -> LBS.ByteString
-
-instance ToHeader LBS.ByteString where
-  toHeader = id
-
-type Elem :: Exts.Symbol -> [Exts.Symbol] -> Bool
-type family Elem x ys where
-  Elem x '[] = 'False
-  Elem x (x ': ys) = 'True
-  Elem x (y ': ys) = Elem x ys
-
 data Headers (headerKeys :: [Exts.Symbol]) where
   NoHeaders :: Headers '[]
   InsertHeader ::
     forall (headerKey :: Exts.Symbol) headerValue (headerKeys :: [Exts.Symbol]).
-    (ToHeader headerValue) =>
+    (TypeLits.KnownSymbol headerKey, Web.ToHttpApiData headerValue) =>
     headerValue ->
     Headers headerKeys ->
     Headers (headerKey : headerKeys)
@@ -77,46 +69,40 @@ noHeaders = NoHeaders
 
 insertHeader ::
   forall (headerKey :: Exts.Symbol) headerValue (headerKeys :: [Exts.Symbol]).
-  (ToHeader headerValue) =>
+  (TypeLits.KnownSymbol headerKey, Web.ToHttpApiData headerValue) =>
   headerValue ->
   Headers headerKeys ->
   Headers (headerKey : headerKeys)
 insertHeader = InsertHeader
 
-data HeaderKey (k :: Exts.Symbol) = HeaderKey
+popHeader ::
+  forall (headerKey :: Exts.Symbol) headerValue (headerKeys :: [Exts.Symbol]).
+  (TypeLits.KnownSymbol headerKey, Web.ToHttpApiData headerValue) =>
+  Headers (headerKey : headerKeys) ->
+  (BS.ByteString, Headers headerKeys)
+popHeader (InsertHeader v rem) = (Web.toHeader v, rem)
 
--- instance Exts.KnownSymbol k => Show (Var k) where
---     show = Exts.symbolVal
+data HeaderKey (k :: Exts.Symbol) = HeaderKey
 
 -- | Membership test a type class (predicate)
 class IsMember (headerKey :: Exts.Symbol) (headerKeys :: [Exts.Symbol]) where
   -- | Value-level lookup of elements from a map, via type class predicate
-  lookupHeader :: HeaderKey headerKey -> Headers headerKeys -> LBS.ByteString
-
--- instance {-# OVERLAPS #-} IsMember v t ((v ':-> t) ': m) where
---   lookp _ (Ext _ x _) = x
+  lookupHeader :: HeaderKey headerKey -> Headers headerKeys -> BS.ByteString
 
 instance {-# OVERLAPS #-} IsMember headerKey (headerKey ': rest) where
-  lookupHeader _ (InsertHeader v _) = toHeader v
-
--- instance {-# OVERLAPPABLE #-} IsMember v t m => IsMember v t (x ': m) where
---   lookp v (Ext _ _ m) = lookp v m
+  lookupHeader _ (InsertHeader v _) = Web.toHeader v
 
 instance {-# OVERLAPPABLE #-} (IsMember headerKey headerKeys) => IsMember headerKey (otherHeaderKey ': headerKeys) where
   lookupHeader k (InsertHeader _ tail) = lookupHeader k tail
 
-{-
-lookupHeader ::
-  forall (headerKey :: Exts.Symbol) (headerKeys :: [Exts.Symbol]).
-  (Elem headerKey headerKeys ~ True) =>
-  Headers headerKeys ->
-  LBS.ByteString
-lookupHeader NoHeaders = undefined
-lookupHeader (InsertHeader @k v rest) =
-  case Typeable.eqT @headerKey @k of
-    Nothing -> lookupHeader @headerKey rest
-    Just Typeable.Refl -> toHeader v
--}
+class WaiResponseHeaders (headerKeys :: [Exts.Symbol]) where
+  toWaiResponseHeaders :: Headers headerKeys -> HTTP.ResponseHeaders
+
+instance {-# OVERLAPS #-} WaiResponseHeaders '[] where
+  toWaiResponseHeaders _ = []
+
+instance {-# OVERLAPPABLE #-} (WaiResponseHeaders headerKeys) => WaiResponseHeaders (headerKey ': headerKeys) where
+  toWaiResponseHeaders (InsertHeader v tail) = [(CI.mk . Char8.pack $ TypeLits.symbolVal @headerKey Typeable.Proxy, Web.toHeader v)]
 
 data Body
   = BodyStream Wai.StreamingBody
@@ -125,7 +111,7 @@ data Body
   | BodyFile FilePath (Maybe Wai.FilePart)
 
 class ContentType a where
-  contentTypeName :: LBS.ByteString
+  contentTypeName :: BS.ByteString
   contentTypeBody :: a -> Body
 
 instance ContentType Text.Text where
@@ -154,25 +140,19 @@ data Response where
     (ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
     Response
 
-toWaiResponseHeaders ::
-  forall (headerKeys :: [Exts.Symbol]).
-  Headers headerKeys ->
-  HTTP.ResponseHeaders
-toWaiResponseHeaders headers = []
-
 natToStatus :: Nat.Nat -> HTTP.Status
 natToStatus n = toEnum $ fromEnum n
 
 makeResponder ::
   forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type).
-  (Nat.KnownNat status, ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
+  (Nat.KnownNat status, WaiResponseHeaders headerKeys, ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
   (Headers headerKeys -> resultType -> Wai.Response)
 makeResponder headerMap result =
   let status = natToStatus $ Nat.natVal @status Typeable.Proxy
       contentType = toContentType @contentType @resultType result
       bodyType = contentTypeBody @contentType contentType
       name = contentTypeName @contentType
-      headers = toWaiResponseHeaders headerMap
+      headers = ("Content-Type", name) : toWaiResponseHeaders headerMap
    in case bodyType of
         BodyBytes bytes -> Wai.responseLBS status headers bytes
         BodyBuilder builder -> Wai.responseBuilder status headers builder

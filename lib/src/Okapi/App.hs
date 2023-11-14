@@ -126,10 +126,11 @@ data Node (r :: [Type]) where
     Node r
   Responder ::
     forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
-    ( Response.ContentType contentType
-    , Response.ToContentType contentType resultType
-    , Nat.KnownNat status
+    ( Nat.KnownNat status
     , Typeable.Typeable status
+    , Response.WaiResponseHeaders headerKeys
+    , Response.ContentType contentType
+    , Response.ToContentType contentType resultType
     , Typeable.Typeable headerKeys
     , Typeable.Typeable contentType
     , Typeable.Typeable resultType
@@ -297,10 +298,11 @@ scope tag children = apply @t @r tag $ route @a @r children
 
 responder ::
   forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
-  ( Response.ContentType contentType
-  , Response.ToContentType contentType resultType
-  , Nat.KnownNat status
+  ( Nat.KnownNat status
   , Typeable.Typeable status
+  , Response.WaiResponseHeaders headerKeys
+  , Response.ContentType contentType
+  , Response.ToContentType contentType resultType
   , Typeable.Typeable headerKeys
   , Typeable.Typeable contentType
   , Typeable.Typeable resultType

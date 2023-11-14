@@ -114,7 +114,7 @@ userApi =
                 -- . authenticateUser -- Middleware for user authentication
                 . param @Int
                 . responder @200 @'[] @Aeson.Value @[Book]
-                . responder @500 @'[] @Aeson.Value @Text.Text
+                . responder @500 @'[] @Text.Text @Text.Text
                 . method HTTP.GET id
                 $ \userId ok userNotFound _req ->
                     return $ case getUserPreferences userId of
