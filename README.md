@@ -1,107 +1,90 @@
 # 🦓🦒Okapi
 
-Okapi is a micro framework for implementing HTTP servers.
+Okapi is a data-driven micro framework for implementing HTTP servers.
 
-- Ergonomic DSL for routing and parsing requests
+- Ergonomic DSLs for routing and parsing requests
 - Integrate Okapi with ANY monad stack or effect system
-- Automatically generate clients and OpenAPI specifications
+- Automatically generate clients and OpenAPI specifications (coming soon)
+- Programatically generate your API's structure
 
-The primary way to implement a server in Okapi is via *Endpoints*:
+## Hello World Example
 
 ```haskell
--- | Define Endpoints using an Applicative eDSL
-myEndpoint = Endpoint
-  GET
-  do
-    Path.static "index"
-    magicNumber <- Path.param @Int
-    pure magicNumber
-  do
-    x <- Query.param @Int "x"
-    y <- Query.option 10 $ Query.param @Int "y"
-    pure (x, y)
-  do
-    foo <- Body.json @Value
-    pure foo
-  do pure ()
-  do
-    itsOk <- Responder.json @Int HTTP.status200 do
-      addSecretNumber <- AddHeader.using @Int "X-SECRET"
-      pure addSecretNumber
-    pure itsOk
+helloWorld =
+  responder @200 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+    $ \greet _req -> return $ greet noHeaders "Hello World!"
 
--- | Define Handlers for Endpoints
-myHandler magicNumber (x, y) foo () responder = do
-  let newNumber = magicNumber + x * y
-  print newNumber
-  print foo
-  return $ responder (\addHeader response -> addHeader (newNumber * 100) response) newNumber
+main =
+  Warp.run 8000
+    . withDefault helloWorld
+    $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+```
 
--- | Combine Endpoints with Handlers to create Plans
-myPlan = Plan
-  myEndpoint
-  myHandler
+## Calculator Example
 
--- | Compose Plans with other Plans to create Servers
-myServer = Server
-  Nothing
-  default404
-  [ myPlan
-  , Plan myOtherEndpoint myOtherHandler
-  , anotherPlan
+```haskell
+data Operator
+    = Add
+    | Sub
+    | Mul
+    | Div
+    | Sq
+    | Neg
+    deriving (Show)
+
+instance Web.FromHttpApiData Operator where
+    parseUrlPiece "add" = Right Add
+    parseUrlPiece "sub" = Right Sub
+    parseUrlPiece "minus" = Right Sub
+    parseUrlPiece "mul" = Right Mul
+    parseUrlPiece "div" = Right Div
+    parseUrlPiece "neg" = Right Neg
+    parseUrlPiece "sq" = Right Sq
+    parseUrlPiece "square" = Right Sq
+    parseUrlPiece _ = Left "Can't parse operator..."
+
+shared =
+  lit "calc"
+    . param @Operator
+    . param @Int
+
+unary =
+  responder @200 @'[] @Text.Text @Int
+    . responder @500 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+
+unaryHandler operator x ok wrongArgs _req =
+  return $ case operator of
+    Sq  -> ok noHeaders (x * x)
+    Neg -> ok noHeaders (x * (-1))
+    _   -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs two arguments."
+
+binary =
+  param @Int
+    . responder @200 @'[] @Text.Text @Int
+    . responder @500 @'[] @Text.Text @Text.Text
+    . responder @403 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+
+binaryHandler operator x y ok wrongArgs divByZeroErr _req =
+  return $ case operator of
+    Add -> ok noHeaders (x + y)
+    Sub -> ok noHeaders (x - y)
+    Mul -> ok noHeaders (x * y)
+    Div ->
+      if y == 0
+      then divByZeroErr noHeaders "You can't divide by 0."
+      else ok noHeaders (div x y)
+    _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs one argument."
+
+calc = shared $ choice
+  [ unary unaryHandler
+  , binary binaryHandler
   ]
 
--- | Run your Servers using Warp
-main = Warp.run 3000 $ instantiate id myServer
+main =
+  Warp.run 8003
+    . withDefault calc
+    $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 ```
-
-An alternative, more concise way of defining a server in Okapi is via *Matchpoints*:
-
-```haskell
--- | Define Matchpoint patterns using PatternSynonyms,
---   ViewPatterns, and the same eDSL used for Endpoints
-pattern GetUsers optF <- Matchpoint
-  GET
-  ["users"]
-  _
-  (Body.eval $ Body.optional $ Body.json @Filter -> Ok optF)
-  _
-
-pattern AddUser user <- Matchpoint
-  POST                                     -- Method
-  ["users"]                                -- Path
-  _                                        -- Query
-  (Body.eval $ Body.json @User -> Ok user) -- Body
-  _                                        -- Headers
-
-pattern GetUsersByID userID <- Matchpoint
-  GET
-  (Path.eval $ Path.static "users" *> Path.param @UserID -> Ok userID)
-  _
-  ""
-  _
-
--- | Servers are just contextful functions from a Matchpoint to a Response
-type Server m = Matchpoint -> m Response
-
-myServer :: Server IO
-myServer = \case
-  GetUser -> do
-    ...
-  GetUserByID userID -> do
-    ...
-  AddUser user -> do
-    ...
-  _ -> do
-    ...
-
--- | Run your Server using Warp
-main = Warp.run 3000 $ instantiate id myServer
-```
-
-The advantadge of using Endpoints over Matchpoints is that Okapi can
-automatically generate specifications and clients for a server implemented
-with Endpoints, but not a server implemented with Matchpoints.
-
-On the flip side, a server implemented with Matchpoints will be more
-concise than a server implemented with Endpoints.

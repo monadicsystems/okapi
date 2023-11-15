@@ -160,7 +160,7 @@ blogRoute = do
   return ok
 ```
 
-Now if we run our parser, it will return a `200 OK` response if we send a `GET` request to the `/blog` endpoint. On top of being able to sequence parsers with `do` notation thanks to `Parser` being an instance of the `Monad` typeclass, we can also build parsers that "choose" between multiple subparsers. This is possible because the `Parser` type is also an instance of the `Alternative` typeclass, which provides the `<|>` operator.
+Now if we run our parser, it will return a `200 OK` response if we send a `GET` request to the `/blog` endpoint. On top of being able to sequence parsers with `do` notation thanks to `Parser` being an instance of the `Monad` typeclass, we can also build parsers that "choice" between multiple subparsers. This is possible because the `Parser` type is also an instance of the `Alternative` typeclass, which provides the `<|>` operator.
 
 Explain `<|>` then explain we can also parser combinators like `many`, `some`, `optional`, `option`, `takeWhile`, etc.
 
