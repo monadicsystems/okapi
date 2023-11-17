@@ -28,6 +28,7 @@
 
 module Okapi.App where
 
+import Control.Concurrent.Chan qualified as Chan
 import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
@@ -45,6 +46,7 @@ import GHC.Generics qualified as Generics
 import GHC.TypeNats qualified as Nat
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
+import Network.Wai.EventSource qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
 import Okapi.Body qualified as Body
 import Okapi.Headers qualified as Headers
@@ -134,6 +136,11 @@ data Node (r :: [Type]) where
     , Typeable.Typeable r
     ) =>
     Node (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
+    Node r
+  Events ::
+    forall (r :: [Type]).
+    (Typeable.Typeable r) =>
+    Chan.Chan Wai.ServerEvent ->
     Node r
   Method ::
     forall env (r :: [Type]).
@@ -340,6 +347,13 @@ any transformation handler =
     | stdMethod <- [minBound ..]
     ]
 
+events ::
+  forall (r :: [Type]).
+  (Typeable.Typeable r) =>
+  Chan.Chan Wai.ServerEvent ->
+  Node r
+events = Events @r
+
 data HList (l :: [Type]) where
   HNil :: HList '[]
   HCons :: e -> HList l -> HList (e ': l)
@@ -401,6 +415,12 @@ withDefaultLoop middleware args root backup request respond = case root of
                 request
                 respond
             else withDefaultLoop middleware args (choice nodes) backup request respond
+    Events source ->
+      middleware
+        ( \request' respond' -> Wai.eventSourceAppChan source request' respond'
+        )
+        request
+        respond
   root' -> withDefaultLoop middleware args (choice [root']) backup request respond
 
 ---- TODO: May need system for content-type negotiation???

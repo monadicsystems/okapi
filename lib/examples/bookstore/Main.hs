@@ -1,54 +1,21 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-{-# HLINT ignore "Use if" #-}
+module Main where
 
-module Example.Bookstore where
-
-import Control.Natural qualified as Natural
-import Data.Aeson qualified as Aeson
-import Data.Binary.Builder qualified as Builder
-import Data.ByteString.Lazy qualified as LBS
-import Data.ByteString.Lazy.Char8 qualified as LBSChar8
-import Data.Kind
-import Data.List qualified as List
-import Data.Text qualified as Text
-import Data.Type.Equality qualified as Equality
-import Data.Typeable qualified as Typeable
-import Data.Vault.Lazy qualified as Vault
-import GHC.Exts qualified as Exts
-import GHC.Generics qualified as Generics
-import GHC.Natural qualified as Natural
-import Network.HTTP.Types qualified as HTTP
-import Network.Wai qualified as Wai
-import Network.Wai.Handler.Warp qualified as Warp
-import Okapi.App {- qualified as App -}
-import Okapi.Response {- qualified as Response -}
-import Web.HttpApiData qualified as Web
+import qualified GHC.Generics as Generics
+import qualified Data.Aeson as Aeson
+import qualified Data.Text as Text
+import qualified Network.HTTP.Types as HTTP
+import qualified Network.Wai as Wai
+import qualified Network.Wai.Handler.Warp as Warp
+import Okapi.App
+import Okapi.Response
+import qualified Web.HttpApiData as Web
 
 -- Data types representing books, authors, genres, and user preferences
 data Book = Book

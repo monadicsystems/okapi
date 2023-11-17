@@ -1,42 +1,90 @@
-# Okapi
+# 🦓🦒Okapi
 
-A micro web framework based on monadic parsing. Official documentation [here](https://www.okapi.wiki/).
+Okapi is a data-driven micro framework for implementing HTTP servers.
 
-## Introduction
+- Ergonomic DSLs for routing and parsing requests
+- Integrate Okapi with ANY monad stack or effect system
+- Automatically generate clients and OpenAPI specifications (coming soon)
+- Programatically generate your API's structure
 
-**Okapi** is a micro web framework for Haskell.
-In contrast to other web frameworks in the Haskell ecosystem, Okapi is primarily concerned with being easy to understand and use, instead of extreme type safety.
-
-Here's an example of a simple web server:
+## Hello World Example
 
 ```haskell
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
+helloWorld =
+  responder @200 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+    $ \greet _req -> return $ greet noHeaders "Hello World!"
 
-import Data.Text
-import Okapi
-
-main :: IO ()
-main = run greet
-
-greet = do
-  methodGET
-  pathParam @Text `is` "greet"
-  name <- pathParam
-  pathEnd
-  return $ setPlaintext ("Hello " <> name <> "! I'm Okapi.") $ ok
+main =
+  Warp.run 8000
+    . withDefault helloWorld
+    $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
 ```
 
-Running this code will start a server on [localhost:3000](http://localhost:3000.org).
-If you go to [http://localhost:3000/greeting/Bob]() the server will respond with
+## Calculator Example
 
-```Hello Bob! I'm Okapi.```
+```haskell
+data Operator
+    = Add
+    | Sub
+    | Mul
+    | Div
+    | Sq
+    | Neg
+    deriving (Show)
 
-in plain text format.
+instance Web.FromHttpApiData Operator where
+    parseUrlPiece "add" = Right Add
+    parseUrlPiece "sub" = Right Sub
+    parseUrlPiece "minus" = Right Sub
+    parseUrlPiece "mul" = Right Mul
+    parseUrlPiece "div" = Right Div
+    parseUrlPiece "neg" = Right Neg
+    parseUrlPiece "sq" = Right Sq
+    parseUrlPiece "square" = Right Sq
+    parseUrlPiece _ = Left "Can't parse operator..."
 
-Okapi provides [monadic parsers](https://www.cs.nott.ac.uk/~pszgmh/monparsing.pdf) for extracting data from HTTP requests.
-Since they are monads, parsers can be used with all `Applicative`, `Alternative`, and `Monad` typeclass methods, plus other Haskell idioms like [parser combinators](https://hackage.haskell.org/package/parser-combinators).
-Because of this, parsers are very modular and can be easily composed with one another to fit your specific needs.
+shared =
+  lit "calc"
+    . param @Operator
+    . param @Int
 
-With Okapi, and the rest of the Haskell ecosystem, you can create anything from simple website servers to complex APIs for web apps.
-All you need to get started is basic knowledge about the structure of HTTP requests and an idea of how monadic parsing works.
+unary =
+  responder @200 @'[] @Text.Text @Int
+    . responder @500 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+
+unaryHandler operator x ok wrongArgs _req =
+  return $ case operator of
+    Sq  -> ok noHeaders (x * x)
+    Neg -> ok noHeaders (x * (-1))
+    _   -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs two arguments."
+
+binary =
+  param @Int
+    . responder @200 @'[] @Text.Text @Int
+    . responder @500 @'[] @Text.Text @Text.Text
+    . responder @403 @'[] @Text.Text @Text.Text
+    . method HTTP.GET id
+
+binaryHandler operator x y ok wrongArgs divByZeroErr _req =
+  return $ case operator of
+    Add -> ok noHeaders (x + y)
+    Sub -> ok noHeaders (x - y)
+    Mul -> ok noHeaders (x * y)
+    Div ->
+      if y == 0
+      then divByZeroErr noHeaders "You can't divide by 0."
+      else ok noHeaders (div x y)
+    _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs one argument."
+
+calc = shared $ choice
+  [ unary unaryHandler
+  , binary binaryHandler
+  ]
+
+main =
+  Warp.run 8003
+    . withDefault calc
+    $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+```
