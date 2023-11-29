@@ -1,15 +1,16 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Main where
 
-import qualified GHC.Generics as Generics
 import qualified Data.Aeson as Aeson
 import qualified Data.Text as Text
+import qualified Data.Tree as Tree
+import qualified GHC.Generics as Generics
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
@@ -90,6 +91,7 @@ userApi =
             ]
 
 -- Combining the Bookstore and User APIs
+api :: Node '[]
 api = choice [bookstoreApi, userApi]
 
 -- Helper function to find a book by ID (replace with database query)
@@ -107,5 +109,7 @@ getUserPreferences userId
 
 -- Run the API on port 8009
 main :: IO ()
-main = Warp.run 8009 . withDefault api $ \req resp ->
-    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+main = putStrLn $ Tree.drawTree $ stringTree $ api
+
+-- Warp.run 8009 . withDefault api $ \req resp ->
+--     resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."

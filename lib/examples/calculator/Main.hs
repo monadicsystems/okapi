@@ -33,13 +33,13 @@ instance Web.FromHttpApiData Operator where
     parseUrlPiece _ = Left "Can't parse operator..."
 
 shared =
-    lit "calc"
-        . param @Operator
+    lit' "calc"
+        . param' @Operator
         . param @Int
 
 unary =
-    responder @200 @'[] @Text.Text @Int
-        . responder @500 @'[] @Text.Text @Text.Text
+    responder' @200 @'[] @Text.Text @Int
+        . responder' @500 @'[] @Text.Text @Text.Text
         . method HTTP.GET id
 
 unaryHandler operator x ok wrongArgs _req =
@@ -49,10 +49,10 @@ unaryHandler operator x ok wrongArgs _req =
         _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs two arguments."
 
 binary =
-    param @Int
-        . responder @200 @'[] @Text.Text @Int
-        . responder @500 @'[] @Text.Text @Text.Text
-        . responder @403 @'[] @Text.Text @Text.Text
+    param' @Int
+        . responder' @200 @'[] @Text.Text @Int
+        . responder' @500 @'[] @Text.Text @Text.Text
+        . responder' @403 @'[] @Text.Text @Text.Text
         . method HTTP.GET id
 
 binaryHandler operator x y ok wrongArgs divByZeroErr _req =
@@ -66,14 +66,18 @@ binaryHandler operator x y ok wrongArgs divByZeroErr _req =
                 else ok noHeaders (div x y)
         _ -> wrongArgs noHeaders $ Text.pack (show operator) <> " needs one argument."
 
+calc :: Forest '[]
 calc =
-    shared
-        $ choice
-            [ unary unaryHandler
-            , binary binaryHandler
-            ]
+    [ shared
+        [ unary unaryHandler
+        , binary binaryHandler
+        ]
+    ]
 
-main =
-    Warp.run 8003
-        . withDefault calc
-        $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+main = do
+    printForest calc
+    print "Done"
+
+-- Warp.run 8003
+--     . withDefault calc
+--     $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."

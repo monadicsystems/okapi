@@ -1,15 +1,30 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Okapi.Route where
 
+import Control.Applicative
+import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
 import Data.Typeable qualified as Typeable
+import GHC.Exts qualified as Exts
+import GHC.Generics qualified as Generics
+import GHC.TypeLits qualified as TypeLits
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
@@ -17,9 +32,12 @@ data Parser a where
   FMap :: (a -> b) -> Parser a -> Parser b
   Pure :: a -> Parser a
   Apply :: Parser (a -> b) -> Parser a -> Parser b
-  Match :: forall a. (Web.ToHttpApiData a) => a -> Parser ()
+  Empty :: Parser a
+  Or :: Parser a -> Parser a -> Parser a
+  Match :: forall a. (Typeable.Typeable a, Web.ToHttpApiData a) => a -> Parser ()
   Param :: forall a. (Typeable.Typeable a, Web.FromHttpApiData a) => Parser a
-  Regex :: forall a. (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
+  Splat :: forall a. (Typeable.Typeable a, Web.FromHttpApiData a) => Parser (NonEmpty.NonEmpty a)
+  Regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
 
 instance Functor Parser where
   fmap = FMap
@@ -28,11 +46,161 @@ instance Applicative Parser where
   pure = Pure
   (<*>) = Apply
 
-class From a where
-  parser :: Parser a
-  parse :: ()
+instance Alternative Parser where
+  empty = Empty
+  (<|>) = Or
 
-match :: forall a. (Web.ToHttpApiData a) => a -> Parser ()
+data Lit (s :: Exts.Symbol) where
+  Lit :: Lit s
+
+-- data Capture (p :: *) where
+--   Capture :: forall p. (Web.FromHttpApiData p, Typeable.Typeable p) => Capture p
+
+data Nest (subRoute :: *) where
+  Nest :: forall subRoute. (Route subRoute, Typeable.Typeable subRoute) => subRoute -> Nest subRoute
+
+class Route a where
+  parser :: Parser a
+  default parser :: (Generics.Generic a, GenericParser (Generics.Rep a)) => Parser a
+  parser = fmap Generics.to genericParser
+  printer :: a -> [Text.Text]
+  default printer :: (Generics.Generic a, GenericPrinter (Generics.Rep a)) => a -> [Text.Text]
+  printer = genericPrinter . Generics.from
+
+class GenericParser f where
+  genericParser :: Parser (f a)
+
+instance GenericParser Generics.V1 where
+  genericParser = empty
+
+instance GenericParser Generics.U1 where
+  genericParser = pure Generics.U1
+
+instance (GenericParser f, GenericParser g) => GenericParser (f Generics.:+: g) where
+  genericParser =
+    fmap Generics.L1 genericParser <|> fmap Generics.R1 genericParser
+
+instance (GenericParser f, GenericParser g) => GenericParser (f Generics.:*: g) where
+  genericParser = liftA2 (Generics.:*:) genericParser genericParser
+
+-- A data type
+instance (GenericParser p) => GenericParser (Generics.M1 Generics.D f p) where
+  genericParser = fmap Generics.M1 genericParser
+
+-- Constructor with one or more arguments
+instance (Generics.Constructor f, GenericParser p) => GenericParser (Generics.M1 Generics.C f p) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in fmap Generics.M1 genericParser
+
+-- Constructor with no arguments
+instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericParser (Generics.M1 Generics.C f Generics.U1) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in do
+          lit $ Text.toLower $ Text.pack $ Generics.conName m
+          x <- fmap Generics.M1 genericParser
+          pure x
+
+-- A SubRoute
+instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (Nest a))) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in fmap (Generics.M1 . Generics.K1 . Nest) (parser @a)
+
+-- A Parameter
+instance {-# OVERLAPPABLE #-} (Generics.Selector f, Web.FromHttpApiData a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i a)) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in do
+          p <- param @a
+          pure (Generics.M1 $ Generics.K1 p)
+
+-- A Splat
+instance (Generics.Selector f, Web.FromHttpApiData a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in do
+          neList <- splat @a
+          pure (Generics.M1 $ Generics.K1 neList)
+
+-- A literal field
+instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (Lit s))) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in do
+          lit $ Text.pack $ TypeLits.symbolVal @s Typeable.Proxy
+          pure (Generics.M1 $ Generics.K1 Lit)
+
+class GenericPrinter f where
+  genericPrinter :: f a -> [Text.Text]
+
+instance GenericPrinter Generics.V1 where
+  genericPrinter _ = []
+
+-- instance GenericParser Generics.U1 where
+--   genericParser = pure Generics.U1
+
+instance (GenericPrinter f, GenericPrinter g) => GenericPrinter (f Generics.:+: g) where
+  genericPrinter (Generics.L1 l) = genericPrinter l
+  genericPrinter (Generics.R1 r) = genericPrinter r
+
+instance (GenericPrinter f, GenericPrinter g) => GenericPrinter (f Generics.:*: g) where
+  genericPrinter (l Generics.:*: r) = genericPrinter l <> genericPrinter r
+
+-- A data type
+instance (GenericPrinter p) => GenericPrinter (Generics.M1 Generics.D f p) where
+  genericPrinter (Generics.M1 x) = genericPrinter x
+
+-- Constructor with no arguments
+instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericPrinter (Generics.M1 Generics.C f Generics.U1) where
+  genericPrinter _ =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in [Text.toLower $ Text.pack $ Generics.conName m]
+
+-- Constructor with one or more arguments
+instance (Generics.Constructor f, GenericPrinter p) => GenericPrinter (Generics.M1 Generics.C f p) where
+  genericPrinter (Generics.M1 x) =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in genericPrinter x
+
+-- A SubRoute
+instance {-# OVERLAPPABLE #-} (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (Nest a))) where
+  genericPrinter (Generics.M1 (Generics.K1 (Nest x))) =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in printer x
+
+-- A Parameter
+instance {-# OVERLAPPABLE #-} (Generics.Selector f, Web.ToHttpApiData a, Web.FromHttpApiData a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i a)) where
+  genericPrinter (Generics.M1 (Generics.K1 x)) =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in [Web.toUrlPiece x]
+
+-- A Splat
+instance (Generics.Selector f, Web.FromHttpApiData a, Web.ToHttpApiData a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
+  genericPrinter (Generics.M1 (Generics.K1 x)) =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in map Web.toUrlPiece $ NonEmpty.toList x
+
+-- A literal field
+instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (Lit s))) where
+  genericPrinter (Generics.M1 (Generics.K1 _)) =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in [Text.pack $ TypeLits.symbolVal @s Typeable.Proxy]
+
+match :: forall a. (Typeable.Typeable a, Web.ToHttpApiData a) => a -> Parser ()
 match = Match
 
 lit :: Text.Text -> Parser ()
@@ -41,16 +209,19 @@ lit = Match @Text.Text
 param :: (Typeable.Typeable a, Web.FromHttpApiData a) => Parser a
 param = Param
 
-regex :: forall a. (Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
+splat :: (Typeable.Typeable a, Web.FromHttpApiData a) => Parser (NonEmpty.NonEmpty a)
+splat = Splat
+
+regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
 regex = Regex
 
-rep :: Parser a -> Text.Text
-rep (FMap _ dsl) = rep dsl
-rep (Pure x) = ""
-rep (Apply aF aX) = rep aF <> rep aX
-rep (Match t) = "/" <> Web.toUrlPiece t
-rep (Param @p) = "/:" <> Text.pack (show . Typeable.typeRep $ Typeable.Proxy @p)
-rep (Regex @ty regex) = "/r(" <> regex <> ")"
+-- allRoutes :: Parser a -> [Text.Text]
+-- allRoutes (FMap _ dsl) = allRoutes dsl
+-- allRoutes (Pure x) = ""
+-- allRoutes (Apply aF aX) = allRoutes aF <> allRoutes aX
+-- allRoutes (Match t) = "/" <> Web.toUrlPiece t
+-- allRoutes (Param @p) = "/:" <> Text.pack (show . Typeable.typeRep $ Typeable.Proxy @p)
+-- allRoutes (Regex @ty regex) = "/r(" <> regex <> ")"
 
 -- equals :: Parser a -> Parser b -> Bool
 -- equals (FMap _ r) (FMap _ r') = equals r r'
@@ -63,3 +234,13 @@ rep (Regex @ty regex) = "/r(" <> regex <> ")"
 -- equals _ _ = False
 
 data Error = Error
+
+data MyRoutes
+  = Student {path :: Lit "student", firstName :: Text.Text, lastName :: Text.Text}
+  | StudentGrades {path' :: Lit "student", firstName :: Text.Text, lastName :: Text.Text, rem :: Lit "grades"}
+  | Hello
+  | Baz {path'' :: Lit "baz", subRoute :: Nest SubRoute}
+  deriving (Generics.Generic, Route)
+
+data SubRoute = SubRoute {path :: Lit "student", foo :: Int, bar :: Float}
+  deriving (Generics.Generic, Route)
