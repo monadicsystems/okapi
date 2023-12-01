@@ -19,6 +19,7 @@
 module Okapi.Route where
 
 import Control.Applicative
+import Control.Applicative.Combinators.NonEmpty qualified as Combinators
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
 import Data.Typeable qualified as Typeable
@@ -53,11 +54,10 @@ instance Alternative Parser where
 data Lit (s :: Exts.Symbol) where
   Lit :: Lit s
 
--- data Capture (p :: *) where
---   Capture :: forall p. (Web.FromHttpApiData p, Typeable.Typeable p) => Capture p
-
+{-
 data Nest (subRoute :: *) where
   Nest :: forall subRoute. (Route subRoute, Typeable.Typeable subRoute) => subRoute -> Nest subRoute
+-}
 
 class Route a where
   parser :: Parser a
@@ -66,6 +66,22 @@ class Route a where
   printer :: a -> [Text.Text]
   default printer :: (Generics.Generic a, GenericPrinter (Generics.Rep a)) => a -> [Text.Text]
   printer = genericPrinter . Generics.from
+
+instance Route Int where
+  parser = param
+  printer = pure . Web.toUrlPiece
+
+instance Route Float where
+  parser = param
+  printer = pure . Web.toUrlPiece
+
+instance Route Text.Text where
+  parser = param
+  printer = pure . Web.toUrlPiece
+
+-- instance (Web.FromHttpApiData a, Web.ToHttpApiData a) => Route a where
+--   parser = param @a
+--   printer = pure . Web.toUrlPiece
 
 class GenericParser f where
   genericParser :: Parser (f a)
@@ -87,13 +103,6 @@ instance (GenericParser f, GenericParser g) => GenericParser (f Generics.:*: g) 
 instance (GenericParser p) => GenericParser (Generics.M1 Generics.D f p) where
   genericParser = fmap Generics.M1 genericParser
 
--- Constructor with one or more arguments
-instance (Generics.Constructor f, GenericParser p) => GenericParser (Generics.M1 Generics.C f p) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in fmap Generics.M1 genericParser
-
 -- Constructor with no arguments
 instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericParser (Generics.M1 Generics.C f Generics.U1) where
   genericParser =
@@ -104,29 +113,38 @@ instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericParser (Generics
           x <- fmap Generics.M1 genericParser
           pure x
 
+-- Constructor with one or more arguments
+instance (Generics.Constructor f, GenericParser p) => GenericParser (Generics.M1 Generics.C f p) where
+  genericParser =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in fmap Generics.M1 genericParser
+
+{-
 -- A SubRoute
 instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (Nest a))) where
   genericParser =
     let m :: Generics.M1 i f p a
         m = undefined
      in fmap (Generics.M1 . Generics.K1 . Nest) (parser @a)
+-}
 
--- A Parameter
-instance {-# OVERLAPPABLE #-} (Generics.Selector f, Web.FromHttpApiData a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i a)) where
+-- A Parameter/SubRoute
+instance {-# OVERLAPPABLE #-} (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i a)) where
   genericParser =
     let m :: Generics.M1 i f p a
         m = undefined
      in do
-          p <- param @a
+          p <- parser @a
           pure (Generics.M1 $ Generics.K1 p)
 
 -- A Splat
-instance (Generics.Selector f, Web.FromHttpApiData a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
+instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
   genericParser =
     let m :: Generics.M1 i f p a
         m = undefined
      in do
-          neList <- splat @a
+          neList <- Combinators.some $ parser @a
           pure (Generics.M1 $ Generics.K1 neList)
 
 -- A literal field
@@ -158,13 +176,6 @@ instance (GenericPrinter f, GenericPrinter g) => GenericPrinter (f Generics.:*: 
 instance (GenericPrinter p) => GenericPrinter (Generics.M1 Generics.D f p) where
   genericPrinter (Generics.M1 x) = genericPrinter x
 
--- Constructor with no arguments
-instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericPrinter (Generics.M1 Generics.C f Generics.U1) where
-  genericPrinter _ =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in [Text.toLower $ Text.pack $ Generics.conName m]
-
 -- Constructor with one or more arguments
 instance (Generics.Constructor f, GenericPrinter p) => GenericPrinter (Generics.M1 Generics.C f p) where
   genericPrinter (Generics.M1 x) =
@@ -172,26 +183,26 @@ instance (Generics.Constructor f, GenericPrinter p) => GenericPrinter (Generics.
         m = undefined
      in genericPrinter x
 
--- A SubRoute
-instance {-# OVERLAPPABLE #-} (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (Nest a))) where
-  genericPrinter (Generics.M1 (Generics.K1 (Nest x))) =
+-- Constructor with no arguments
+instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericPrinter (Generics.M1 Generics.C f Generics.U1) where
+  genericPrinter _ =
+    let m :: Generics.M1 i f p a
+        m = undefined
+     in [Text.toLower $ Text.pack $ Generics.conName m]
+
+-- A Parameter/Sub Route
+instance {-# OVERLAPPABLE #-} (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i a)) where
+  genericPrinter (Generics.M1 (Generics.K1 x)) =
     let m :: Generics.M1 i f p a
         m = undefined
      in printer x
 
--- A Parameter
-instance {-# OVERLAPPABLE #-} (Generics.Selector f, Web.ToHttpApiData a, Web.FromHttpApiData a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i a)) where
-  genericPrinter (Generics.M1 (Generics.K1 x)) =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in [Web.toUrlPiece x]
-
 -- A Splat
-instance (Generics.Selector f, Web.FromHttpApiData a, Web.ToHttpApiData a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
+instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
   genericPrinter (Generics.M1 (Generics.K1 x)) =
     let m :: Generics.M1 i f p a
         m = undefined
-     in map Web.toUrlPiece $ NonEmpty.toList x
+     in concat $ map printer $ NonEmpty.toList x
 
 -- A literal field
 instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (Lit s))) where
@@ -239,7 +250,7 @@ data MyRoutes
   = Student {path :: Lit "student", firstName :: Text.Text, lastName :: Text.Text}
   | StudentGrades {path' :: Lit "student", firstName :: Text.Text, lastName :: Text.Text, rem :: Lit "grades"}
   | Hello
-  | Baz {path'' :: Lit "baz", subRoute :: Nest SubRoute}
+  | Baz {path'' :: Lit "baz", subRoute :: SubRoute}
   deriving (Generics.Generic, Route)
 
 data SubRoute = SubRoute {path :: Lit "student", foo :: Int, bar :: Float}

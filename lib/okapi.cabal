@@ -63,6 +63,7 @@ library
     , wai-extra
     , wai-logger
     , warp
+    , parser-combinators
   default-language: Haskell2010
 
 executable hello-world
