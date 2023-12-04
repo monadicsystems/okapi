@@ -52,7 +52,7 @@ instance Alternative Parser where
   (<|>) = Or
 
 data Lit (s :: Exts.Symbol) where
-  Lit :: Lit s
+  Lit :: (TypeLits.KnownSymbol s) => Lit s
 
 {-
 data Nest (subRoute :: *) where

@@ -8,6 +8,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedRecordDot #-}
@@ -21,6 +22,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use if" #-}
@@ -41,8 +43,10 @@ import Data.Tree.Knuth.Forest qualified as Knuth
 import Data.Type.Equality qualified as Equality
 import Data.Typeable qualified as Typeable
 import Data.Vault.Lazy qualified as Vault
+import Data.Void qualified as Void
 import GHC.Exts qualified as Exts
 import GHC.Generics qualified as Generics
+import GHC.TypeLits qualified as TypeLits
 import GHC.TypeNats qualified as Nat
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
@@ -65,60 +69,144 @@ type family (:->) (a :: [Type]) (b :: Type) where
 type Handler :: [Type] -> (Type -> Type) -> Type
 type family Handler args env where
   Handler '[] env = Wai.Request -> env Wai.Response
+  -- Handler (Route.Lit arg : args) env = Handler args env
   Handler (arg : args) env = arg -> Handler args env
 
-type Forest r = [Tree r]
+-- Need to pass `r :: [Type]` type variable for args
+type TypeTree :: Type
+data TypeTree where
+  TypeNode :: Type -> TypeForest -> TypeTree
+
+type TypeLeaf a = TypeNode a '[]
+
+type TypeForest :: Type
+type TypeForest = [TypeTree]
+
+type Foo :: TypeForest
+type Foo =
+  '[ TypeNode
+      (Route.Lit "hello")
+      '[ TypeNode
+          (Route.Lit "world")
+          '[ TypeNode Int '[]
+           ]
+       ]
+   ]
+
+-- data TyForest where
+--   TyForest :: forall (tts :: [TyTree]). TyForest
+
+-- Types in r should be equal to all the node type values of the forest's children
+-- You could insure that each level of the tree has unique node types with no overlapping node types
+-- type Forest :: [Type] -> TypeForest -> Type
+-- type Forest r f = GenType r f
+
+-- type GenType :: [Type] -> TypeForest -> Type
+-- type family GenType args typeForest where
+--   GenType path '[] = '[]
+--   GenType pathz (t : ts) = Tree pathz t ': GenType pathz ts
+
+{-
+data Forest (r :: [Type]) (f :: TypeForest) where
+  Forest :: forall (r :: [Type]) (f :: TypeForest) (t :: TypeTree) (x :: Type). [Tree x r t] -> Forest r f
+
+forest ::
+  forall (r :: [Type]) (f :: TypeForest) (t :: TypeTree) (x :: Type).
+  [Tree x r t] ->
+  Forest r f
+forest = Forest
+-}
+
+test ::
+  Tree
+    '[]
+    ( 'TypeNode
+        Int
+        '[ 'TypeNode
+            (Route.Lit "hello")
+            '[ 'TypeNode
+                (Route.Lit "world")
+                '[ 'TypeNode Float '[]]
+             ]
+         ] ::
+        TypeTree
+    )
+test =
+  Match @Int
+    5
+    ( Lit @"hello"
+        ( Lit @"world"
+            ( Param @Float
+                Empty
+                :<|> Empty
+            )
+            :<|> Empty
+        )
+        :<|> Empty
+    )
+
+test' = test :<|> (test :<|> Empty)
+
+data Forest (r :: [Type]) (f :: TypeForest) where
+  Empty :: forall (r :: [Type]). Forest r '[]
+  (:<|>) :: forall (r :: [Type]) (t :: TypeTree) (f :: TypeForest). Tree r t -> Forest r f -> Forest r (t : f)
 
 -- TODO: Potentially add type parameter to constrain middleware enum type
-data Tree (r :: [Type]) where
+data Tree (r :: [Type]) (t :: TypeTree) where
   Match ::
-    forall a (r :: [Type]).
-    (Show a, Web.ToHttpApiData a, Eq a, Typeable.Typeable a) =>
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Show a, Web.ToHttpApiData a, Eq a, Typeable.Typeable a, t ~ TypeNode a f) =>
     a ->
-    Forest r ->
-    Tree r
+    Forest r f ->
+    Tree r t
+  Lit ::
+    forall (s :: Exts.Symbol) (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (TypeLits.KnownSymbol s, t ~ TypeNode (Route.Lit s) f) =>
+    Forest (r :-> Route.Lit s) f ->
+    Tree r t
   Param ::
-    forall a (r :: [Type]).
-    (Web.FromHttpApiData a, Typeable.Typeable a) =>
-    Forest (r :-> a) ->
-    Tree r
-  Regex ::
-    forall a (r :: [Type]).
-    (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a) =>
-    Text.Text ->
-    Forest (r :-> a) ->
-    Tree r
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Web.FromHttpApiData a, Typeable.Typeable a, t ~ TypeNode a f) =>
+    Forest (r :-> a) f ->
+    Tree r t
+  -- Regex ::
+  --   forall a (r :: [Type]).
+  --   (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a) =>
+  --   Text.Text ->
+  --   Forest (r :-> a) ->
+  --   Tree r
   Splat ::
-    forall a (r :: [Type]).
-    (Web.FromHttpApiData a, Typeable.Typeable a) =>
-    Forest (r :-> NonEmpty.NonEmpty a) ->
-    Tree r
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Web.FromHttpApiData a, Typeable.Typeable a, t ~ TypeNode (NonEmpty.NonEmpty a) f) =>
+    Forest (r :-> NonEmpty.NonEmpty a) f ->
+    Tree r t
   Route ::
-    forall a (r :: [Type]).
-    (Route.Route a, Typeable.Typeable a) =>
-    Forest (r :-> a) ->
-    Tree r
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Route.Route a, Typeable.Typeable a, t ~ TypeNode a f) =>
+    Forest (r :-> a) f ->
+    Tree r t
   Query ::
-    forall a (r :: [Type]).
-    (Query.From a, Typeable.Typeable a) =>
-    Forest (r :-> a) ->
-    Tree r
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Query.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
+    Forest (r :-> a) f ->
+    Tree r t
   Headers ::
-    forall a (r :: [Type]).
-    (Headers.From a, Typeable.Typeable a) =>
-    Forest (r :-> a) ->
-    Tree r
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Headers.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
+    Forest (r :-> a) f ->
+    Tree r t
   Body ::
-    forall a (r :: [Type]).
-    (Body.From a, Typeable.Typeable a) =>
-    Forest (r :-> a) ->
-    Tree r
-  Apply ::
-    forall t (r :: [Type]).
-    (Middleware.Tag t, Eq t, Typeable.Typeable t) =>
-    t ->
-    Tree r ->
-    Tree r
+    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    (Body.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
+    Forest (r :-> a) f ->
+    Tree r t
+  -- Apply ::
+  --   forall t (r :: [Type]).
+  --   (Middleware.Tag t, Eq t, Typeable.Typeable t) =>
+  --   t ->
+  --   Tree r ->
+  --   Tree r
+  {-
   Responder ::
     forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
     ( Nat.KnownNat status
@@ -132,21 +220,22 @@ data Tree (r :: [Type]) where
     ) =>
     Forest (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
     Tree r
+  -}
   -- Events ::
   --   forall (r :: [Type]).
   --   (Typeable.Typeable r) =>
   --   Chan.Chan Wai.ServerEvent ->
   --   Tree r
   Method ::
-    forall env (r :: [Type]).
-    (Typeable.Typeable env) =>
+    forall env (r :: [Type]) (t :: TypeTree).
+    (Typeable.Typeable env, t ~ TypeLeaf ()) =>
     HTTP.StdMethod ->
     (env Natural.~> IO) ->
     Handler r env ->
-    Tree r
+    Tree r t
 
 -- TODO: Add tags to method/handlers like in reitit (Clojure)
-
+{-
 combine ::
   forall (r :: [Type]).
   Tree r ->
@@ -162,9 +251,9 @@ combine n1 n2 = case (n1, n2) of
   (Param @a1 @r1 child1, Param @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2) of
     Just Typeable.Refl -> Just $ param @a1 @r1 $ flatten $ child1 <> child2
     _ -> Nothing
-  (Regex @a1 @r1 regex1 child1, Regex @a2 @r2 regex2 child2) -> case (Typeable.eqT @a1 @a2, regex1 == regex2) of
-    (Just Typeable.Refl, True) -> Just $ regex @a1 @r1 regex1 $ flatten $ child1 <> child2
-    (_, _) -> Nothing
+  -- (Regex @a1 @r1 regex1 child1, Regex @a2 @r2 regex2 child2) -> case (Typeable.eqT @a1 @a2, regex1 == regex2) of
+  --   (Just Typeable.Refl, True) -> Just $ regex @a1 @r1 regex1 $ flatten $ child1 <> child2
+  --   (_, _) -> Nothing
   (Splat @a1 @r1 child1, Splat @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2) of
     Just Typeable.Refl -> Just $ splat @a1 @r1 $ flatten @(r1 :-> NonEmpty.NonEmpty a1) $ child1 <> child2
     _ -> Nothing
@@ -180,19 +269,21 @@ combine n1 n2 = case (n1, n2) of
   (Body @a1 @r1 child1, Body @a2 @r2 child2) -> case (Typeable.eqT @a1 @a2) of
     Just Typeable.Refl -> Just $ body @a1 @r1 $ flatten @(r1 :-> a1) $ child1 <> child2
     _ -> Nothing
-  (Apply @t1 @r1 tag1 node1, Apply @t2 @r2 tag2 node2) -> case (Typeable.eqT @t1 @t2) of
-    Just Typeable.Refl -> case tag1 == tag2 of
-      True -> case node1 `combine` node2 of
-        Just newNode -> Just $ apply @t1 @r1 tag1 newNode
-        Nothing -> Nothing
-      False -> Nothing
-    _ -> Nothing
+  -- (Apply @t1 @r1 tag1 node1, Apply @t2 @r2 tag2 node2) -> case (Typeable.eqT @t1 @t2) of
+  --   Just Typeable.Refl -> case tag1 == tag2 of
+  --     True -> case node1 `combine` node2 of
+  --       Just newNode -> Just $ apply @t1 @r1 tag1 newNode
+  --       Nothing -> Nothing
+  --     False -> Nothing
+  --   _ -> Nothing
   (Responder @s1 @hk1 @ct1 @rt1 @r1 child1, Responder @s2 @hk2 @ct2 @rt2 @r2 child2) -> case (Typeable.eqT @s1 @s2, Typeable.eqT @hk1 @hk2, Typeable.eqT @ct1 @ct2, Typeable.eqT @rt1 @rt2) of
     (Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl, Just Typeable.Refl) -> Just $ responder @s1 @hk1 @ct1 @rt1 @r1 $ flatten @(r1 :-> (Response.Headers hk1 -> rt1 -> Wai.Response)) $ child1 <> child2
     (_, _, _, _) -> Nothing
   -- Method is not combinable
   (_, _) -> Nothing
+-}
 
+{-
 flatten :: Forest r -> Forest r
 flatten [] = []
 flatten [tree] = [tree]
@@ -204,51 +295,85 @@ flatten (tree1 : tree2 : trees) = case tree1 `combine` tree2 of
       , flatten (tree2 : trees)
       , flatten trees
       ]
-
+-}
+{-
 match ::
-  forall a (r :: [Type]).
+  forall a (r :: [Type]) (f :: TypeForest).
   (Show a, Web.ToHttpApiData a, Eq a, Typeable.Typeable a) =>
   a ->
-  Forest r ->
-  Tree r
-match = Match @a @r
-
-match' ::
-  forall a (r :: [Type]).
-  (Show a, Web.ToHttpApiData a, Eq a, Typeable.Typeable a) =>
-  a ->
-  Tree r ->
-  Tree r
-match' val = match @a @r val . pure
+  Forest r f ->
+  Tree r (TypeNode a f)
+match = Match @a @r @f
 
 lit ::
-  forall (r :: [Type]).
-  Text.Text ->
-  Forest r ->
-  Tree r
-lit = match @Text.Text
-
-lit' ::
-  forall (r :: [Type]).
-  Text.Text ->
-  Tree r ->
-  Tree r
-lit' = match' @Text.Text
+  forall (s :: Exts.Symbol) (r :: [Type]) (f :: TypeForest).
+  (TypeLits.KnownSymbol s) =>
+  Forest r f ->
+  Tree r (TypeNode (Route.Lit s) f)
+lit = Lit @s @r @f
 
 param ::
-  forall a (r :: [Type]).
+  forall a (r :: [Type]) (f :: TypeForest).
   (Web.FromHttpApiData a, Typeable.Typeable a) =>
-  Forest (r :-> a) ->
-  Tree r
-param = Param @a @r
+  Forest (r :-> a) f ->
+  Tree r (TypeNode a f)
+param = Param @a @r @f
+-}
 
-param' ::
-  forall a (r :: [Type]).
-  (Web.FromHttpApiData a, Typeable.Typeable a) =>
-  Tree (r :-> a) ->
-  Tree r
-param' = param @a @r . pure
+-- (?.) ::
+--   forall
+--     (r :: [Type])
+--     (r' :: [Type])
+--     (r'' :: [Type]).
+--   (Forest r -> Tree r) ->
+--   (Forest r' -> Tree r') ->
+--   Forest r'' ->
+--   Tree r'
+{-
+(.>>) con1 con2 forest = con1 [con2 forest]
 
+(|>>) con = con . pure
+
+testMethod = Method HTTP.GET id \_ _ (age :: Text.Text) (name :: Int) _ req -> undefined
+
+test :: Tree '[]
+test =
+  Lit @"hello"
+    .>> Lit @"world"
+    .>> Param @Text.Text
+    .>> Param @Int
+    .>> Lit @"foo"
+    |>> testMethod
+
+test'' :: Forest '[]
+test'' =
+  [ Lit @"hello"
+      .>> Lit @"world"
+      .>> Param @Text.Text
+      .>> Param @Int
+      $ [ Method HTTP.GET id \_ _ (age :: Text.Text) (name :: Int) req -> do
+            undefined
+        ]
+  , Lit @"bye"
+      .>> Lit @"world"
+      .>> Param @Float
+      $ [ Lit @"hello"
+            .>> Lit @"world"
+            .>> Param @Text.Text
+            .>> Param @Int
+            $ [ Method HTTP.GET id \float name age req -> do
+                  undefined
+              ]
+        ]
+  ]
+-}
+{-
+  lit @"hello" ?. lit @"world" ?. param @Text.Text $ forest
+    [ method @IO HTTP.GET id \(text :: Text.Text) req -> do
+        undefined
+    ]
+-}
+{-
 regex ::
   forall a (r :: [Type]).
   (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a) =>
@@ -264,7 +389,8 @@ regex' ::
   Tree (r :-> a) ->
   Tree r
 regex' r = regex @a @r r . pure
-
+-}
+{-
 splat ::
   forall a (r :: [Type]).
   (Web.FromHttpApiData a, Typeable.Typeable a) =>
@@ -334,7 +460,8 @@ body' ::
   Tree (r :-> a) ->
   Tree r
 body' = body @a @r . pure
-
+-}
+{-
 apply ::
   forall t (r :: [Type]).
   (Middleware.Tag t, Eq t, Typeable.Typeable t) =>
@@ -350,7 +477,8 @@ scope ::
   Forest (r :-> a) ->
   Tree r
 scope tag children = apply @t @r tag $ route @a @r children
-
+-}
+{-
 responder ::
   forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
   ( Nat.KnownNat status
@@ -380,16 +508,18 @@ responder' ::
   Tree (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
   Tree r
 responder' = Responder @status @headerKeys @contentType @resultType @r . pure
-
+-}
+{-
 method ::
-  forall env (r :: [Type]).
+  forall env (r :: [Type]) .
   (Typeable.Typeable env) =>
   HTTP.StdMethod ->
   (env Natural.~> IO) ->
   Handler r env ->
-  Tree r
+  Tree r (TypeNode env '[])
 method = Method @env @r
-
+-}
+{-
 endpoint ::
   forall a env (r :: [Type]).
   (Route.Route a, Typeable.Typeable a, Typeable.Typeable env) =>
@@ -410,7 +540,7 @@ any transformation handler =
   [ Method @env @r stdMethod transformation handler
   | stdMethod <- [minBound ..]
   ]
-
+-}
 data HList (l :: [Type]) where
   HNil :: HList '[]
   HCons :: e -> HList l -> HList (e ': l)
@@ -423,6 +553,7 @@ fillHandler :: Handler args env -> HList args -> (Wai.Request -> env Wai.Respons
 fillHandler handler HNil = handler
 fillHandler handler (HCons x xs) = fillHandler (handler x) xs
 
+{-
 withDefault :: Forest '[] -> Wai.Middleware
 withDefault = withDefaultLoop id HNil
 
@@ -471,7 +602,7 @@ withDefaultLoop middleware args root backup request respond = case root of
                 request
                 respond
             else withDefaultLoop middleware args nodes backup request respond
-
+-}
 -- Events source ->
 --   middleware
 --     ( \request' respond' -> Wai.eventSourceAppChan source request' respond'
@@ -482,7 +613,7 @@ withDefaultLoop middleware args root backup request respond = case root of
 ---- TODO: May need system for content-type negotiation???
 ---- The accepted content types can be the same or more
 ---- If Accept is less than the responseses content types, then I can't go down that tree
-
+{-
 instance Show (Tree r) where
   show = Tree.drawTree . stringTree []
 
@@ -512,7 +643,7 @@ stringForest responderStrings forest = map (stringTree responderStrings) forest
 -- delete v (node:nodes) = case node of
 
 printForest = putStrLn . Tree.drawForest . stringForest []
-
+-}
 {-
 deleteRespNode :: Maybe (Tree.Tree String) -> Tree.Forest String -> Tree.Forest String
 deleteRespNode _ [] = []
