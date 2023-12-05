@@ -73,16 +73,17 @@ type family Handler args env where
   Handler (arg : args) env = arg -> Handler args env
 
 -- Need to pass `r :: [Type]` type variable for args
-type TypeTree :: Type
-data TypeTree where
-  TypeNode :: Type -> TypeForest -> TypeTree
+type TypeTree :: [Type] -> Type
+data TypeTree (r :: [Type]) (a :: Type) where
+  TypeNode :: Type -> TypeForest (r :-> a) -> TypeTree r
 
+type TypeLeaf :: forall (r :: [Type]). Type -> TypeTree r
 type TypeLeaf a = TypeNode a '[]
 
-type TypeForest :: Type
-type TypeForest = [TypeTree]
+type TypeForest :: [Type] -> Type
+type TypeForest r = [TypeTree r]
 
-type Foo :: TypeForest
+type Foo :: TypeForest '[]
 type Foo =
   '[ TypeNode
       (Route.Lit "hello")
@@ -147,25 +148,25 @@ test =
 
 test' = test :<|> (test :<|> Empty)
 
-data Forest (r :: [Type]) (f :: TypeForest) where
+data Forest (r :: [Type]) (f :: TypeForest r) where
   Empty :: forall (r :: [Type]). Forest r '[]
-  (:<|>) :: forall (r :: [Type]) (t :: TypeTree) (f :: TypeForest). Tree r t -> Forest r f -> Forest r (t : f)
+  (:<|>) :: forall (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r). Tree r t -> Forest r f -> Forest r (t : f)
 
 -- TODO: Potentially add type parameter to constrain middleware enum type
-data Tree (r :: [Type]) (t :: TypeTree) where
+data Tree (r :: [Type]) (t :: TypeTree r) where
   Match ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Show a, Web.ToHttpApiData a, Eq a, Typeable.Typeable a, t ~ TypeNode a f) =>
     a ->
     Forest r f ->
     Tree r t
   Lit ::
-    forall (s :: Exts.Symbol) (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall (s :: Exts.Symbol) (r :: [Type]) (t :: TypeTree r) (f :: TypeForest (r :-> Route.Lit s)).
     (TypeLits.KnownSymbol s, t ~ TypeNode (Route.Lit s) f) =>
     Forest (r :-> Route.Lit s) f ->
     Tree r t
   Param ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Web.FromHttpApiData a, Typeable.Typeable a, t ~ TypeNode a f) =>
     Forest (r :-> a) f ->
     Tree r t
@@ -176,27 +177,27 @@ data Tree (r :: [Type]) (t :: TypeTree) where
   --   Forest (r :-> a) ->
   --   Tree r
   Splat ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Web.FromHttpApiData a, Typeable.Typeable a, t ~ TypeNode (NonEmpty.NonEmpty a) f) =>
     Forest (r :-> NonEmpty.NonEmpty a) f ->
     Tree r t
   Route ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Route.Route a, Typeable.Typeable a, t ~ TypeNode a f) =>
     Forest (r :-> a) f ->
     Tree r t
   Query ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Query.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
     Forest (r :-> a) f ->
     Tree r t
   Headers ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Headers.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
     Forest (r :-> a) f ->
     Tree r t
   Body ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (r :: [Type]) (t :: TypeTree r) (f :: TypeForest r).
     (Body.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
     Forest (r :-> a) f ->
     Tree r t
@@ -227,7 +228,7 @@ data Tree (r :: [Type]) (t :: TypeTree) where
   --   Chan.Chan Wai.ServerEvent ->
   --   Tree r
   Method ::
-    forall env (r :: [Type]) (t :: TypeTree).
+    forall env (r :: [Type]) (t :: TypeTree r).
     (Typeable.Typeable env, t ~ TypeLeaf ()) =>
     HTTP.StdMethod ->
     (env Natural.~> IO) ->
