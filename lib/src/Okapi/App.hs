@@ -82,6 +82,17 @@ type TypeLeaf a = TypeNode a '[]
 type TypeForest :: Type
 type TypeForest = [TypeTree]
 
+type TypeForestAppend :: TypeForest -> TypeForest -> TypeForest
+type family TypeForestAppend f1 f2 where
+  TypeForestAppend '[] f2 = f2
+  TypeForestAppend (t1 : ts1) f2 = t1 : TypeForestAppend ts1 f2
+
+(+++) :: Forest f1 -> Forest f2 -> Forest (TypeForestAppend f1 f2)
+(+++) Empty f2 = f2
+(+++) (t1 :<|> ts1) f2 = t1 :<|> (ts1 +++ f2)
+
+(.>>) fst snd forest = fst (snd forest :<|> Empty)
+
 type Foo :: TypeForest
 type Foo =
   '[ TypeNode
@@ -93,33 +104,8 @@ type Foo =
        ]
    ]
 
--- data TyForest where
---   TyForest :: forall (tts :: [TyTree]). TyForest
-
--- Types in r should be equal to all the node type values of the forest's children
--- You could insure that each level of the tree has unique node types with no overlapping node types
--- type Forest :: [Type] -> TypeForest -> Type
--- type Forest r f = GenType r f
-
--- type GenType :: [Type] -> TypeForest -> Type
--- type family GenType args typeForest where
---   GenType path '[] = '[]
---   GenType pathz (t : ts) = Tree pathz t ': GenType pathz ts
-
-{-
-data Forest (r :: [Type]) (f :: TypeForest) where
-  Forest :: forall (r :: [Type]) (f :: TypeForest) (t :: TypeTree) (x :: Type). [Tree x r t] -> Forest r f
-
-forest ::
-  forall (r :: [Type]) (f :: TypeForest) (t :: TypeTree) (x :: Type).
-  [Tree x r t] ->
-  Forest r f
-forest = Forest
--}
-
 test ::
   Tree
-    '[]
     ( 'TypeNode
         Int
         '[ 'TypeNode
@@ -128,8 +114,7 @@ test ::
                 (Route.Lit "world")
                 '[ 'TypeNode Float '[]]
              ]
-         ] ::
-        TypeTree
+         ]
     )
 test =
   Match @Int
@@ -147,28 +132,47 @@ test =
 
 test' = test :<|> (test :<|> Empty)
 
-data Forest (r :: [Type]) (f :: TypeForest) where
-  Empty :: forall (r :: [Type]). Forest r '[]
-  (:<|>) :: forall (r :: [Type]) (t :: TypeTree) (f :: TypeForest). Tree r t -> Forest r f -> Forest r (t : f)
+test'' = (Lit @"hello" .>> Lit @"world" .>> Param @Int) Empty
 
+test''' =
+  ( Lit @"hello"
+      .>> Lit @"world"
+      .>> Param @Int
+  )
+    Empty
+    :<|> ( ( Lit @"bye"
+              .>> Lit @"world"
+              .>> Param @Float
+           )
+            Empty
+            :<|> Empty
+         )
+
+test'''' = test' +++ test'''
+
+data Forest (f :: TypeForest) where
+  Empty :: Forest '[]
+  (:<|>) :: forall (t :: TypeTree) (f :: TypeForest). Tree t -> Forest f -> Forest (t : f)
+
+-- (.>>) :: (Forest f -> Tree t) -> (Forest f -> Tree t') -> Forest f -> Tree t'
 -- TODO: Potentially add type parameter to constrain middleware enum type
-data Tree (r :: [Type]) (t :: TypeTree) where
+data Tree (t :: TypeTree) where
   Match ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Show a, Web.ToHttpApiData a, Eq a, Typeable.Typeable a, t ~ TypeNode a f) =>
     a ->
-    Forest r f ->
-    Tree r t
+    Forest f ->
+    Tree t
   Lit ::
-    forall (s :: Exts.Symbol) (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall (s :: Exts.Symbol) (t :: TypeTree) (f :: TypeForest).
     (TypeLits.KnownSymbol s, t ~ TypeNode (Route.Lit s) f) =>
-    Forest (r :-> Route.Lit s) f ->
-    Tree r t
+    Forest f ->
+    Tree t
   Param ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Web.FromHttpApiData a, Typeable.Typeable a, t ~ TypeNode a f) =>
-    Forest (r :-> a) f ->
-    Tree r t
+    Forest f ->
+    Tree t
   -- Regex ::
   --   forall a (r :: [Type]).
   --   (Regex.RegexContext Regex.Regex Text.Text a, Typeable.Typeable a) =>
@@ -176,64 +180,75 @@ data Tree (r :: [Type]) (t :: TypeTree) where
   --   Forest (r :-> a) ->
   --   Tree r
   Splat ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Web.FromHttpApiData a, Typeable.Typeable a, t ~ TypeNode (NonEmpty.NonEmpty a) f) =>
-    Forest (r :-> NonEmpty.NonEmpty a) f ->
-    Tree r t
+    Forest f ->
+    Tree t
   Route ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Route.Route a, Typeable.Typeable a, t ~ TypeNode a f) =>
-    Forest (r :-> a) f ->
-    Tree r t
+    Forest f ->
+    Tree t
   Query ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Query.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
-    Forest (r :-> a) f ->
-    Tree r t
+    Forest f ->
+    Tree t
   Headers ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Headers.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
-    Forest (r :-> a) f ->
-    Tree r t
+    Forest f ->
+    Tree t
   Body ::
-    forall a (r :: [Type]) (t :: TypeTree) (f :: TypeForest).
+    forall a (t :: TypeTree) (f :: TypeForest).
     (Body.From a, Typeable.Typeable a, t ~ TypeNode a f) =>
-    Forest (r :-> a) f ->
-    Tree r t
-  -- Apply ::
-  --   forall t (r :: [Type]).
-  --   (Middleware.Tag t, Eq t, Typeable.Typeable t) =>
-  --   t ->
-  --   Tree r ->
-  --   Tree r
-  {-
-  Responder ::
-    forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
-    ( Nat.KnownNat status
-    , Typeable.Typeable status
-    , Response.WaiResponseHeaders headerKeys
-    , Response.ContentType contentType
-    , Response.ToContentType contentType resultType
-    , Typeable.Typeable headerKeys
-    , Typeable.Typeable contentType
-    , Typeable.Typeable resultType
-    ) =>
-    Forest (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
-    Tree r
-  -}
-  -- Events ::
-  --   forall (r :: [Type]).
-  --   (Typeable.Typeable r) =>
-  --   Chan.Chan Wai.ServerEvent ->
-  --   Tree r
-  Method ::
-    forall env (r :: [Type]) (t :: TypeTree).
-    (Typeable.Typeable env, t ~ TypeLeaf ()) =>
-    HTTP.StdMethod ->
-    (env Natural.~> IO) ->
-    Handler r env ->
-    Tree r t
+    Forest f ->
+    Tree t
 
+-- (.>>) ::
+--   forall
+--     (a :: Type) (f :: TypeForest) (a' :: Type) (f' :: TypeForest) (t :: TypeTree) (t' :: TypeTree).
+--     (t ~ TypeNode a f, t' ~ TypeNode a' f') =>
+--     (Forest f -> Tree t)
+--     -> (Forest f' -> Tree t')
+--     -> Forest f
+--     -> Tree t'
+
+-- Apply ::
+--   forall t (r :: [Type]).
+--   (Middleware.Tag t, Eq t, Typeable.Typeable t) =>
+--   t ->
+--   Tree r ->
+--   Tree r
+{-
+Responder ::
+  forall (status :: Nat.Nat) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type) (r :: [Type]).
+  ( Nat.KnownNat status
+  , Typeable.Typeable status
+  , Response.WaiResponseHeaders headerKeys
+  , Response.ContentType contentType
+  , Response.ToContentType contentType resultType
+  , Typeable.Typeable headerKeys
+  , Typeable.Typeable contentType
+  , Typeable.Typeable resultType
+  ) =>
+  Forest (r :-> (Response.Headers headerKeys -> resultType -> Wai.Response)) ->
+  Tree r
+-}
+-- Events ::
+--   forall (r :: [Type]).
+--   (Typeable.Typeable r) =>
+--   Chan.Chan Wai.ServerEvent ->
+--   Tree r
+{-
+Method ::
+  forall env (t :: TypeTree).
+  (Typeable.Typeable env, t ~ TypeLeaf ()) =>
+  HTTP.StdMethod ->
+  (env Natural.~> IO) ->
+  Handler env ->
+  Tree t
+-}
 -- TODO: Add tags to method/handlers like in reitit (Clojure)
 {-
 combine ::
@@ -320,18 +335,7 @@ param ::
 param = Param @a @r @f
 -}
 
--- (?.) ::
---   forall
---     (r :: [Type])
---     (r' :: [Type])
---     (r'' :: [Type]).
---   (Forest r -> Tree r) ->
---   (Forest r' -> Tree r') ->
---   Forest r'' ->
---   Tree r'
 {-
-(.>>) con1 con2 forest = con1 [con2 forest]
-
 (|>>) con = con . pure
 
 testMethod = Method HTTP.GET id \_ _ (age :: Text.Text) (name :: Int) _ req -> undefined
