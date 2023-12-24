@@ -20,6 +20,7 @@ module Okapi.Route where
 
 import Control.Applicative
 import Control.Applicative.Combinators.NonEmpty qualified as Combinators
+import Data.Kind (Type)
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
 import Data.Typeable qualified as Typeable
@@ -38,7 +39,8 @@ data Parser a where
   Match :: forall a. (Typeable.Typeable a, Web.ToHttpApiData a) => a -> Parser ()
   Param :: forall a. (Typeable.Typeable a, Web.FromHttpApiData a) => Parser a
   Splat :: forall a. (Typeable.Typeable a, Web.FromHttpApiData a) => Parser (NonEmpty.NonEmpty a)
-  Regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
+
+-- Regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
 
 instance Functor Parser where
   fmap = FMap
@@ -51,8 +53,17 @@ instance Alternative Parser where
   empty = Empty
   (<|>) = Or
 
-data Lit (s :: Exts.Symbol) where
-  Lit :: (TypeLits.KnownSymbol s) => Lit s
+data LIT (s :: Exts.Symbol) where
+  LIT :: (TypeLits.KnownSymbol s) => LIT s
+
+data MATCH (a :: Type) where
+  MATCH :: (Web.ToHttpApiData a) => a -> MATCH a
+
+data PARAM (a :: Type) where
+  PARAM :: (Web.FromHttpApiData a) => PARAM a
+
+data SPLAT (a :: Type) where
+  SPLAT :: (Web.FromHttpApiData a) => SPLAT (NonEmpty.NonEmpty a)
 
 {-
 data Nest (subRoute :: *) where
@@ -148,13 +159,13 @@ instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (G
           pure (Generics.M1 $ Generics.K1 neList)
 
 -- A literal field
-instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (Lit s))) where
+instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (LIT s))) where
   genericParser =
     let m :: Generics.M1 i f p a
         m = undefined
      in do
           lit $ Text.pack $ TypeLits.symbolVal @s Typeable.Proxy
-          pure (Generics.M1 $ Generics.K1 Lit)
+          pure (Generics.M1 $ Generics.K1 LIT)
 
 class GenericPrinter f where
   genericPrinter :: f a -> [Text.Text]
@@ -205,7 +216,7 @@ instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (
      in concat $ map printer $ NonEmpty.toList x
 
 -- A literal field
-instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (Lit s))) where
+instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (LIT s))) where
   genericPrinter (Generics.M1 (Generics.K1 _)) =
     let m :: Generics.M1 i f p a
         m = undefined
@@ -223,8 +234,8 @@ param = Param
 splat :: (Typeable.Typeable a, Web.FromHttpApiData a) => Parser (NonEmpty.NonEmpty a)
 splat = Splat
 
-regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
-regex = Regex
+-- regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
+-- regex = Regex
 
 -- allRoutes :: Parser a -> [Text.Text]
 -- allRoutes (FMap _ dsl) = allRoutes dsl
@@ -247,11 +258,23 @@ regex = Regex
 data Error = Error
 
 data MyRoutes
-  = Student {path :: Lit "student", firstName :: Text.Text, lastName :: Text.Text}
-  | StudentGrades {path' :: Lit "student", firstName :: Text.Text, lastName :: Text.Text, rem :: Lit "grades"}
+  = Student
+      { path :: LIT "student"
+      , firstName :: Text.Text
+      , lastName :: Text.Text
+      }
+  | StudentGrades
+      { path' :: LIT "student"
+      , firstName :: Text.Text
+      , lastName :: Text.Text
+      , rem :: LIT "grades"
+      }
   | Hello
-  | Baz {path'' :: Lit "baz", subRoute :: SubRoute}
+  | Baz
+      { path'' :: LIT "baz"
+      , subRoute :: SubRoute
+      }
   deriving (Generics.Generic, Route)
 
-data SubRoute = SubRoute {path :: Lit "student", foo :: Int, bar :: Float}
+data SubRoute = SubRoute {path :: LIT "student", foo :: Int, bar :: Float}
   deriving (Generics.Generic, Route)

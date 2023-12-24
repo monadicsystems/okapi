@@ -138,7 +138,7 @@ natToStatus n = toEnum $ fromEnum n
 
 makeResponder ::
   forall (status :: Natural.Natural) (headerKeys :: [Exts.Symbol]) (contentType :: Type) (resultType :: Type).
-  (Nat.KnownNat status, WaiResponseHeaders headerKeys, ContentType contentType, ToContentType contentType resultType, Typeable.Typeable headerKeys, Typeable.Typeable resultType) =>
+  (Nat.KnownNat status, WaiResponseHeaders headerKeys, ContentType contentType, ToContentType contentType resultType) =>
   (Headers headerKeys -> resultType -> Wai.Response)
 makeResponder headerMap result =
   let status = natToStatus $ Nat.natVal @status Typeable.Proxy

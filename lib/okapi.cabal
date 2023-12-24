@@ -36,7 +36,9 @@ library
       Okapi.App
       Okapi.Route
       Okapi.Response
-      Okapi.Key
+      Okapi.Kind
+      -- Okapi.Type
+      Okapi.Phantom
   other-modules:
       Paths_okapi
   hs-source-dirs:
