@@ -81,27 +81,63 @@ data PList (p :: P) where
     (:/#) :: (Route.Route a) => PList p -> a -> PList (p :-> Phantom.Route a)
     (:>>) :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => PList p -> Phantom.Response status headers content result -> PList (p :-> Phantom.Response status headers content result)
 
-start :: PList Root
-start = Start
+go :: PList Root
+go = Start
 
 testP =
-    start
+    go
         :/= Phantom.Lit @"hello"
-        :/* (0 :| [1, 2, 3 :: Int])
         :/= Phantom.Lit @"world"
-        :/: ("myName" :: Text.Text)
-        :/: (5 :: Int)
+        :/: (9008.6 :: Float)
+        :/: 'y'
+
+type Append :: P -> P -> P
+type family Append p p' where
+    Append x Root = x
+    Append Root x = x
+    Append (as :-> a) (bs :-> b) = Append (as :-> a) bs :-> b
+
+testAppend = append testP testP
+
+append :: PList p -> PList p' -> PList (Append p p')
+append Start x = x
+append x Start = x
+-- Lit
+append (x :/= Phantom.Lit @s') (y :/= Phantom.Lit @s) = append (x :/= Phantom.Lit @s') y :/= Phantom.Lit @s
+append (x :/: a) (y :/= Phantom.Lit @s) = append (x :/: a) y :/= Phantom.Lit @s
+append (x :/* nel) (y :/= Phantom.Lit @s) = append (x :/* nel) y :/= Phantom.Lit @s
+append (x :/# r) (y :/= Phantom.Lit @s) = append (x :/# r) y :/= Phantom.Lit @s
+append (x :>> res) (y :/= Phantom.Lit @s) = append (x :>> res) y :/= Phantom.Lit @s
+-- Param
+append (x :/= Phantom.Lit @s) (y :/: a) = append (x :/= Phantom.Lit @s) y :/: a
+append (x :/: a') (y :/: a) = append (x :/: a') y :/: a
+append (x :/* nel) (y :/: a) = append (x :/* nel) y :/: a
+append (x :/# r) (y :/: a) = append (x :/# r) y :/: a
+append (x :>> res) (y :/: a) = append (x :>> res) y :/: a
+-- Splat
+append (x :/= Phantom.Lit @s) (y :/* nel) = append (x :/= Phantom.Lit @s) y :/* nel
+append (x :/: a) (y :/* nel) = append (x :/: a) y :/* nel
+append (x :/* nel') (y :/* nel) = append (x :/* nel') y :/* nel
+append (x :/# r) (y :/* nel) = append (x :/# r) y :/* nel
+append (x :>> res) (y :/* nel) = append (x :>> res) y :/* nel
+-- Route
+append (x :/= Phantom.Lit @s) (y :/# r) = append (x :/= Phantom.Lit @s) y :/# r
+append (x :/: a) (y :/# r) = append (x :/: a) y :/# r
+append (x :/* nel') (y :/# r) = append (x :/* nel') y :/# r
+append (x :/# r') (y :/# r) = append (x :/# r') y :/# r
+append (x :>> res) (y :/# r) = append (x :>> res) y :/# r
+-- Response
+append (x :/= Phantom.Lit @s) (y :>> res) = append (x :/= Phantom.Lit @s) y :>> res
+append (x :/: a) (y :>> res) = append (x :/: a) y :>> res
+append (x :/* nel') (y :>> res) = append (x :/* nel') y :>> res
+append (x :/# r') (y :>> res) = append (x :/# r') y :>> res
+append (x :>> res') (y :>> res) = append (x :>> res') y :>> res
 
 type Reverse :: P -> P
 type family Reverse p where
     Reverse Root = Root
     Reverse (Root :-> h) = (Root :-> h)
-    Reverse ((t :-> h) :-> x) = Reverse t :-> x :-> h
-
--- type (:<-) :: Type -> P -> P
--- type family (:<-) a p where
---     h :<- Root = _
---     h :<- t    = _
+    Reverse (t :-> x) = Append (Root :-> x) (Reverse t)
 
 type Handler :: P -> (Type -> Type) -> Type
 type family Handler p env where
@@ -116,6 +152,44 @@ type family Handler p env where
 -- snoc :: forall (p :: P) (a :: Type). a -> PList p -> PList (p :-> a)
 -- snoc x Start = Start :-> x
 -- snoc x (t :/= h) = HCons h (snoc t x)
+
+flipper :: PList p -> PList (Reverse p)
+flipper Start = Start
+-- Lit
+flipper (Start :/= Phantom.Lit @s) = Start :/= Phantom.Lit
+flipper ((t :/= Phantom.Lit @s') :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/= Phantom.Lit @s'))
+flipper ((t :/: a) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/: a))
+flipper ((t :/* nel) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/* nel))
+flipper ((t :/# r) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/# r))
+flipper ((t :>> res) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :>> res))
+-- Param
+flipper (Start :/: a) = Start :/: a
+flipper ((t :/= Phantom.Lit @s) :/: a) = append (Start :/: a) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a') :/: a) = append (Start :/: a) (flipper (t :/: a'))
+flipper ((t :/* nel) :/: a) = append (Start :/: a) (flipper (t :/* nel))
+flipper ((t :/# r) :/: a) = append (Start :/: a) (flipper (t :/# r))
+flipper ((t :>> res) :/: a) = append (Start :/: a) (flipper (t :>> res))
+-- Splat
+flipper (Start :/* nel) = Start :/* nel
+flipper ((t :/= Phantom.Lit @s) :/* nel) = append (Start :/* nel) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a) :/* nel) = append (Start :/* nel) (flipper (t :/: a))
+flipper ((t :/* nel') :/* nel) = append (Start :/* nel) (flipper (t :/* nel'))
+flipper ((t :/# r) :/* nel) = append (Start :/* nel) (flipper (t :/# r))
+flipper ((t :>> res) :/* nel) = append (Start :/* nel) (flipper (t :>> res))
+-- Route
+flipper (Start :/# r) = Start :/# r
+flipper ((t :/= Phantom.Lit @s) :/# r) = append (Start :/# r) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a) :/# r) = append (Start :/# r) (flipper (t :/: a))
+flipper ((t :/* nel) :/# r) = append (Start :/# r) (flipper (t :/* nel))
+flipper ((t :/# r') :/# r) = append (Start :/# r) (flipper (t :/# r'))
+flipper ((t :>> res) :/# r) = append (Start :/# r) (flipper (t :>> res))
+-- Response
+flipper (Start :>> res) = Start :>> res
+flipper ((t :/= Phantom.Lit @s) :>> res) = append (Start :>> res) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a) :>> res) = append (Start :>> res) (flipper (t :/: a))
+flipper ((t :/* nel) :>> res) = append (Start :>> res) (flipper (t :/* nel))
+flipper ((t :/# r) :>> res) = append (Start :>> res) (flipper (t :/# r))
+flipper ((t :>> res') :>> res) = append (Start :>> res) (flipper (t :>> res'))
 
 runHandler :: Handler p env -> PList p -> (Wai.Request -> env Wai.Response)
 runHandler handler Start = handler

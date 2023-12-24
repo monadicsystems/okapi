@@ -25,9 +25,10 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# HLINT ignore "Use if" #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+-- {-# HLINT ignore "Use if" #-}
+-- {-# LANGUAGE UndecidableInstances #-}
+-- {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Okapi.App where
 
@@ -94,11 +95,19 @@ type Test =
 test :: Root _
 test = Lit @"hello" . Lit @"world" . Param @Float . Param @Char $ testMethods
 
+test2 :: Root _
+test2 = (Lit @"hello" . Lit @"world" . Param @Float . Param @Char . Method @Kind.PUT @IO id) \(f :: Float) (c :: Char) (r :: Wai.Request) -> do
+  undefined
+
+tester = mkURL test P.testP
+
 testMethods = method1 .<|> method2 .<|> method3
  where
   method1 = Method @Kind.GET @IO id \(f :: Float) (c :: Char) (r :: Wai.Request) -> do undefined
   method2 = Method @Kind.POST @IO id undefined
   method3 = Method @Kind.PUT @IO id undefined
+
+-- testURL = mkURL test P.testP
 
 data Tree (t :: Kind.Tree) (p :: P.P) where
   Lit ::
@@ -151,15 +160,38 @@ data Tree (t :: Kind.Tree) (p :: P.P) where
 showType :: forall a. (Typeable.Typeable a) => String
 showType = show . Typeable.typeRep $ Typeable.Proxy @a
 
--- type PToQ :: P.P -> Q.Q
--- type family PToQ (p :: P.P) where
---   PToQ P.Root = Q.Tip
---   PToQ (t P.:-> h) = h Q.:<- PToQ t
+mkURL :: (URL t (P.Reverse p)) => Tree t p' -> P.PList p -> [Text.Text]
+mkURL tree = url tree . P.flipper
 
--- pListToQList :: P.PList p -> Q.QList (PToQ p)
--- pListToQList P.Start = Q.End
--- pListToQList (rem P.:/= Phantom.Lit @s) = Phantom.Lit @s Q.:/= pListToQList rem
--- pListToQList (rem P.:/: a) = a Q.:/: pListToQList rem
--- pListToQList (rem P.:/* s) = s Q.:/* pListToQList rem
--- pListToQList (rem P.:/# r) = r Q.:/# pListToQList rem
--- pListToQList (rem P.:>> res) = res Q.:>> pListToQList rem
+class URL (t :: Kind.Tree) (p :: P.P) where
+  url :: Tree t p' -> P.PList p -> [Text.Text]
+
+instance (URL t p) => URL (Phantom.Lit s :- t) (p P.:-> Phantom.Lit s) where
+  url (Lit child) (p P.:/= Phantom.Lit) = Text.pack (TypeLits.symbolVal @s Typeable.Proxy) : url child p
+
+instance (URL t p) => URL (Phantom.Param a :- t) (p P.:-> Phantom.Param a) where
+  url (Param child) (p P.:/: a) = Web.toUrlPiece a : url child p
+
+instance (URL t p) => URL (Phantom.Splat a :- t) (p P.:-> Phantom.Splat a) where
+  url (Splat child) (p P.:/* nel) = NonEmpty.toList (Web.toUrlPiece <$> nel) <> url child p
+
+instance (URL t p) => URL (Phantom.Route a :- t) (p P.:-> Phantom.Route a) where
+  url (Route child) (p P.:/# a) = Route.printer a <> url child p
+
+instance (URL t p) => URL (Phantom.Response status headers content result :- t) p where
+  url (Responder child) p = url child p
+
+instance (URL (ph :- c) (pt P.:-> ph)) => URL ((ph :- c) :<|> t') (pt P.:-> ph) where
+  url (Fork t _) = url t
+
+instance (URL (ph :- c) (pt P.:-> ph)) => URL (t' :<|> (ph :- c)) (pt P.:-> ph) where
+  url (Fork _ t) = url t
+
+instance URL (Kind.Leaf m) P.Root where
+  url (Method _ _) _ = [] :: [Text.Text]
+
+instance URL (Kind.Leaf m :<|> t) P.Root where
+  url _ _ = [] :: [Text.Text]
+
+instance URL (t :<|> Kind.Leaf m) P.Root where
+  url _ _ = [] :: [Text.Text]
