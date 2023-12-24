@@ -96,7 +96,7 @@ test :: Root _
 test = Lit @"hello" . Lit @"world" . Param @Float . Param @Char $ testMethods
 
 test2 :: Root _
-test2 = (Lit @"hello" . Lit @"world" . Param @Float . Param @Char . Method @Kind.PUT @IO id) \(f :: Float) (c :: Char) (r :: Wai.Request) -> do
+test2 = (Lit @"hello" . Lit @"world" . Param @Float . Param @Char . Responder @200 @'[] @Text.Text @Int . Method @Kind.PUT @IO id) \(f :: Float) (c :: Char) (responder :: Response.Headers headers -> result -> Wai.Response) (r :: Wai.Request) -> do
   undefined
 
 tester = mkURL test P.testP

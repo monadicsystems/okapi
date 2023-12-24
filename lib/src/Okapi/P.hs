@@ -88,7 +88,7 @@ testP =
     go
         :/= Phantom.Lit @"hello"
         :/= Phantom.Lit @"world"
-        :/: (9008.6 :: Float)
+        :/: (9008.609 :: Float)
         :/: 'y'
 
 type Append :: P -> P -> P
