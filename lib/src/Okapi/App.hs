@@ -101,6 +101,8 @@ test2 = (Lit @"hello" . Lit @"world" . Param @Float . Param @Char . Responder @2
 
 tester = mkURL test P.testP
 
+tester' = mkURL test2 P.testP
+
 testMethods = method1 .<|> method2 .<|> method3
  where
   method1 = Method @Kind.GET @IO id \(f :: Float) (c :: Char) (r :: Wai.Request) -> do undefined
