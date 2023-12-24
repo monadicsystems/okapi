@@ -30,7 +30,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Okapi.Kind where
+module Okapi.Q where
 
 import Control.Concurrent.Chan qualified as Chan
 import Control.Natural qualified as Natural
@@ -67,18 +67,41 @@ import Okapi.Route qualified as Route
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
-type Tree :: Type
-data Tree where
-  Leaf :: Method -> Tree
-  Grow :: Type -> Tree -> Tree
-  Fork :: Tree -> Tree -> Tree
+type Q :: Type
+data Q where
+    Tip :: Q
+    (:<-) :: Type -> Q -> Q
 
-type n :- t = Grow n t
+type QList :: Q -> Type
+data QList (q :: Q) where
+    End :: QList Tip
+    (:/=) :: (TypeLits.KnownSymbol s) => Phantom.Lit s -> QList q -> QList (Phantom.Lit s :<- q)
+    (:/:) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => a -> QList q -> QList (Phantom.Param a :<- q)
+    (:/*) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => NonEmpty.NonEmpty a -> QList q -> QList (Phantom.Splat a :<- q)
+    (:/#) :: (Route.Route a) => a -> QList q -> QList (Phantom.Route a :<- q)
+    (:>>) :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => Phantom.Response status headers content result -> QList q -> QList (Phantom.Response status headers content result :<- q)
 
-type t :<|> t' = Fork t t'
+end :: QList Tip
+end = End
 
-type Method :: Type
-data Method where
-  GET :: Method
-  POST :: Method
-  PUT :: Method
+type Handler :: Q -> (Type -> Type) -> Type
+type family Handler q env where
+    Handler Tip env = Wai.Request -> env Wai.Response
+    Handler (Phantom.Lit s :<- rem) env = Handler rem env
+    Handler (Phantom.Param a :<- rem) env = a -> Handler rem env
+    Handler (Phantom.Splat a :<- rem) env = NonEmpty.NonEmpty a -> Handler rem env
+    Handler (Phantom.Route a :<- rem) env = a -> Handler rem env
+    Handler (Phantom.Response status headers content result :<- rem) env = (Response.Headers headers -> result -> Wai.Response) -> Handler rem env
+    Handler x _ = TypeError.TypeError (TypeError.Text "Can't create Handler for type: " TypeError.:<>: TypeError.ShowType x)
+
+-- snoc :: forall (l :: [Type]) (e :: Type). (Renderable e) => HList l -> e -> HList (l :-> e)
+-- snoc HNil x = HCons x HNil
+-- snoc (HCons h t) x = HCons h (snoc t x)
+
+runHandler :: Handler q env -> QList q -> (Wai.Request -> env Wai.Response)
+runHandler handler End = handler
+runHandler handler (lit :/= rest) = runHandler handler rest
+runHandler handler (param :/: rest) = runHandler (handler param) rest
+runHandler handler (splat :/* rest) = runHandler (handler splat) rest
+runHandler handler (route :/# rest) = runHandler (handler route) rest
+runHandler handler (Phantom.Response @status @headers @content @result :>> rest) = runHandler (handler $ Response.makeResponder @status @headers @content @result) rest
