@@ -32,6 +32,7 @@
 
 module Okapi.P where
 
+import Control.Category ((>>>))
 import Control.Concurrent.Chan qualified as Chan
 import Control.Natural qualified as Natural
 import Data.Binary.Builder qualified as Builder
@@ -67,35 +68,55 @@ import Okapi.Route qualified as Route
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
-type P :: Type
-data P where
-    Root :: P
-    (:->) :: P -> Type -> P
+-- type P :: Type
+-- data P where
+--     Root :: P
+--     (:::) :: P -> Type -> P
 
-type PList :: P -> Type
-data PList (p :: P) where
-    Start :: PList Root
-    (:/=) :: (TypeLits.KnownSymbol s) => PList p -> Phantom.Lit s -> PList (p :-> Phantom.Lit s)
-    (:/:) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => PList p -> a -> PList (p :-> Phantom.Param a)
-    (:/*) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => PList p -> NonEmpty.NonEmpty a -> PList (p :-> Phantom.Splat a)
-    (:/#) :: (Route.Route a) => PList p -> a -> PList (p :-> Phantom.Route a)
-    (:>>) :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => PList p -> Phantom.Response status headers content result -> PList (p :-> Phantom.Response status headers content result)
+type PList :: [Type] -> Type
+data PList (p :: [Type]) where
+    Start :: PList '[]
+    Lit :: (TypeLits.KnownSymbol s) => PList p -> PList (Phantom.Lit s : p)
+    Param :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => a -> PList p -> PList (Phantom.Param a : p)
+    Splat :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => NonEmpty.NonEmpty a -> PList p -> PList (Phantom.Splat a : p)
+    Route :: (Route.Route a) => a -> PList p -> PList (Phantom.Route a : p)
+    Responder :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => PList p -> PList (Phantom.Response status headers content result : p)
 
-go :: PList Root
+-- (:/=) :: (TypeLits.KnownSymbol s) => PList p -> Phantom.Lit s -> PList (p ::: Phantom.Lit s)
+-- (:/:) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => PList p -> a -> PList (p ::: Phantom.Param a)
+-- (:/*) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => PList p -> NonEmpty.NonEmpty a -> PList (p ::: Phantom.Splat a)
+-- (:/#) :: (Route.Route a) => PList p -> a -> PList (p ::: Phantom.Route a)
+-- (:>>) :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => PList p -> Phantom.Response status headers content result -> PList (p ::: Phantom.Response status headers content result)
+
+go :: PList '[]
 go = Start
 
-testP =
-    go
-        :/= Phantom.Lit @"hello"
-        :/= Phantom.Lit @"world"
-        :/: (9008.609 :: Float)
-        :/: 'y'
+showPList :: PList p -> Text.Text
+showPList Start = ""
+showPList (Lit @s child) = "lit/" <> showPList child
+showPList (Param @a x child) = "param/" <> showPList child
+showPList (Splat @a nel child) = "splat/" <> showPList child
+showPList (Route @r r child) = "nel/" <> showPList child
+showPList (Responder @status @headers @content @result child) = "result/" <> showPList child
 
+testP = Lit @"hello" . Lit @"world" . Param (9008.609 :: Float) . Param 'z'
+
+testP2 = Lit @"foo" . Param (23 :: Int) . Splat (True NonEmpty.:| [False, False])
+
+testP3 = testP . testP2
+
+toUrl :: PList p -> [Text.Text]
+toUrl (Lit @s child) = Text.pack (TypeLits.symbolVal @s Typeable.Proxy) : toUrl child
+toUrl (Param a child) = Web.toUrlPiece a : toUrl child
+toUrl (Splat nel child) = map Web.toUrlPiece (NonEmpty.toList nel) ++ toUrl child
+toUrl _ = []
+
+{-
 type Append :: P -> P -> P
 type family Append p p' where
     Append x Root = x
     Append Root x = x
-    Append (as :-> a) (bs :-> b) = Append (as :-> a) bs :-> b
+    Append (as ::: a) (bs ::: b) = Append (as ::: a) bs ::: b
 
 testAppend = append testP testP
 
@@ -136,21 +157,22 @@ append (x :>> res') (y :>> res) = append (x :>> res') y :>> res
 type Reverse :: P -> P
 type family Reverse p where
     Reverse Root = Root
-    Reverse (Root :-> h) = (Root :-> h)
-    Reverse (t :-> x) = Append (Root :-> x) (Reverse t)
-
-type Handler :: P -> (Type -> Type) -> Type
+    Reverse (Root ::: h) = (Root ::: h)
+    Reverse (t ::: x) = Append (Root ::: x) (Reverse t)
+-}
+type Handler :: [Type] -> (Type -> Type) -> Type
 type family Handler p env where
-    Handler Root env = Wai.Request -> env Wai.Response
-    Handler (rem :-> Phantom.Lit s) env = Handler rem env
-    Handler (rem :-> Phantom.Param a) env = a -> Handler rem env
-    Handler (rem :-> Phantom.Splat a) env = NonEmpty.NonEmpty a -> Handler rem env
-    Handler (rem :-> Phantom.Route a) env = a -> Handler rem env
-    Handler (rem :-> Phantom.Response status headers content result) env = (Response.Headers headers -> result -> Wai.Response) -> Handler rem env
+    Handler '[] env = Wai.Request -> env Wai.Response
+    Handler (Phantom.Lit s : rem) env = Handler rem env
+    Handler (Phantom.Param a : rem) env = a -> Handler rem env
+    Handler (Phantom.Splat a : rem) env = NonEmpty.NonEmpty a -> Handler rem env
+    Handler (Phantom.Route a : rem) env = a -> Handler rem env
+    Handler (Phantom.Response status headers content result : rem) env = (Response.Headers headers -> result -> Wai.Response) -> Handler rem env
     Handler x _ = TypeError.TypeError (TypeError.Text "Can't create Handler for type: " TypeError.:<>: TypeError.ShowType x)
 
--- snoc :: forall (p :: P) (a :: Type). a -> PList p -> PList (p :-> a)
--- snoc x Start = Start :-> x
+{-
+-- snoc :: forall (p :: P) (a :: Type). a -> PList p -> PList (p ::: a)
+-- snoc x Start = Start ::: x
 -- snoc x (t :/= h) = HCons h (snoc t x)
 
 flipper :: PList p -> PList (Reverse p)
@@ -198,3 +220,4 @@ runHandler handler (rest :/: param) = runHandler (handler param) rest
 runHandler handler (rest :/* splat) = runHandler (handler splat) rest
 runHandler handler (rest :/# route) = runHandler (handler route) rest
 runHandler handler (rest :>> Phantom.Response @status @headers @content @result) = runHandler (handler $ Response.makeResponder @status @headers @content @result) rest
+-}

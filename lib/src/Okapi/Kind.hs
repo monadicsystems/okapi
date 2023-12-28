@@ -73,7 +73,7 @@ data Tree where
   Grow :: Type -> Tree -> Tree
   Fork :: Tree -> Tree -> Tree
 
-type n :- t = Grow n t
+type n :> t = Grow n t
 
 type t :<|> t' = Fork t t'
 
