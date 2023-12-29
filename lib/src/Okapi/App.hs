@@ -47,6 +47,7 @@ import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
 import Data.Tree qualified as Tree
 import Data.Tree.Knuth.Forest qualified as Knuth
+import Data.Type.Bool (type (&&))
 import Data.Type.Equality qualified as Equality
 import Data.Typeable qualified as Typeable
 import Data.Vault.Lazy qualified as Vault
@@ -76,9 +77,12 @@ import Web.HttpApiData qualified as Web
 
 type Root (t :: Kind.Tree) = Tree t '[]
 
+-- TODO: Study why changing the infixity of this operator satisfied instances of Look?
+infixr 6 |||
+
 (|||) ::
   forall (t1 :: Kind.Tree) (t2 :: Kind.Tree) (p :: [Type]).
-  -- (Kind.NotEqual t1 t2 ~ True) =>
+  (NotElem t1 t2 ~ True) =>
   Tree t1 p ->
   Tree t2 p ->
   Tree (t1 :<|> t2) p
@@ -132,13 +136,22 @@ data Tree (t :: Kind.Tree) (p :: [Type]) where
     Tree t p
   Or ::
     forall (t :: Kind.Tree) (t' :: Kind.Tree) (p :: [Type]).
-    -- (Kind.NotEqual t t' ~ True) =>
+    (NotElem t t' ~ True) =>
     Tree t p ->
     Tree t' p ->
     Tree (t :<|> t') p
 
 showType :: forall a. (Typeable.Typeable a) => String
 showType = show . Typeable.typeRep $ Typeable.Proxy @a
+
+type NotElem :: Kind.Tree -> Kind.Tree -> Bool
+type family NotElem t t' where
+  NotElem (Kind.Leaf m) (Kind.Leaf m) = False
+  NotElem (Kind.Grow n _) (Kind.Grow n _) = False
+  NotElem (Kind.Fork a b) (Kind.Fork c d) = NotElem a c && NotElem b d && NotElem a d && NotElem b c
+  NotElem (Kind.Fork a b) t = NotElem a b && NotElem a t
+  NotElem t t = False
+  NotElem t t' = True
 
 type To :: Kind.Tree -> [Type] -> Kind.Tree
 type family To (tree :: Kind.Tree) (path :: [Type]) where
@@ -148,13 +161,6 @@ type family To (tree :: Kind.Tree) (path :: [Type]) where
   To (Kind.Fork t t') ns = To t' ns
   To t p = TypeError.TypeError (TypeError.Text "The Path: " TypeError.:<>: TypeError.ShowType p TypeError.:<>: TypeError.Text " doesn't exist in Tree: " TypeError.:<>: TypeError.ShowType t)
 
--- type ToP :: Kind.Tree -> [Type] -> [Type]
--- type family ToP (tree :: Kind.Tree) (path :: [Type]) where
---   ToP t '[] = '[]
---   ToP (Kind.Grow n t) (n : ns) = ToP t ns
---   ToP (Kind.Fork (Kind.Grow n t) _) (n : ns) = ToP t ns
---   ToP (Kind.Fork t t') ns = ToP t' ns
---   ToP t p = TypeError.TypeError (TypeError.Text "The Path: " TypeError.:<>: TypeError.ShowType p TypeError.:<>: TypeError.Text " doesn't exist in Tree: " TypeError.:<>: TypeError.ShowType t)
 type (+++) :: [Type] -> [Type] -> [Type]
 type family (+++) xs ys where
   '[] +++ ys = ys
@@ -257,24 +263,27 @@ home = Lit @"home" method
  where
   method = Method @Kind.GET id \req -> do undefined
 
-person = (Lit @"person") (withPerson ||| postPerson)
+person = Lit @"person" (withPerson ||| postPerson ||| (Lit @"foo" $ Method @Kind.POST @IO id \req -> undefined))
 
-withPerson = (Param @Text.Text) (getPerson ||| pet)
+withPerson = Param @Text.Text (getPerson ||| pet)
 
 postPerson = Lit @"new" . Param @Text.Text $ Method @Kind.POST id \newPerson req -> do
   undefined
 
 getPerson = Method @Kind.GET id \person req -> do undefined
 
-pet = Lit @"pet" (getPet ||| postPet)
+pet = Lit @"pet" (getPet ||| getPet ||| postPet ||| putPet)
 
 getPet = Param @Text.Text $ Method @Kind.GET id \person pet req -> do
   undefined
 
-postPet = (Lit @"new" . Param @Text.Text) $ Method @Kind.POST id \person newPet req -> do
+postPet = Lit @"new" . Param @Text.Text $ Method @Kind.POST id \person newPet req -> do
   undefined
 
-test1 :: Tree ('Kind.Leaf 'Kind.GET) '[Phantom.Lit "home"]
+putPet = Lit @"update" . Param @Text.Text $ Method @Kind.PUT id \person newPet req -> do
+  undefined
+
+test1 :: Tree ('Kind.Leaf 'Kind.GET) _
 test1 = lookupTree api path
  where
   path = P.Lit @"home"
@@ -299,7 +308,17 @@ test3 = lookupTree api path
       . P.Param @Text.Text "Mochi"
 
 test4 :: [Text.Text]
-test4 = url @Kind.POST api path
+test4 = url @Kind.PUT api path
+ where
+  path =
+    P.Lit @"person"
+      . P.Param @Text.Text "John"
+      . P.Lit @"pet"
+      . P.Lit @"update"
+      . P.Param @Text.Text "Mochi"
+
+test8 :: [Text.Text]
+test8 = url @Kind.POST api path
  where
   path =
     P.Lit @"person"
@@ -314,3 +333,14 @@ test5 = url @Kind.GET api path
   path =
     P.Lit @"person"
       . P.Param @Text.Text "Johnny"
+
+test6 :: [Text.Text]
+test6 = url @Kind.GET api path
+ where
+  path =
+    P.Lit @"person"
+      . P.Param @Text.Text "Johnny"
+      . P.Lit @"pet"
+      . P.Param @Text.Text "Mochi"
+
+-- interpreter :: Tree t p ->

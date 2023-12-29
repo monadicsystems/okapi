@@ -67,6 +67,10 @@ import Okapi.Route qualified as Route
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
+-- type Forest :: Type
+-- type Forest where
+--   Forest :: [Tree] -> Type
+
 type Tree :: Type
 data Tree where
   Leaf :: Method -> Tree
