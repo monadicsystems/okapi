@@ -1,280 +1,223 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE QualifiedDo #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# HLINT ignore "Use if" #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module Okapi.Route where
+module Okapi.P where
 
-import Control.Applicative
-import Control.Applicative.Combinators.NonEmpty qualified as Combinators
-import Data.Kind (Type)
+import Control.Category ((>>>))
+import Control.Concurrent.Chan qualified as Chan
+import Control.Natural qualified as Natural
+import Data.Binary.Builder qualified as Builder
+import Data.ByteString.Lazy qualified as LBS
+import Data.ByteString.Lazy.Char8 qualified as LBSChar8
+import Data.Kind
+import Data.List qualified as List
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
+import Data.Tree qualified as Tree
+import Data.Tree.Knuth.Forest qualified as Knuth
+import Data.Type.Equality qualified as Equality
 import Data.Typeable qualified as Typeable
+import Data.Vault.Lazy qualified as Vault
+import Data.Void qualified as Void
 import GHC.Exts qualified as Exts
 import GHC.Generics qualified as Generics
+import GHC.TypeError qualified as TypeError
 import GHC.TypeLits qualified as TypeLits
+import GHC.TypeNats qualified as Nat
+import Network.HTTP.Types qualified as HTTP
+import Network.Wai qualified as Wai
+import Network.Wai.EventSource qualified as Wai
+import Network.Wai.Handler.Warp qualified as Warp
+import Okapi.Body qualified as Body
+import Okapi.Headers qualified as Headers
+
+import Okapi.Phantom qualified as Phantom
+import Okapi.Query qualified as Query
+import Okapi.Response qualified as Response
+import Okapi.Path qualified as Path
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
-data Parser a where
-  FMap :: (a -> b) -> Parser a -> Parser b
-  Pure :: a -> Parser a
-  Apply :: Parser (a -> b) -> Parser a -> Parser b
-  Empty :: Parser a
-  Or :: Parser a -> Parser a -> Parser a
-  Match :: forall a. (Typeable.Typeable a, Web.ToHttpApiData a) => a -> Parser ()
-  Param :: forall a. (Typeable.Typeable a, Web.FromHttpApiData a) => Parser a
-  Splat :: forall a. (Typeable.Typeable a, Web.FromHttpApiData a) => Parser (NonEmpty.NonEmpty a)
+-- type P :: Type
+-- data P where
+--     Root :: P
+--     (:::) :: P -> Type -> P
 
--- Regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
+type PList :: [Type] -> Type
+data PList (p :: [Type]) where
+    Start :: PList '[]
+    Lit :: (TypeLits.KnownSymbol s) => PList p -> PList (Phantom.Lit s : p)
+    Param :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => a -> PList p -> PList (Phantom.Param a : p)
+    Splat :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => NonEmpty.NonEmpty a -> PList p -> PList (Phantom.Splat a : p)
+    Path :: (Path.Path a) => a -> PList p -> PList (Phantom.Path a : p)
+    Responder :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => PList p -> PList (Phantom.Response status headers content result : p)
 
-instance Functor Parser where
-  fmap = FMap
+-- (:/=) :: (TypeLits.KnownSymbol s) => PList p -> Phantom.Lit s -> PList (p ::: Phantom.Lit s)
+-- (:/:) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => PList p -> a -> PList (p ::: Phantom.Param a)
+-- (:/*) :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => PList p -> NonEmpty.NonEmpty a -> PList (p ::: Phantom.Splat a)
+-- (:/#) :: (Path.Path a) => PList p -> a -> PList (p ::: Phantom.Path a)
+-- (:>>) :: (TypeLits.KnownNat status, Response.WaiResponseHeaders headers, Response.ToContentType content result) => PList p -> Phantom.Response status headers content result -> PList (p ::: Phantom.Response status headers content result)
 
-instance Applicative Parser where
-  pure = Pure
-  (<*>) = Apply
+go :: PList '[]
+go = Start
 
-instance Alternative Parser where
-  empty = Empty
-  (<|>) = Or
+showPList :: PList p -> Text.Text
+showPList Start = ""
+showPList (Lit @s child) = "lit/" <> showPList child
+showPList (Param @a x child) = "param/" <> showPList child
+showPList (Splat @a nel child) = "splat/" <> showPList child
+showPList (Path @r r child) = "nel/" <> showPList child
+showPList (Responder @status @headers @content @result child) = "result/" <> showPList child
 
-data LIT (s :: Exts.Symbol) where
-  LIT :: (TypeLits.KnownSymbol s) => LIT s
+testP = Lit @"hello" . Lit @"world" . Param (9008.609 :: Float) . Param 'z'
 
-data MATCH (a :: Type) where
-  MATCH :: (Web.ToHttpApiData a) => a -> MATCH a
+testP2 = Lit @"foo" . Param (23 :: Int) . Splat (True NonEmpty.:| [False, False])
 
-data PARAM (a :: Type) where
-  PARAM :: (Web.FromHttpApiData a) => PARAM a
+testP3 = testP . testP2
 
-data SPLAT (a :: Type) where
-  SPLAT :: (Web.FromHttpApiData a) => SPLAT (NonEmpty.NonEmpty a)
-
-{-
-data Nest (subRoute :: *) where
-  Nest :: forall subRoute. (Route subRoute, Typeable.Typeable subRoute) => subRoute -> Nest subRoute
--}
-
-class Route a where
-  parser :: Parser a
-  default parser :: (Generics.Generic a, GenericParser (Generics.Rep a)) => Parser a
-  parser = fmap Generics.to genericParser
-  printer :: a -> [Text.Text]
-  default printer :: (Generics.Generic a, GenericPrinter (Generics.Rep a)) => a -> [Text.Text]
-  printer = genericPrinter . Generics.from
-
-instance Route Int where
-  parser = param
-  printer = pure . Web.toUrlPiece
-
-instance Route Float where
-  parser = param
-  printer = pure . Web.toUrlPiece
-
-instance Route Text.Text where
-  parser = param
-  printer = pure . Web.toUrlPiece
-
--- instance (Web.FromHttpApiData a, Web.ToHttpApiData a) => Route a where
---   parser = param @a
---   printer = pure . Web.toUrlPiece
-
-class GenericParser f where
-  genericParser :: Parser (f a)
-
-instance GenericParser Generics.V1 where
-  genericParser = empty
-
-instance GenericParser Generics.U1 where
-  genericParser = pure Generics.U1
-
-instance (GenericParser f, GenericParser g) => GenericParser (f Generics.:+: g) where
-  genericParser =
-    fmap Generics.L1 genericParser <|> fmap Generics.R1 genericParser
-
-instance (GenericParser f, GenericParser g) => GenericParser (f Generics.:*: g) where
-  genericParser = liftA2 (Generics.:*:) genericParser genericParser
-
--- A data type
-instance (GenericParser p) => GenericParser (Generics.M1 Generics.D f p) where
-  genericParser = fmap Generics.M1 genericParser
-
--- Constructor with no arguments
-instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericParser (Generics.M1 Generics.C f Generics.U1) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in do
-          lit $ Text.toLower $ Text.pack $ Generics.conName m
-          x <- fmap Generics.M1 genericParser
-          pure x
-
--- Constructor with one or more arguments
-instance (Generics.Constructor f, GenericParser p) => GenericParser (Generics.M1 Generics.C f p) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in fmap Generics.M1 genericParser
+toUrl :: PList p -> [Text.Text]
+toUrl (Lit @s child) = Text.pack (TypeLits.symbolVal @s Typeable.Proxy) : toUrl child
+toUrl (Param a child) = Web.toUrlPiece a : toUrl child
+toUrl (Splat nel child) = map Web.toUrlPiece (NonEmpty.toList nel) ++ toUrl child
+toUrl _ = []
 
 {-
--- A SubRoute
-instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (Nest a))) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in fmap (Generics.M1 . Generics.K1 . Nest) (parser @a)
+type Append :: P -> P -> P
+type family Append p p' where
+    Append x Root = x
+    Append Root x = x
+    Append (as ::: a) (bs ::: b) = Append (as ::: a) bs ::: b
+
+testAppend = append testP testP
+
+append :: PList p -> PList p' -> PList (Append p p')
+append Start x = x
+append x Start = x
+-- Lit
+append (x :/= Phantom.Lit @s') (y :/= Phantom.Lit @s) = append (x :/= Phantom.Lit @s') y :/= Phantom.Lit @s
+append (x :/: a) (y :/= Phantom.Lit @s) = append (x :/: a) y :/= Phantom.Lit @s
+append (x :/* nel) (y :/= Phantom.Lit @s) = append (x :/* nel) y :/= Phantom.Lit @s
+append (x :/# r) (y :/= Phantom.Lit @s) = append (x :/# r) y :/= Phantom.Lit @s
+append (x :>> res) (y :/= Phantom.Lit @s) = append (x :>> res) y :/= Phantom.Lit @s
+-- Param
+append (x :/= Phantom.Lit @s) (y :/: a) = append (x :/= Phantom.Lit @s) y :/: a
+append (x :/: a') (y :/: a) = append (x :/: a') y :/: a
+append (x :/* nel) (y :/: a) = append (x :/* nel) y :/: a
+append (x :/# r) (y :/: a) = append (x :/# r) y :/: a
+append (x :>> res) (y :/: a) = append (x :>> res) y :/: a
+-- Splat
+append (x :/= Phantom.Lit @s) (y :/* nel) = append (x :/= Phantom.Lit @s) y :/* nel
+append (x :/: a) (y :/* nel) = append (x :/: a) y :/* nel
+append (x :/* nel') (y :/* nel) = append (x :/* nel') y :/* nel
+append (x :/# r) (y :/* nel) = append (x :/# r) y :/* nel
+append (x :>> res) (y :/* nel) = append (x :>> res) y :/* nel
+-- Path
+append (x :/= Phantom.Lit @s) (y :/# r) = append (x :/= Phantom.Lit @s) y :/# r
+append (x :/: a) (y :/# r) = append (x :/: a) y :/# r
+append (x :/* nel') (y :/# r) = append (x :/* nel') y :/# r
+append (x :/# r') (y :/# r) = append (x :/# r') y :/# r
+append (x :>> res) (y :/# r) = append (x :>> res) y :/# r
+-- Response
+append (x :/= Phantom.Lit @s) (y :>> res) = append (x :/= Phantom.Lit @s) y :>> res
+append (x :/: a) (y :>> res) = append (x :/: a) y :>> res
+append (x :/* nel') (y :>> res) = append (x :/* nel') y :>> res
+append (x :/# r') (y :>> res) = append (x :/# r') y :>> res
+append (x :>> res') (y :>> res) = append (x :>> res') y :>> res
+
+type Reverse :: P -> P
+type family Reverse p where
+    Reverse Root = Root
+    Reverse (Root ::: h) = (Root ::: h)
+    Reverse (t ::: x) = Append (Root ::: x) (Reverse t)
 -}
+type Handler :: [Type] -> (Type -> Type) -> Type
+type family Handler p env where
+    Handler '[] env = Wai.Request -> env Wai.Response
+    Handler (Phantom.Lit s : rem) env = Handler rem env
+    Handler (Phantom.Param a : rem) env = a -> Handler rem env
+    Handler (Phantom.Splat a : rem) env = NonEmpty.NonEmpty a -> Handler rem env
+    Handler (Phantom.Path a : rem) env = a -> Handler rem env
+    Handler (Phantom.Response status headers content result : rem) env = (Response.Headers headers -> result -> Wai.Response) -> Handler rem env
+    Handler x _ = TypeError.TypeError (TypeError.Text "Can't create Handler for type: " TypeError.:<>: TypeError.ShowType x)
 
--- A Parameter/SubRoute
-instance {-# OVERLAPPABLE #-} (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i a)) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in do
-          p <- parser @a
-          pure (Generics.M1 $ Generics.K1 p)
+{-
+-- snoc :: forall (p :: P) (a :: Type). a -> PList p -> PList (p ::: a)
+-- snoc x Start = Start ::: x
+-- snoc x (t :/= h) = HCons h (snoc t x)
 
--- A Splat
-instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in do
-          neList <- Combinators.some $ parser @a
-          pure (Generics.M1 $ Generics.K1 neList)
+flipper :: PList p -> PList (Reverse p)
+flipper Start = Start
+-- Lit
+flipper (Start :/= Phantom.Lit @s) = Start :/= Phantom.Lit
+flipper ((t :/= Phantom.Lit @s') :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/= Phantom.Lit @s'))
+flipper ((t :/: a) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/: a))
+flipper ((t :/* nel) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/* nel))
+flipper ((t :/# r) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :/# r))
+flipper ((t :>> res) :/= Phantom.Lit @s) = append (Start :/= Phantom.Lit @s) (flipper (t :>> res))
+-- Param
+flipper (Start :/: a) = Start :/: a
+flipper ((t :/= Phantom.Lit @s) :/: a) = append (Start :/: a) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a') :/: a) = append (Start :/: a) (flipper (t :/: a'))
+flipper ((t :/* nel) :/: a) = append (Start :/: a) (flipper (t :/* nel))
+flipper ((t :/# r) :/: a) = append (Start :/: a) (flipper (t :/# r))
+flipper ((t :>> res) :/: a) = append (Start :/: a) (flipper (t :>> res))
+-- Splat
+flipper (Start :/* nel) = Start :/* nel
+flipper ((t :/= Phantom.Lit @s) :/* nel) = append (Start :/* nel) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a) :/* nel) = append (Start :/* nel) (flipper (t :/: a))
+flipper ((t :/* nel') :/* nel) = append (Start :/* nel) (flipper (t :/* nel'))
+flipper ((t :/# r) :/* nel) = append (Start :/* nel) (flipper (t :/# r))
+flipper ((t :>> res) :/* nel) = append (Start :/* nel) (flipper (t :>> res))
+-- Path
+flipper (Start :/# r) = Start :/# r
+flipper ((t :/= Phantom.Lit @s) :/# r) = append (Start :/# r) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a) :/# r) = append (Start :/# r) (flipper (t :/: a))
+flipper ((t :/* nel) :/# r) = append (Start :/# r) (flipper (t :/* nel))
+flipper ((t :/# r') :/# r) = append (Start :/# r) (flipper (t :/# r'))
+flipper ((t :>> res) :/# r) = append (Start :/# r) (flipper (t :>> res))
+-- Response
+flipper (Start :>> res) = Start :>> res
+flipper ((t :/= Phantom.Lit @s) :>> res) = append (Start :>> res) (flipper (t :/= Phantom.Lit @s))
+flipper ((t :/: a) :>> res) = append (Start :>> res) (flipper (t :/: a))
+flipper ((t :/* nel) :>> res) = append (Start :>> res) (flipper (t :/* nel))
+flipper ((t :/# r) :>> res) = append (Start :>> res) (flipper (t :/# r))
+flipper ((t :>> res') :>> res) = append (Start :>> res) (flipper (t :>> res'))
 
--- A literal field
-instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericParser (Generics.M1 Generics.S f (Generics.K1 i (LIT s))) where
-  genericParser =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in do
-          lit $ Text.pack $ TypeLits.symbolVal @s Typeable.Proxy
-          pure (Generics.M1 $ Generics.K1 LIT)
-
-class GenericPrinter f where
-  genericPrinter :: f a -> [Text.Text]
-
-instance GenericPrinter Generics.V1 where
-  genericPrinter _ = []
-
--- instance GenericParser Generics.U1 where
---   genericParser = pure Generics.U1
-
-instance (GenericPrinter f, GenericPrinter g) => GenericPrinter (f Generics.:+: g) where
-  genericPrinter (Generics.L1 l) = genericPrinter l
-  genericPrinter (Generics.R1 r) = genericPrinter r
-
-instance (GenericPrinter f, GenericPrinter g) => GenericPrinter (f Generics.:*: g) where
-  genericPrinter (l Generics.:*: r) = genericPrinter l <> genericPrinter r
-
--- A data type
-instance (GenericPrinter p) => GenericPrinter (Generics.M1 Generics.D f p) where
-  genericPrinter (Generics.M1 x) = genericPrinter x
-
--- Constructor with one or more arguments
-instance (Generics.Constructor f, GenericPrinter p) => GenericPrinter (Generics.M1 Generics.C f p) where
-  genericPrinter (Generics.M1 x) =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in genericPrinter x
-
--- Constructor with no arguments
-instance {-# OVERLAPPING #-} (Generics.Constructor f) => GenericPrinter (Generics.M1 Generics.C f Generics.U1) where
-  genericPrinter _ =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in [Text.toLower $ Text.pack $ Generics.conName m]
-
--- A Parameter/Sub Route
-instance {-# OVERLAPPABLE #-} (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i a)) where
-  genericPrinter (Generics.M1 (Generics.K1 x)) =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in printer x
-
--- A Splat
-instance (Generics.Selector f, Route a, Typeable.Typeable a) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (NonEmpty.NonEmpty a))) where
-  genericPrinter (Generics.M1 (Generics.K1 x)) =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in concat $ map printer $ NonEmpty.toList x
-
--- A literal field
-instance (Generics.Selector f, TypeLits.KnownSymbol s) => GenericPrinter (Generics.M1 Generics.S f (Generics.K1 i (LIT s))) where
-  genericPrinter (Generics.M1 (Generics.K1 _)) =
-    let m :: Generics.M1 i f p a
-        m = undefined
-     in [Text.pack $ TypeLits.symbolVal @s Typeable.Proxy]
-
-match :: forall a. (Typeable.Typeable a, Web.ToHttpApiData a) => a -> Parser ()
-match = Match
-
-lit :: Text.Text -> Parser ()
-lit = Match @Text.Text
-
-param :: (Typeable.Typeable a, Web.FromHttpApiData a) => Parser a
-param = Param
-
-splat :: (Typeable.Typeable a, Web.FromHttpApiData a) => Parser (NonEmpty.NonEmpty a)
-splat = Splat
-
--- regex :: forall a. (Typeable.Typeable a, Regex.RegexContext Regex.Regex Text.Text a) => Text.Text -> Parser a
--- regex = Regex
-
--- allRoutes :: Parser a -> [Text.Text]
--- allRoutes (FMap _ dsl) = allRoutes dsl
--- allRoutes (Pure x) = ""
--- allRoutes (Apply aF aX) = allRoutes aF <> allRoutes aX
--- allRoutes (Match t) = "/" <> Web.toUrlPiece t
--- allRoutes (Param @p) = "/:" <> Text.pack (show . Typeable.typeRep $ Typeable.Proxy @p)
--- allRoutes (Regex @ty regex) = "/r(" <> regex <> ")"
-
--- equals :: Parser a -> Parser b -> Bool
--- equals (FMap _ r) (FMap _ r') = equals r r'
--- equals (Pure _) (Pure _) = True
--- equals (Apply af ap) (Apply af' ap') = equals af af' && equals ap ap'
--- equals (Static t) (Static t') = t == t'
--- equals (Param @a) (Param @b) = case heqT @a @b of
---   Nothing -> False
---   Just HRefl -> True
--- equals _ _ = False
-
-data Error = Error
-
-data MyRoutes
-  = Student
-      { path :: LIT "student"
-      , firstName :: Text.Text
-      , lastName :: Text.Text
-      }
-  | StudentGrades
-      { path' :: LIT "student"
-      , firstName :: Text.Text
-      , lastName :: Text.Text
-      , rem :: LIT "grades"
-      }
-  | Hello
-  | Baz
-      { path'' :: LIT "baz"
-      , subRoute :: SubRoute
-      }
-  deriving (Generics.Generic, Route)
-
-data SubRoute = SubRoute {path :: LIT "student", foo :: Int, bar :: Float}
-  deriving (Generics.Generic, Route)
+runHandler :: Handler p env -> PList p -> (Wai.Request -> env Wai.Response)
+runHandler handler Start = handler
+runHandler handler (rest :/= lit) = runHandler handler rest
+runHandler handler (rest :/: param) = runHandler (handler param) rest
+runHandler handler (rest :/* splat) = runHandler (handler splat) rest
+runHandler handler (rest :/# route) = runHandler (handler route) rest
+runHandler handler (rest :>> Phantom.Response @status @headers @content @result) = runHandler (handler $ Response.makeResponder @status @headers @content @result) rest
+-}

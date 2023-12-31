@@ -37,7 +37,7 @@ import Network.Wai.Middleware.RequestLogger qualified as Wai
 import Okapi.App
 import Okapi.App qualified as App
 import Okapi.Headers qualified as Headers
-import Okapi.Route qualified as Route
+import Okapi.Path qualified as Path
 
 import Web.HttpApiData qualified as Web
 
@@ -253,9 +253,9 @@ opAPI op =
 --       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
 --     testAPI :: [App]
 --     testAPI =
---       [ endpoint HTTP.GET (do Route.lit "user";) id \_ req -> do
+--       [ endpoint HTTP.GET (do Path.lit "user";) id \_ req -> do
 --           undefined
---       , endpoint HTTP.POST (do Route.lit "user"; id' <- Route.param @Int; return id') id \userIDS req -> do
+--       , endpoint HTTP.POST (do Path.lit "user"; id' <- Path.param @Int; return id') id \userIDS req -> do
 --           let userID = Secret.tell req userIDS
 --           undefined
 --       ]

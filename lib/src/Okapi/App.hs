@@ -65,13 +65,13 @@ import Okapi.Body qualified as Body
 import Okapi.Headers qualified as Headers
 import Okapi.Kind ((:<|>), (:>))
 import Okapi.Kind qualified as Kind
-import Okapi.Middleware qualified as Middleware
+
 import Okapi.P qualified as P
+import Okapi.Path qualified as Path
 import Okapi.Phantom qualified as Phantom
 import Okapi.Q qualified as Q
 import Okapi.Query qualified as Query
 import Okapi.Response qualified as Response
-import Okapi.Route qualified as Route
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
 
@@ -109,11 +109,11 @@ data Tree (t :: Kind.Tree) (p :: [Type]) where
     (Web.FromHttpApiData a, Typeable.Typeable a) =>
     Tree c (p :< Phantom.Splat a) ->
     Tree (Phantom.Splat a :> c) p
-  Route ::
+  Path ::
     forall a (c :: Kind.Tree) (p :: [Type]).
-    (Route.Route a, Typeable.Typeable a) =>
-    Tree c (p :< Phantom.Route a) ->
-    Tree (Phantom.Route a :> c) p
+    (Path.Path a, Typeable.Typeable a) =>
+    Tree c (p :< Phantom.Path a) ->
+    Tree (Phantom.Path a :> c) p
   Method ::
     forall (m :: Kind.Method) (env :: Type -> Type) (p :: [Type]).
     (Typeable.Typeable env) =>
@@ -147,8 +147,8 @@ showType = show . Typeable.typeRep $ Typeable.Proxy @a
 type NotElem :: Kind.Tree -> Kind.Tree -> Bool
 type family NotElem t t' where
   NotElem (Kind.Leaf m) (Kind.Leaf m) = False
-  NotElem (Kind.Grow n _) (Kind.Grow n _) = False
-  NotElem (Kind.Fork a b) (Kind.Fork c d) = NotElem a c && NotElem b d && NotElem a d && NotElem b c
+  NotElem (Kind.Node n _) (Kind.Node n _) = False
+  -- NotElem (Kind.Fork a b) (Kind.Fork c d) = NotElem a c && NotElem b d && NotElem a d && NotElem b c
   NotElem (Kind.Fork a b) t = NotElem a b && NotElem a t
   NotElem t t = False
   NotElem t t' = True
@@ -156,8 +156,8 @@ type family NotElem t t' where
 type To :: Kind.Tree -> [Type] -> Kind.Tree
 type family To (tree :: Kind.Tree) (path :: [Type]) where
   To t '[] = t
-  To (Kind.Grow n t) (n : ns) = To t ns
-  To (Kind.Fork (Kind.Grow n t) _) (n : ns) = To t ns
+  To (Kind.Node n t) (n : ns) = To t ns
+  To (Kind.Fork (Kind.Node n t) _) (n : ns) = To t ns
   To (Kind.Fork t t') ns = To t' ns
   To t p = TypeError.TypeError (TypeError.Text "The Path: " TypeError.:<>: TypeError.ShowType p TypeError.:<>: TypeError.Text " doesn't exist in Tree: " TypeError.:<>: TypeError.ShowType t)
 
@@ -187,7 +187,7 @@ instance
   ( Look c p (o :< Phantom.Lit s) t'
   , (o :< Phantom.Lit s) +++ p ~ o +++ (Phantom.Lit s : p)
   ) =>
-  Look (Kind.Grow (Phantom.Lit s) c) (Phantom.Lit s : p) o t'
+  Look (Kind.Node (Phantom.Lit s) c) (Phantom.Lit s : p) o t'
   where
   look (Lit tree) (P.Lit path) = look tree path
 
@@ -195,7 +195,7 @@ instance
   ( Look c p (o :< Phantom.Param a) t'
   , (o :< Phantom.Param a) +++ p ~ o +++ (Phantom.Param a : p)
   ) =>
-  Look (Kind.Grow (Phantom.Param a) c) (Phantom.Param a : p) o t'
+  Look (Kind.Node (Phantom.Param a) c) (Phantom.Param a : p) o t'
   where
   look (Param tree) (P.Param _ path) = look tree path
 
@@ -203,23 +203,23 @@ instance
   ( Look c p (o :< Phantom.Splat a) t'
   , (o :< Phantom.Splat a) +++ p ~ o +++ (Phantom.Splat a : p)
   ) =>
-  Look (Kind.Grow (Phantom.Splat a) c) (Phantom.Splat a : p) o t'
+  Look (Kind.Node (Phantom.Splat a) c) (Phantom.Splat a : p) o t'
   where
   look (Splat tree) (P.Splat _ path) = look tree path
 
 instance
-  ( Look c p (o :< Phantom.Route a) t'
-  , (o :< Phantom.Route a) +++ p ~ o +++ (Phantom.Route a : p)
+  ( Look c p (o :< Phantom.Path a) t'
+  , (o :< Phantom.Path a) +++ p ~ o +++ (Phantom.Path a : p)
   ) =>
-  Look (Kind.Grow (Phantom.Route a) c) (Phantom.Route a : p) o t'
+  Look (Kind.Node (Phantom.Path a) c) (Phantom.Path a : p) o t'
   where
-  look (Route tree) (P.Route _ path) = look tree path
+  look (Path tree) (P.Path _ path) = look tree path
 
 instance
   ( Look c p (o :< Phantom.Response status headers content result) t'
   , (o :< Phantom.Response status headers content result) +++ p ~ o +++ p
   ) =>
-  Look (Kind.Grow (Phantom.Response status headers content result) c) p o t'
+  Look (Kind.Node (Phantom.Response status headers content result) c) p o t'
   where
   look (Responder tree) = look tree
 
@@ -227,7 +227,7 @@ instance
   ( Look c p (o :< Phantom.Response status headers content result) t'
   , (o :< Phantom.Response status headers content result) +++ p ~ o +++ p
   ) =>
-  Look (Kind.Fork (Kind.Grow (Phantom.Response status headers content result) c) x) p o t'
+  Look (Kind.Fork (Kind.Node (Phantom.Response status headers content result) c) x) p o t'
   where
   look (Or (Responder tree) _) = look tree
 
@@ -238,12 +238,12 @@ instance
   ( Look c p (o :< n) t'
   , (o :< n) +++ p ~ o +++ (n : p)
   ) =>
-  Look (Kind.Fork (Kind.Grow n c) x) (n : p) o t'
+  Look (Kind.Fork (Kind.Node n c) x) (n : p) o t'
   where
   look (Or (Lit tree) _) (P.Lit path) = look tree path
   look (Or (Param tree) _) (P.Param _ path) = look tree path
   look (Or (Splat tree) _) (P.Splat _ path) = look tree path
-  look (Or (Route tree) _) (P.Route _ path) = look tree path
+  look (Or (Path tree) _) (P.Path _ path) = look tree path
 
 instance
   {-# OVERLAPPABLE #-}

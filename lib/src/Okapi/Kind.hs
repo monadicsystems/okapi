@@ -59,25 +59,21 @@ import Network.Wai.EventSource qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
 import Okapi.Body qualified as Body
 import Okapi.Headers qualified as Headers
-import Okapi.Middleware qualified as Middleware
+
 import Okapi.Phantom qualified as Phantom
 import Okapi.Query qualified as Query
 import Okapi.Response qualified as Response
-import Okapi.Route qualified as Route
+import Okapi.Path qualified as Path
 import Text.Regex.TDFA qualified as Regex
 import Web.HttpApiData qualified as Web
-
--- type Forest :: Type
--- type Forest where
---   Forest :: [Tree] -> Type
 
 type Tree :: Type
 data Tree where
   Leaf :: Method -> Tree
-  Grow :: Type -> Tree -> Tree
+  Node :: Type -> Tree -> Tree
   Fork :: Tree -> Tree -> Tree
 
-type n :> t = Grow n t
+type n :> t = Node n t
 
 type t :<|> t' = Fork t t'
 

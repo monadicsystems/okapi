@@ -51,7 +51,7 @@ import GHC.TypeNats qualified as Nat
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Headers qualified as Headers
-import Okapi.Route qualified as Route
+import Okapi.Path qualified as Path
 
 import Web.HttpApiData qualified as Web
 
