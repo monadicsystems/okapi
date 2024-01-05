@@ -339,10 +339,13 @@ home =
     lit @"hello"
         . lit @"world"
         . param @Text.Text
-        . method @Kind.GET @IO (response @"ok" @200 @'[] @Text.Text @Text.Text) id
+        . method @Kind.GET @IO (response @"ok" @200 @'[] @Text.Text @Text.Text . response @"error" @500 @'[] @Text.Text @Text.Text) id
 
 homeHandler =
-    \(name :: Text.Text) env -> return $ env.responses.ok noHeaders "Hello"
+    \(name :: Text.Text) env ->
+        if name == "Bob"
+            then return $ env.responses.ok noHeaders "Hello"
+            else return $ env.responses.error noHeaders "Bye"
 
 person = lit @"person" . method @Kind.PUT @IO (response @"ok" @200 @'[] @Text.Text @Text.Text) id
 
