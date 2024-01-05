@@ -70,5 +70,5 @@ data Param (a :: Type) where
 data Splat (a :: Type) where
     Splat :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => NonEmpty.NonEmpty a -> Splat a
 
-data Response (status :: TypeLits.Nat) (headers :: [TypeLits.Symbol]) (content :: Type) (result :: Type) where
-    Response :: forall status headers content result. (TypeLits.KnownNat status) => Response status headers content result
+-- data Response (status :: TypeLits.Nat) (headers :: [TypeLits.Symbol]) (content :: Type) (result :: Type) where
+--     Response :: forall status headers content result. (TypeLits.KnownNat status) => Response status headers content result

@@ -31,6 +31,7 @@
 module Kind where
 
 import Data.Kind
+import GHC.TypeLits qualified as TypeLits
 
 type VERB :: Type
 data VERB where
@@ -40,9 +41,14 @@ data VERB where
 
 type TREE :: Type
 data TREE where
-    LEAF :: VERB -> TREE
+    LEAF :: VERB -> [RESPONSE] -> TREE
     NODE :: Type -> TREE -> TREE
     BRANCH :: TREE -> TREE -> TREE
+
+type RESPONSE :: Type
+data RESPONSE where
+    NOCONTENT :: TypeLits.Symbol -> [TypeLits.Symbol] -> RESPONSE
+    RESPONSE :: TypeLits.Symbol -> TypeLits.Nat -> [TypeLits.Symbol] -> Type -> Type -> RESPONSE
 
 -- data Forest (f :: FOREST) (p :: [Type]) where
 --     Empty :: Forest '[] p
