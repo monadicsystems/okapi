@@ -41,6 +41,7 @@ import Data.ByteString.Char8 qualified as Char8
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBSChar8
 import Data.CaseInsensitive qualified as CI
+import Data.Either qualified as Either
 import Data.Functor.Identity qualified as Identity
 import Data.Kind
 import Data.List qualified as List
@@ -60,66 +61,203 @@ import GHC.Records qualified as Records
 import GHC.TypeError qualified as TypeError
 import GHC.TypeLits qualified as TypeLits
 import GHC.TypeNats qualified as Nat
-import Kind qualified
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.EventSource qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
-import Phantom qualified
 import Web.HttpApiData qualified as Web
 
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
+-----------
+-- KINDS --
+-----------
 
--- type FOREST :: Type
--- type FOREST = [TREE]
+type VERB :: Type
+data VERB where
+    GET :: VERB
+    POST :: VERB
+    PUT :: VERB
 
--- (+++) :: Forest f p -> Forest f' p -> Forest (f :+++ f') p
--- (+++) x y = case x of
---     Seed -> y
---     (Grow t f) -> Grow t (f +++ y)
+class ToStdMethod (v :: VERB) where
+    toStdMethod :: HTTP.StdMethod
 
-type (:<>) :: [k] -> [k] -> [k]
-type family (:<>) xs ys where
-    '[] :<> ys = ys
-    (x : xs) :<> ys = x : xs :<> ys
+instance ToStdMethod GET where
+    toStdMethod = HTTP.GET
 
-type (:<) :: [Type] -> Type -> [Type]
-type family (:<) xs x where
-    '[] :< x = x : '[]
-    (x : xs) :< x' = x : (xs :< x')
+instance ToStdMethod POST where
+    toStdMethod = HTTP.POST
 
-type (:*) n t = Kind.NODE n t
+instance ToStdMethod PUT where
+    toStdMethod = HTTP.PUT
 
-type (:+) t t' = Kind.BRANCH t t'
+type TREE :: Type
+data TREE where
+    LEAF :: TypeLits.Symbol -> [Type] -> (Type -> Type) -> VERB -> [RESPONSE] -> TREE
+    NODE :: Type -> TREE -> TREE
+    BRANCH :: TREE -> TREE -> TREE
 
-class ToWaiResponseHeaders (headerKeys :: [TypeLits.Symbol]) where
-    toWaiResponseHeaders :: ResponseHeaders headerKeys -> HTTP.ResponseHeaders
+type (:*) n t = NODE n t
 
-instance ToWaiResponseHeaders '[] where
-    toWaiResponseHeaders _ = []
+type (:+) t t' = BRANCH t t'
 
-instance (ToWaiResponseHeaders headerKeys) => ToWaiResponseHeaders (headerKey ': headerKeys) where
-    toWaiResponseHeaders (InsertHeader v tail) = [(CI.mk . Char8.pack $ TypeLits.symbolVal @headerKey Typeable.Proxy, Web.toHeader v)]
+--------------
+-- PHANTOMS --
+--------------
 
-data Responses (res :: [Kind.RESPONSE]) where
+data Lit_ (s :: TypeLits.Symbol) where
+    Lit_ :: (TypeLits.KnownSymbol s) => Lit_ s
+
+data Param_ (a :: Type) where
+    Param_ :: (Web.FromHttpApiData a) => a -> Param_ a
+
+data Splat_ (a :: Type) where
+    Splat_ :: (Web.FromHttpApiData a) => NonEmpty.NonEmpty a -> Splat_ a
+
+data Method_ (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (p :: [Type]) where
+    Method_ ::
+        (ToStdMethod v, BuildHandler res p env) =>
+        (env Natural.~> IO) ->
+        (Responses '[] -> Responses res) ->
+        (Handler res p env) ->
+        Method_ name v env res p
+
+----------
+-- Tree --
+----------
+
+data Tree (t :: TREE) (p :: [Type]) where
+    Method ::
+        forall (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (p :: [Type]).
+        (ToStdMethod v, BuildHandler res p env) =>
+        (env Natural.~> IO) ->
+        (Responses '[] -> Responses res) ->
+        (Handler res p env) ->
+        Tree (LEAF name p env v res) p
+    Lit ::
+        forall (s :: Exts.Symbol) (c :: TREE) (p :: [Type]).
+        (TypeLits.KnownSymbol s) =>
+        Tree c (p :< Lit_ s) ->
+        Tree (Lit_ s :* c) p
+    Param ::
+        forall (a :: Type) (c :: TREE) (p :: [Type]).
+        (Web.FromHttpApiData a) =>
+        Tree c (p :< Param_ a) ->
+        Tree (Param_ a :* c) p
+    Splat ::
+        forall a (c :: TREE) (p :: [Type]).
+        (Web.FromHttpApiData a) =>
+        Tree c (p :< Splat_ a) ->
+        Tree (Splat_ a :* c) p
+    Branch ::
+        forall (t :: TREE) (t' :: TREE) (p :: [Type]).
+        (Valid (t :+ t') ~ True) =>
+        Tree t p ->
+        Tree t' p ->
+        Tree (t :+ t') p
+
+type Root (t :: TREE) = Tree t '[]
+
+method ::
+    forall (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (p :: [Type]).
+    (ToStdMethod v, BuildHandler res p env) =>
+    (env Natural.~> IO) ->
+    (Responses '[] -> Responses res) ->
+    Handler res p env ->
+    Tree (LEAF name p env v res) p
+method = Method
+
+lit ::
+    forall (s :: Exts.Symbol) (c :: TREE) (p :: [Type]).
+    (TypeLits.KnownSymbol s) =>
+    Tree c (p :< Lit_ s) ->
+    Tree (Lit_ s :* c) p
+lit = Lit
+
+param ::
+    forall (a :: Type) (c :: TREE) (p :: [Type]).
+    (Web.FromHttpApiData a) =>
+    Tree c (p :< Param_ a) ->
+    Tree (Param_ a :* c) p
+param = Param
+
+splat ::
+    forall a (c :: TREE) (p :: [Type]).
+    (Web.FromHttpApiData a) =>
+    Tree c (p :< Splat_ a) ->
+    Tree (Splat_ a :* c) p
+splat = Splat
+
+infixr 6 |||
+
+(|||) ::
+    forall (t :: TREE) (t' :: TREE) (p :: [Type]).
+    (Valid (t :+ t') ~ True) =>
+    Tree t p ->
+    Tree t' p ->
+    Tree (t :+ t') p
+(|||) = Branch
+
+-- instance (Records.HasField name (Tree c (p :< Lit_ s)) (Method_ name verb env res path)) => Records.HasField name (Tree (NODE (Lit_ s) c) p) (Method_ name verb env res path) where
+--     getField (Lit child) = Records.getField @name child
+
+instance (TreeToMethods t, Records.HasField name (Methods (TTMType t)) (Method_ name verb env res path)) => Records.HasField name (Tree t p) (Method_ name verb env res path) where
+    getField tree = Records.getField @name $ treeToMethods tree
+
+---------------
+-- RESPONSES --
+---------------
+
+type RESPONSE :: Type
+data RESPONSE where
+    NOCONTENT :: TypeLits.Symbol -> [TypeLits.Symbol] -> RESPONSE
+    RESPONSE :: TypeLits.Symbol -> TypeLits.Nat -> [TypeLits.Symbol] -> Type -> Type -> RESPONSE
+
+data Responses (res :: [RESPONSE]) where
     Nil :: Responses '[]
-    NoContent :: forall name headers tail. (ToWaiResponseHeaders headers) => Responses tail -> Responses ('Kind.NOCONTENT name headers : tail)
+    NoContent :: forall name headers tail. (ToWaiResponseHeaders headers) => Responses tail -> Responses ('NOCONTENT name headers : tail)
     Response ::
         forall name status headers content result tail.
         (TypeLits.KnownNat status, ToContentType content result, ToWaiResponseHeaders headers) =>
         Responses tail ->
-        Responses ('Kind.RESPONSE name status headers content result : tail)
+        Responses ('RESPONSE name status headers content result : tail)
 
-noContent :: forall name headers tail. (ToWaiResponseHeaders headers) => Responses tail -> Responses ('Kind.NOCONTENT name headers : tail)
+noContent :: forall name headers tail. (ToWaiResponseHeaders headers) => Responses tail -> Responses ('NOCONTENT name headers : tail)
 noContent = NoContent
 
 response ::
     forall name status headers content result tail.
     (TypeLits.KnownNat status, ToContentType content result, ToWaiResponseHeaders headers) =>
     Responses tail ->
-    Responses ('Kind.RESPONSE name status headers content result : tail)
+    Responses ('RESPONSE name status headers content result : tail)
 response = Response
+
+instance {-# OVERLAPS #-} Records.HasField name (Responses ('RESPONSE name status headers content result ': rs)) (ResponseHeaders headers -> result -> Wai.Response) where
+    getField (Response _) headerMap result =
+        let status = natToStatus $ Nat.natVal @status Typeable.Proxy
+            contentType = toContentType @content @result result
+            bodyType = contentTypeBody @content contentType
+            name = contentTypeName @content
+            headers = ("Content-Type", name) : toWaiResponseHeaders headerMap
+         in case bodyType of
+                ResponseBodyBytes bytes -> Wai.responseLBS status headers bytes
+                ResponseBodyBuilder builder -> Wai.responseBuilder status headers builder
+                ResponseBodyStream stream -> Wai.responseStream status headers stream
+                ResponseBodyFile path part -> Wai.responseFile status headers path part
+
+instance {-# OVERLAPS #-} Records.HasField name (Responses (NOCONTENT name headers ': rs)) (ResponseHeaders headers -> Wai.Response) where
+    getField (NoContent _) headerMap =
+        let status = natToStatus 204
+            headers = toWaiResponseHeaders headerMap
+         in Wai.responseLBS status headers ""
+
+instance {-# OVERLAPPABLE #-} (Records.HasField name (Responses res) a) => Records.HasField name (Responses ('RESPONSE name' status headers content result ': res)) a where
+    getField (Response r) = Records.getField @name r
+
+instance {-# OVERLAPPABLE #-} (Records.HasField name (Responses res) a) => Records.HasField name (Responses ('NOCONTENT name' headers ': res)) a where
+    getField (NoContent r) = Records.getField @name r
+
+----------------------
+-- RESPONSE HEADERS --
+----------------------
 
 data ResponseHeaders (headerKeys :: [Exts.Symbol]) where
     NoHeaders :: ResponseHeaders '[]
@@ -141,39 +279,28 @@ insertHeader ::
     ResponseHeaders (headerKey : headerKeys)
 insertHeader = InsertHeader
 
-natToStatus :: Nat.Nat -> HTTP.Status
-natToStatus n = toEnum $ fromEnum n
+class ToWaiResponseHeaders (headerKeys :: [TypeLits.Symbol]) where
+    toWaiResponseHeaders :: ResponseHeaders headerKeys -> HTTP.ResponseHeaders
 
-instance {-# OVERLAPS #-} Records.HasField name (Responses ('Kind.RESPONSE name status headers content result ': rs)) (ResponseHeaders headers -> result -> Wai.Response) where
-    getField (Response _) headerMap result =
-        let status = natToStatus $ Nat.natVal @status Typeable.Proxy
-            contentType = toContentType @content @result result
-            bodyType = contentTypeBody @content contentType
-            name = contentTypeName @content
-            headers = ("Content-Type", name) : toWaiResponseHeaders headerMap
-         in case bodyType of
-                ResponseBodyBytes bytes -> Wai.responseLBS status headers bytes
-                ResponseBodyBuilder builder -> Wai.responseBuilder status headers builder
-                ResponseBodyStream stream -> Wai.responseStream status headers stream
-                ResponseBodyFile path part -> Wai.responseFile status headers path part
+instance ToWaiResponseHeaders '[] where
+    toWaiResponseHeaders _ = []
 
-instance {-# OVERLAPS #-} Records.HasField name (Responses (Kind.NOCONTENT name headers ': rs)) (ResponseHeaders headers -> Wai.Response) where
-    getField (NoContent _) headerMap =
-        let status = natToStatus 204
-            headers = toWaiResponseHeaders headerMap
-         in Wai.responseLBS status headers ""
+instance (ToWaiResponseHeaders headerKeys) => ToWaiResponseHeaders (headerKey ': headerKeys) where
+    toWaiResponseHeaders (InsertHeader v tail) = [(CI.mk . Char8.pack $ TypeLits.symbolVal @headerKey Typeable.Proxy, Web.toHeader v)]
 
-instance {-# OVERLAPPABLE #-} (Records.HasField name (Responses res) a) => Records.HasField name (Responses ('Kind.RESPONSE name' status headers content result ': res)) a where
-    getField (Response r) = Records.getField @name r
-
-instance {-# OVERLAPPABLE #-} (Records.HasField name (Responses res) a) => Records.HasField name (Responses ('Kind.NOCONTENT name' headers ': res)) a where
-    getField (NoContent r) = Records.getField @name r
+-------------------
+-- RESPONSE BODY --
+-------------------
 
 data ResponseBody
     = ResponseBodyStream Wai.StreamingBody
     | ResponseBodyBuilder Builder.Builder
     | ResponseBodyBytes LBS.ByteString
     | ResponseBodyFile FilePath (Maybe Wai.FilePart)
+
+------------------
+-- CONTENT TYPE --
+------------------
 
 class ContentType a where
     contentTypeName :: BS.ByteString
@@ -199,120 +326,193 @@ instance ToContentType Text.Text Int where
 instance (Aeson.ToJSON a) => ToContentType Aeson.Value a where
     toContentType = Aeson.toJSON
 
+-------------
+-- METHOD --
+-------------
+
+type METHOD :: Type
+data METHOD where
+    METHOD :: TypeLits.Symbol -> [Type] -> (Type -> Type) -> VERB -> [RESPONSE] -> METHOD
+
+type MapSub :: Type -> [METHOD] -> [METHOD]
+type family MapSub e xs where
+    MapSub e '[] = '[]
+    MapSub e ('METHOD name path env verb res ': xs) = 'METHOD name (e ': path) env verb res ': MapSub e xs
+
+data Methods (ms :: [METHOD]) where
+    None :: Methods '[]
+    AddMethod ::
+        forall name path env verb res tail.
+        Method_ name verb env res path ->
+        Methods tail ->
+        Methods ('METHOD name path env verb res : tail)
+
+none :: Methods '[]
+none = None
+
+addMethod ::
+    forall name path env verb res tail.
+    (ToStdMethod verb, BuildHandler res path env) =>
+    Method_ name verb env res path ->
+    Methods tail ->
+    Methods ('METHOD name path env verb res : tail)
+addMethod = AddMethod
+
+appendMethods :: Methods ms -> Methods ms' -> Methods (ms :<> ms')
+appendMethods None ys = ys
+appendMethods (AddMethod method_ tail) ys = AddMethod method_ (appendMethods tail ys)
+
+class TreeToMethods (t :: TREE) where
+    type TTMType t :: [METHOD]
+    treeToMethods :: Tree t p -> Methods (TTMType t)
+
+instance TreeToMethods (LEAF name path env verb res) where
+    type TTMType (LEAF name path env verb res) = 'METHOD name path env verb res ': '[]
+    treeToMethods (Method trans responseBuilder handler) = AddMethod (Method_ trans responseBuilder handler) None
+
+instance (TreeToMethods c) => TreeToMethods (NODE n c) where
+    type TTMType (NODE _ c) = TTMType c
+    treeToMethods (Lit child) = treeToMethods child
+    treeToMethods (Param child) = treeToMethods child
+    treeToMethods (Splat child) = treeToMethods child
+
+instance (TreeToMethods t, TreeToMethods t') => TreeToMethods (BRANCH t t') where
+    type TTMType (BRANCH t t') = TTMType t :<> TTMType t'
+    treeToMethods (Branch t t') = treeToMethods t `appendMethods` treeToMethods t'
+
+instance Records.HasField name (Methods ('METHOD name path env verb res ': rs)) (Method_ name verb env res path) where
+    getField (AddMethod method_ _) = method_
+
+instance {-# OVERLAPS #-} (Records.HasField name (Methods ms) (Method_ name verb env res path)) => Records.HasField name (Methods ('METHOD name' path' env' verb' res' ': ms)) (Method_ name verb env res path) where
+    getField (AddMethod _ tail) = Records.getField @name tail
+
+-------------
+-- HANDLER --
+-------------
+
 data Env res = Env
     { request :: Wai.Request
     , responses :: Responses res
     }
 
-type Handler :: [Kind.RESPONSE] -> [Type] -> (Type -> Type) -> Type
+type Handler :: [RESPONSE] -> [Type] -> (Type -> Type) -> Type
 type family Handler res p env where
     Handler res '[] env = Env res -> env Wai.Response
-    Handler res (Phantom.Lit s : rem) env = Handler res rem env
-    Handler res (Phantom.Param a : rem) env = a -> Handler res rem env
-    Handler res (Phantom.Splat a : rem) env = NonEmpty.NonEmpty a -> Handler res rem env
-    -- Handler (Phantom.Response status headers content result : rem) env = Phantom.Response status headers content result -> Handler rem env
+    Handler res (Lit_ s : rem) env = Handler res rem env
+    Handler res (Param_ a : rem) env = a -> Handler res rem env
+    Handler res (Splat_ a : rem) env = NonEmpty.NonEmpty a -> Handler res rem env
     Handler res x _ = TypeError.TypeError (TypeError.Text "Can't create Handler for type: " TypeError.:<>: TypeError.ShowType x)
 
-type Root (t :: Kind.TREE) = Tree t '[]
+class BuildHandler res args env where
+    buildHandler :: Handler res args env -> HList args -> (Env res -> env Wai.Response)
 
-data Tree (t :: Kind.TREE) (p :: [Type]) where
-    Method ::
-        forall (v :: Kind.VERB) (env :: Type -> Type) (res :: [Kind.RESPONSE]) (p :: [Type]).
-        (Responses '[] -> Responses res) ->
-        (env Natural.~> IO) ->
-        (Handler res p env) ->
-        Tree (Kind.LEAF v res) p
-    Lit ::
-        forall (s :: Exts.Symbol) (c :: Kind.TREE) (p :: [Type]).
-        (TypeLits.KnownSymbol s) =>
-        Tree c (p :< Phantom.Lit s) ->
-        Tree (Phantom.Lit s :* c) p
-    Param ::
-        forall (a :: Type) (c :: Kind.TREE) (p :: [Type]).
-        (Web.FromHttpApiData a) =>
-        Tree c (p :< Phantom.Param a) ->
-        Tree (Phantom.Param a :* c) p
-    Splat ::
-        forall a (c :: Kind.TREE) (p :: [Type]).
-        (Web.FromHttpApiData a) =>
-        Tree c (p :< Phantom.Splat a) ->
-        Tree (Phantom.Splat a :* c) p
-    -- Response ::
-    --     forall (status :: Nat.Nat) (headers :: [Exts.Symbol]) (content :: Type) (result :: Type) (t :: Kind.TREE) (c :: Kind.TREE) (p :: [Type]).
-    --     ( Nat.KnownNat status
-    --     , t ~ Phantom.Response status headers content result :* c
-    --     ) =>
-    --     Tree c (p :< Phantom.Response status headers content result) ->
-    --     Tree t p
-    Branch ::
-        forall (t :: Kind.TREE) (t' :: Kind.TREE) (p :: [Type]).
-        (Valid (t :+ t') ~ True) =>
-        Tree t p ->
-        Tree t' p ->
-        Tree (t :+ t') p
+instance BuildHandler res '[] env where
+    buildHandler handler HNil = handler
 
-method ::
-    forall (v :: Kind.VERB) (env :: Type -> Type) (p :: [Type]) (res :: [Kind.RESPONSE]).
-    (Responses '[] -> Responses res) ->
-    (env Natural.~> IO) ->
-    Handler res p env ->
-    Tree (Kind.LEAF v res) p
-method = Method
+instance (BuildHandler res xs env) => BuildHandler res (Lit_ s : xs) env where
+    buildHandler handler (HCons _ xs) = buildHandler @res @xs @env handler xs
 
-lit ::
-    forall (s :: Exts.Symbol) (c :: Kind.TREE) (p :: [Type]).
-    (TypeLits.KnownSymbol s) =>
-    Tree c (p :< Phantom.Lit s) ->
-    Tree (Phantom.Lit s :* c) p
-lit = Lit
+instance (BuildHandler res xs env) => BuildHandler res (Param_ a : xs) env where
+    buildHandler handler (HCons (Param_ x) xs) = buildHandler @res @xs @env (handler x) xs
 
-param ::
-    forall (a :: Type) (c :: Kind.TREE) (p :: [Type]).
-    (Web.FromHttpApiData a) =>
-    Tree c (p :< Phantom.Param a) ->
-    Tree (Phantom.Param a :* c) p
-param = Param
+instance (BuildHandler res xs env) => BuildHandler res (Splat_ a : xs) env where
+    buildHandler handler (HCons (Splat_ nel) xs) = buildHandler @res @xs @env (handler nel) xs
 
-splat ::
-    forall a (c :: Kind.TREE) (p :: [Type]).
-    (Web.FromHttpApiData a) =>
-    Tree c (p :< Phantom.Splat a) ->
-    Tree (Phantom.Splat a :* c) p
-splat = Splat
+-----------------------
+-- Heterogenous List --
+-----------------------
 
--- response ::
---     forall (status :: Nat.Nat) (headers :: [Exts.Symbol]) (content :: Type) (result :: Type) (t :: Kind.TREE) (c :: Kind.TREE) (p :: [Type]).
---     ( Nat.KnownNat status
---     , t ~ Phantom.Response status headers content result :* c
---     ) =>
---     Tree c (p :< Phantom.Response status headers content result) ->
---     Tree t p
--- response = Response
+data HList (types :: [Type]) where
+    HNil :: HList '[]
+    HCons :: x -> HList xs -> HList (x : xs)
 
-infixr 6 |||
+snoc :: a -> HList p -> HList (p :< a)
+snoc x HNil = HCons x HNil
+snoc x (HCons h t) = HCons h (snoc x t)
 
-(|||) ::
-    forall (t :: Kind.TREE) (t' :: Kind.TREE) (p :: [Type]).
-    (Valid (t :+ t') ~ True) =>
-    Tree t p ->
-    Tree t' p ->
-    Tree (t :+ t') p
-(|||) = Branch
+-------------------------
+-- Tree --> Middleware --
+-------------------------
 
-type Valid :: Kind.TREE -> Bool
+app :: Root t -> Wai.Middleware
+app = appHelper HNil
+
+appHelper :: HList args -> Tree t args -> Wai.Middleware
+appHelper args tree backup request respond = case tree of
+    (Method @_ @v trans responses handler) -> do
+        case HTTP.parseMethod request.requestMethod of
+            Left _ -> backup request respond
+            Right stdMethod ->
+                if toStdMethod @v == stdMethod
+                    then do
+                        result <- trans $ buildHandler handler args $ Env request (responses Nil)
+                        respond result
+                    else backup request respond
+    (Param @param child) -> case request.pathInfo of
+        (ph : pt) ->
+            case Web.parseUrlPiece @param ph of
+                Left _ -> backup request respond
+                Right param -> do
+                    let newRequest = request{Wai.pathInfo = pt}
+                    appHelper (snoc (Param_ @param param) args) child backup newRequest respond
+        [] -> backup request respond
+    (Lit @s child) -> case request.pathInfo of
+        (ph : pt) ->
+            if Text.pack (TypeLits.symbolVal @s Typeable.Proxy) == ph
+                then do
+                    let newRequest = request{Wai.pathInfo = pt}
+                    appHelper (snoc (Lit_ @s) args) child backup newRequest respond
+                else backup request respond
+        [] -> backup request respond
+    (Splat @param child) -> case request.pathInfo of
+        (ph : pt) ->
+            case Web.parseUrlPiece @param ph of
+                Left _ -> backup request respond
+                Right param -> case pt of
+                    [] -> appHelper (snoc (Splat_ (param NonEmpty.:| [])) args) child backup (request{Wai.pathInfo = pt}) respond
+                    pt' ->
+                        let (params, newPathInfo) = forSplat @param ([], pt')
+                         in appHelper (snoc (Splat_ (param NonEmpty.:| params)) args) child backup (request{Wai.pathInfo = newPathInfo}) respond
+        [] -> backup request respond
+    (Branch tree1 tree2) -> appHelper args tree1 (appHelper args tree2 backup) request respond
+
+forSplat :: (Web.FromHttpApiData a) => ([a], [Text.Text]) -> ([a], [Text.Text])
+forSplat (accum, []) = (accum, [])
+forSplat (accum, h : t) = case Web.parseUrlPiece h of
+    Left _ -> (accum, h : t)
+    Right param -> forSplat (param : accum, t)
+
+natToStatus :: Nat.Nat -> HTTP.Status
+natToStatus n = toEnum $ fromEnum n
+
+------------------------------------------
+-- TYPE FAMILIES (Type-level Functions) --
+------------------------------------------
+
+type (:<>) :: [k] -> [k] -> [k]
+type family (:<>) xs ys where
+    '[] :<> ys = ys
+    (x : xs) :<> ys = x : xs :<> ys
+
+type (:<) :: [k] -> k -> [k]
+type family (:<) xs x where
+    '[] :< x = x : '[]
+    (x : xs) :< x' = x : (xs :< x')
+
+type Valid :: TREE -> Bool
 type family Valid api where
     Valid t = ValidHelper '[] '[] t
 
-type ValidHelper :: [Type] -> [Kind.VERB] -> Kind.TREE -> Bool
+type ValidHelper :: [Type] -> [VERB] -> TREE -> Bool
 type family ValidHelper nodes leaves t where
-    ValidHelper seenNodes seenLeaves (Kind.LEAF v _) = NotElem v seenLeaves
-    ValidHelper seenNodes seenLeaves (Kind.NODE n st) =
+    ValidHelper seenNodes seenLeaves (LEAF _ _ _ v _) = NotElem v seenLeaves
+    ValidHelper seenNodes seenLeaves (NODE n st) =
         NotElem n seenNodes && Valid st
-    ValidHelper seenNodes seenLeaves (Kind.BRANCH (Kind.LEAF v _) t') =
+    ValidHelper seenNodes seenLeaves (BRANCH (LEAF _ _ _ v _) t') =
         NotElem v seenLeaves && ValidHelper seenNodes (v : seenLeaves) t'
-    ValidHelper seenNodes seenLeaves (Kind.BRANCH (Kind.NODE n st) t') =
+    ValidHelper seenNodes seenLeaves (BRANCH (NODE n st) t') =
         NotElem n seenNodes && Valid st && ValidHelper (n : seenNodes) seenLeaves t'
-    ValidHelper seenNodes seenLeaves (Kind.BRANCH t t') =
+    ValidHelper seenNodes seenLeaves (BRANCH t t') =
         ValidHelper seenNodes seenLeaves t && ValidHelper seenNodes seenLeaves t'
 
 type NotElem :: k -> [k] -> Bool
@@ -321,44 +521,36 @@ type family NotElem k ks where
     NotElem k (k : ks) = False
     NotElem k (k' : ks) = True && NotElem k ks
 
-type Endpoints :: Kind.TREE -> [([Type], Kind.VERB)]
-type family Endpoints api where
-    Endpoints (Kind.BRANCH a b) = Endpoints a :<> Endpoints b
-    Endpoints (Kind.NODE n a) = MapSub n (Endpoints a)
-    Endpoints (Kind.LEAF v _) = '[ '( '[], v)]
+----------
+-- TEST --
+----------
 
-type MapSub :: Type -> [([Type], Kind.VERB)] -> [([Type], Kind.VERB)]
-type family MapSub e xs where
-    MapSub e '[] = '[]
-    MapSub e ('(ts, v) ': xs) = '(e ': ts, v) ': MapSub e xs
+runApi = do
+    print "Running app..."
+    Warp.run 3000 $ app api $ \request respond -> respond $ Wai.responseLBS (toEnum 404) [] "Not Found"
 
 api :: Root _
-api = home homeHandler ||| person personHandler
+api = home homeHandler ||| person personHandler ||| (lit @"new" $ method @"newPerson" @POST @IO id homeResponses \_ -> undefined)
 
 home =
     lit @"hello"
         . lit @"world"
         . param @Text.Text
-        . method @Kind.GET @IO (response @"ok" @200 @'[] @Text.Text @Text.Text . response @"error" @500 @'[] @Text.Text @Text.Text) id
+        . method @"home" @GET @IO id homeResponses
+
+homeResponses =
+    response @"ok" @200 @'[] @Text.Text @Text.Text
+        . response @"error" @500 @'[] @Text.Text @Text.Text
 
 homeHandler (name :: Text.Text) env =
     if name == "Bob"
         then return $ env.responses.ok noHeaders "Hello"
         else return $ env.responses.error noHeaders "Bye"
 
-person = lit @"person" . method @Kind.PUT @IO (response @"ok" @200 @'[] @Text.Text @Text.Text) id
+person = lit @"person" . method @"putPerson" @PUT @IO id personResponses
 
-personHandler env = return $ env.responses.ok noHeaders "Ping"
+personResponses = response @"ok" @200 @'[] @Text.Text @Text.Text . noContent @"none" @'[]
 
-{-
-get :: env Natural.~> IO -> Handler p2 env -> Tree ('Kind.LEAF 'Kind.GET res) p2
-get trans f = method @Kind.GET trans f
+personHandler env = return $ env.responses.none noHeaders
 
-getIO = get id
-
-getP = get @Identity.Identity (pure . Identity.runIdentity)
--}
-{-
-any :: forall env p. env Natural.~> IO -> Handler p env -> Tree ('Kind.LEAF 'Kind.GET :+ ('Kind.LEAF 'Kind.POST :+ 'Kind.LEAF 'Kind.PUT)) p
-any trans f = method @Kind.GET @env @p trans f ||| method @Kind.POST trans f ||| method @Kind.PUT trans f
--}
+test = api.putPerson
