@@ -45,6 +45,7 @@ import Data.Either qualified as Either
 import Data.Functor.Identity qualified as Identity
 import Data.Kind
 import Data.List qualified as List
+import Data.List.Extra qualified as Extra
 import Data.List.NonEmpty qualified as NonEmpty
 import Data.Text qualified as Text
 import Data.Text.Lazy qualified as LText
@@ -107,18 +108,45 @@ data Lit_ (s :: TypeLits.Symbol) where
     Lit_ :: (TypeLits.KnownSymbol s) => Lit_ s
 
 data Param_ (a :: Type) where
-    Param_ :: (Web.FromHttpApiData a) => a -> Param_ a
+    Param_ :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => a -> Param_ a
 
 data Splat_ (a :: Type) where
     Splat_ :: (Web.FromHttpApiData a) => NonEmpty.NonEmpty a -> Splat_ a
 
-data Method_ (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (p :: [Type]) where
+data Method_ (name :: TypeLits.Symbol) (verb :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (path :: [Type]) where
     Method_ ::
-        (ToStdMethod v, BuildHandler res p env) =>
+        forall name verb env res path.
+        (ToStdMethod verb, BuildHandler res path env, URLBuilder path) =>
         (env Natural.~> IO) ->
         (Responses '[] -> Responses res) ->
-        (Handler res p env) ->
-        Method_ name v env res p
+        (Handler res path env) ->
+        Method_ name verb env res path
+
+class URLBuilder (path :: [Type]) where
+    type URLBuilderType path :: Type
+    buildURL :: [Text.Text] -> URLBuilderType path
+
+instance URLBuilder '[] where
+    type URLBuilderType '[] = [Text.Text]
+    buildURL = id
+
+instance (TypeLits.KnownSymbol s, URLBuilder rem) => URLBuilder (Lit_ s : rem) where
+    type URLBuilderType (Lit_ s : rem) = URLBuilderType rem
+    buildURL list = buildURL @rem (Extra.snoc list (Text.pack $ TypeLits.symbolVal @s Typeable.Proxy))
+
+instance (URLBuilder rem, Web.ToHttpApiData a) => URLBuilder (Param_ a : rem) where
+    type URLBuilderType (Param_ a : rem) = a -> URLBuilderType rem
+    buildURL list x = buildURL @rem (Extra.snoc list (Web.toUrlPiece x))
+
+instance (URLBuilder rem, Web.ToHttpApiData a) => URLBuilder (Splat_ a : rem) where
+    type URLBuilderType (Splat_ a : rem) = NonEmpty.NonEmpty a -> URLBuilderType rem
+    buildURL list nel = buildURL @rem (list <> (reverse $ NonEmpty.toList (fmap Web.toUrlPiece nel)))
+
+instance (f ~ Handler res path env) => Records.HasField "handler" (Method_ name verb env res path) f where
+    getField (Method_ _ _ handler) = handler
+
+instance (URLBuilder path, f ~ URLBuilderType path) => Records.HasField "url" (Method_ name verb env res path) f where
+    getField (Method_ _ _ _) = buildURL @path []
 
 ----------
 -- Tree --
@@ -127,7 +155,7 @@ data Method_ (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res ::
 data Tree (t :: TREE) (p :: [Type]) where
     Method ::
         forall (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (p :: [Type]).
-        (ToStdMethod v, BuildHandler res p env) =>
+        (ToStdMethod v, BuildHandler res p env, URLBuilder p) =>
         (env Natural.~> IO) ->
         (Responses '[] -> Responses res) ->
         (Handler res p env) ->
@@ -139,12 +167,12 @@ data Tree (t :: TREE) (p :: [Type]) where
         Tree (Lit_ s :* c) p
     Param ::
         forall (a :: Type) (c :: TREE) (p :: [Type]).
-        (Web.FromHttpApiData a) =>
+        (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
         Tree c (p :< Param_ a) ->
         Tree (Param_ a :* c) p
     Splat ::
         forall a (c :: TREE) (p :: [Type]).
-        (Web.FromHttpApiData a) =>
+        (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
         Tree c (p :< Splat_ a) ->
         Tree (Splat_ a :* c) p
     Branch ::
@@ -158,10 +186,10 @@ type Root (t :: TREE) = Tree t '[]
 
 method ::
     forall (name :: TypeLits.Symbol) (v :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (p :: [Type]).
-    (ToStdMethod v, BuildHandler res p env) =>
+    (ToStdMethod v, BuildHandler res p env, URLBuilder p) =>
     (env Natural.~> IO) ->
     (Responses '[] -> Responses res) ->
-    Handler res p env ->
+    (Handler res p env) ->
     Tree (LEAF name p env v res) p
 method = Method
 
@@ -174,14 +202,14 @@ lit = Lit
 
 param ::
     forall (a :: Type) (c :: TREE) (p :: [Type]).
-    (Web.FromHttpApiData a) =>
+    (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
     Tree c (p :< Param_ a) ->
     Tree (Param_ a :* c) p
 param = Param
 
 splat ::
     forall a (c :: TREE) (p :: [Type]).
-    (Web.FromHttpApiData a) =>
+    (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
     Tree c (p :< Splat_ a) ->
     Tree (Splat_ a :* c) p
 splat = Splat
@@ -343,6 +371,7 @@ data Methods (ms :: [METHOD]) where
     None :: Methods '[]
     AddMethod ::
         forall name path env verb res tail.
+        (ToStdMethod verb, BuildHandler res path env, URLBuilder path) =>
         Method_ name verb env res path ->
         Methods tail ->
         Methods ('METHOD name path env verb res : tail)
@@ -352,7 +381,7 @@ none = None
 
 addMethod ::
     forall name path env verb res tail.
-    (ToStdMethod verb, BuildHandler res path env) =>
+    (ToStdMethod verb, BuildHandler res path env, URLBuilder path) =>
     Method_ name verb env res path ->
     Methods tail ->
     Methods ('METHOD name path env verb res : tail)
@@ -366,9 +395,9 @@ class TreeToMethods (t :: TREE) where
     type TTMType t :: [METHOD]
     treeToMethods :: Tree t p -> Methods (TTMType t)
 
-instance TreeToMethods (LEAF name path env verb res) where
+instance (ToStdMethod verb, BuildHandler res path env, URLBuilder path) => TreeToMethods (LEAF name path env verb res) where
     type TTMType (LEAF name path env verb res) = 'METHOD name path env verb res ': '[]
-    treeToMethods (Method trans responseBuilder handler) = AddMethod (Method_ trans responseBuilder handler) None
+    treeToMethods (Method trans responseBuilder handler) = AddMethod (Method_ @name @verb @env @res @path trans responseBuilder handler) None
 
 instance (TreeToMethods c) => TreeToMethods (NODE n c) where
     type TTMType (NODE _ c) = TTMType c
@@ -530,19 +559,20 @@ runApi = do
     Warp.run 3000 $ app api $ \request respond -> respond $ Wai.responseLBS (toEnum 404) [] "Not Found"
 
 api :: Root _
-api = home homeHandler ||| person personHandler ||| (lit @"new" $ method @"newPerson" @POST @IO id homeResponses \_ -> undefined)
+api = home homeHandler ||| person personHandler ||| (lit @"new" . param @Text.Text $ method @"newPerson" @POST @IO id homeResponses \_ -> undefined)
 
 home =
     lit @"hello"
         . lit @"world"
         . param @Text.Text
+        . param @Float
         . method @"home" @GET @IO id homeResponses
 
 homeResponses =
     response @"ok" @200 @'[] @Text.Text @Text.Text
         . response @"error" @500 @'[] @Text.Text @Text.Text
 
-homeHandler (name :: Text.Text) env =
+homeHandler (name :: Text.Text) (age :: Float) env =
     if name == "Bob"
         then return $ env.responses.ok noHeaders "Hello"
         else return $ env.responses.error noHeaders "Bye"
