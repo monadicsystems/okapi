@@ -27,6 +27,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 module Okapi where
 
@@ -110,8 +111,8 @@ data Lit_ (s :: TypeLits.Symbol) where
 data Param_ (a :: Type) where
     Param_ :: (Web.FromHttpApiData a, Web.ToHttpApiData a) => a -> Param_ a
 
-data Splat_ (a :: Type) where
-    Splat_ :: (Web.FromHttpApiData a) => NonEmpty.NonEmpty a -> Splat_ a
+-- data Splat_ (a :: Type) where
+--     Splat_ :: (Web.FromHttpApiData a) => NonEmpty.NonEmpty a -> Splat_ a
 
 data Method_ (name :: TypeLits.Symbol) (verb :: VERB) (env :: Type -> Type) (res :: [RESPONSE]) (path :: [Type]) where
     Method_ ::
@@ -138,15 +139,15 @@ instance (URLBuilder rem, Web.ToHttpApiData a) => URLBuilder (Param_ a : rem) wh
     type URLBuilderType (Param_ a : rem) = a -> URLBuilderType rem
     buildURL list x = buildURL @rem (Extra.snoc list (Web.toUrlPiece x))
 
-instance (URLBuilder rem, Web.ToHttpApiData a) => URLBuilder (Splat_ a : rem) where
-    type URLBuilderType (Splat_ a : rem) = NonEmpty.NonEmpty a -> URLBuilderType rem
-    buildURL list nel = buildURL @rem (list <> (reverse $ NonEmpty.toList (fmap Web.toUrlPiece nel)))
+-- instance (URLBuilder rem, Web.ToHttpApiData a) => URLBuilder (Splat_ a : rem) where
+--     type URLBuilderType (Splat_ a : rem) = NonEmpty.NonEmpty a -> URLBuilderType rem
+--     buildURL list nel = buildURL @rem (list <> reverse (NonEmpty.toList (fmap Web.toUrlPiece nel)))
 
 instance (f ~ Handler res path env) => Records.HasField "handler" (Method_ name verb env res path) f where
     getField (Method_ _ _ handler) = handler
 
 instance (URLBuilder path, f ~ URLBuilderType path) => Records.HasField "url" (Method_ name verb env res path) f where
-    getField (Method_ _ _ _) = buildURL @path []
+    getField (Method_{}) = buildURL @path []
 
 ----------
 -- Tree --
@@ -162,22 +163,22 @@ data Tree (t :: TREE) (p :: [Type]) where
         Tree (LEAF name p env v res) p
     Lit ::
         forall (s :: Exts.Symbol) (c :: TREE) (p :: [Type]).
-        (TypeLits.KnownSymbol s) =>
+        (TypeLits.KnownSymbol s, TreeToMethods c) =>
         Tree c (p :< Lit_ s) ->
         Tree (Lit_ s :* c) p
     Param ::
         forall (a :: Type) (c :: TREE) (p :: [Type]).
-        (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
+        (Web.FromHttpApiData a, Web.ToHttpApiData a, TreeToMethods c) =>
         Tree c (p :< Param_ a) ->
         Tree (Param_ a :* c) p
-    Splat ::
-        forall a (c :: TREE) (p :: [Type]).
-        (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
-        Tree c (p :< Splat_ a) ->
-        Tree (Splat_ a :* c) p
+    -- Splat ::
+    --     forall a (c :: TREE) (p :: [Type]).
+    --     (Web.FromHttpApiData a, Web.ToHttpApiData a, TreeToMethods c) =>
+    --     Tree c (p :< Splat_ a) ->
+    --     Tree (Splat_ a :* c) p
     Branch ::
         forall (t :: TREE) (t' :: TREE) (p :: [Type]).
-        (Valid (t :+ t') ~ True) =>
+        (Valid (t :+ t') ~ True, TreeToMethods t, TreeToMethods t') =>
         Tree t p ->
         Tree t' p ->
         Tree (t :+ t') p
@@ -195,37 +196,34 @@ method = Method
 
 lit ::
     forall (s :: Exts.Symbol) (c :: TREE) (p :: [Type]).
-    (TypeLits.KnownSymbol s) =>
+    (TypeLits.KnownSymbol s, TreeToMethods c) =>
     Tree c (p :< Lit_ s) ->
     Tree (Lit_ s :* c) p
 lit = Lit
 
 param ::
     forall (a :: Type) (c :: TREE) (p :: [Type]).
-    (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
+    (Web.FromHttpApiData a, Web.ToHttpApiData a, TreeToMethods c) =>
     Tree c (p :< Param_ a) ->
     Tree (Param_ a :* c) p
 param = Param
 
-splat ::
-    forall a (c :: TREE) (p :: [Type]).
-    (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
-    Tree c (p :< Splat_ a) ->
-    Tree (Splat_ a :* c) p
-splat = Splat
+-- splat ::
+--     forall a (c :: TREE) (p :: [Type]).
+--     (Web.FromHttpApiData a, Web.ToHttpApiData a) =>
+--     Tree c (p :< Splat_ a) ->
+--     Tree (Splat_ a :* c) p
+-- splat = Splat
 
 infixr 6 |||
 
 (|||) ::
     forall (t :: TREE) (t' :: TREE) (p :: [Type]).
-    (Valid (t :+ t') ~ True) =>
+    (Valid (t :+ t') ~ True, TreeToMethods t, TreeToMethods t') =>
     Tree t p ->
     Tree t' p ->
     Tree (t :+ t') p
 (|||) = Branch
-
--- instance (Records.HasField name (Tree c (p :< Lit_ s)) (Method_ name verb env res path)) => Records.HasField name (Tree (NODE (Lit_ s) c) p) (Method_ name verb env res path) where
---     getField (Lit child) = Records.getField @name child
 
 instance (TreeToMethods t, Records.HasField name (Methods (TTMType t)) (Method_ name verb env res path)) => Records.HasField name (Tree t p) (Method_ name verb env res path) where
     getField tree = Records.getField @name $ treeToMethods tree
@@ -403,7 +401,8 @@ instance (TreeToMethods c) => TreeToMethods (NODE n c) where
     type TTMType (NODE _ c) = TTMType c
     treeToMethods (Lit child) = treeToMethods child
     treeToMethods (Param child) = treeToMethods child
-    treeToMethods (Splat child) = treeToMethods child
+
+-- treeToMethods (Splat child) = treeToMethods child
 
 instance (TreeToMethods t, TreeToMethods t') => TreeToMethods (BRANCH t t') where
     type TTMType (BRANCH t t') = TTMType t :<> TTMType t'
@@ -429,7 +428,7 @@ type family Handler res p env where
     Handler res '[] env = Env res -> env Wai.Response
     Handler res (Lit_ s : rem) env = Handler res rem env
     Handler res (Param_ a : rem) env = a -> Handler res rem env
-    Handler res (Splat_ a : rem) env = NonEmpty.NonEmpty a -> Handler res rem env
+    -- Handler res (Splat_ a : rem) env = NonEmpty.NonEmpty a -> Handler res rem env
     Handler res x _ = TypeError.TypeError (TypeError.Text "Can't create Handler for type: " TypeError.:<>: TypeError.ShowType x)
 
 class BuildHandler res args env where
@@ -444,8 +443,8 @@ instance (BuildHandler res xs env) => BuildHandler res (Lit_ s : xs) env where
 instance (BuildHandler res xs env) => BuildHandler res (Param_ a : xs) env where
     buildHandler handler (HCons (Param_ x) xs) = buildHandler @res @xs @env (handler x) xs
 
-instance (BuildHandler res xs env) => BuildHandler res (Splat_ a : xs) env where
-    buildHandler handler (HCons (Splat_ nel) xs) = buildHandler @res @xs @env (handler nel) xs
+-- instance (BuildHandler res xs env) => BuildHandler res (Splat_ a : xs) env where
+--     buildHandler handler (HCons (Splat_ nel) xs) = buildHandler @res @xs @env (handler nel) xs
 
 -----------------------
 -- Heterogenous List --
@@ -465,6 +464,15 @@ snoc x (HCons h t) = HCons h (snoc x t)
 
 app :: Root t -> Wai.Middleware
 app = appHelper HNil
+
+{-
+data Rule env error output = Rule
+  { test :: Request -> env (Either error output)
+  , trans :: env ~> IO
+  }
+
+type Rules = [(Symbol, Rule env error output)]
+-}
 
 appHelper :: HList args -> Tree t args -> Wai.Middleware
 appHelper args tree backup request respond = case tree of
@@ -493,16 +501,16 @@ appHelper args tree backup request respond = case tree of
                     appHelper (snoc (Lit_ @s) args) child backup newRequest respond
                 else backup request respond
         [] -> backup request respond
-    (Splat @param child) -> case request.pathInfo of
-        (ph : pt) ->
-            case Web.parseUrlPiece @param ph of
-                Left _ -> backup request respond
-                Right param -> case pt of
-                    [] -> appHelper (snoc (Splat_ (param NonEmpty.:| [])) args) child backup (request{Wai.pathInfo = pt}) respond
-                    pt' ->
-                        let (params, newPathInfo) = forSplat @param ([], pt')
-                         in appHelper (snoc (Splat_ (param NonEmpty.:| params)) args) child backup (request{Wai.pathInfo = newPathInfo}) respond
-        [] -> backup request respond
+    -- (Splat @param child) -> case request.pathInfo of
+    --     (ph : pt) ->
+    --         case Web.parseUrlPiece @param ph of
+    --             Left _ -> backup request respond
+    --             Right param -> case pt of
+    --                 [] -> appHelper (snoc (Splat_ (param NonEmpty.:| [])) args) child backup (request{Wai.pathInfo = pt}) respond
+    --                 pt' ->
+    --                     let (params, newPathInfo) = forSplat @param ([], pt')
+    --                      in appHelper (snoc (Splat_ (param NonEmpty.:| params)) args) child backup (request{Wai.pathInfo = newPathInfo}) respond
+    --     [] -> backup request respond
     (Branch tree1 tree2) -> appHelper args tree1 (appHelper args tree2 backup) request respond
 
 forSplat :: (Web.FromHttpApiData a) => ([a], [Text.Text]) -> ([a], [Text.Text])
@@ -559,7 +567,11 @@ runApi = do
     Warp.run 3000 $ app api $ \request respond -> respond $ Wai.responseLBS (toEnum 404) [] "Not Found"
 
 api :: Root _
-api = home homeHandler ||| person personHandler ||| (lit @"new" . param @Text.Text $ method @"newPerson" @POST @IO id homeResponses \_ -> undefined)
+api =
+    lit @"api"
+        $ home homeHandler
+        ||| person personHandler
+        ||| (lit @"new" . param @Text.Text $ method @"newPerson" @POST @IO id homeResponses \_ -> undefined)
 
 home =
     lit @"hello"
@@ -584,3 +596,50 @@ personResponses = response @"ok" @200 @'[] @Text.Text @Text.Text . noContent @"n
 personHandler env = return $ env.responses.none noHeaders
 
 test = api.putPerson
+
+class Contract a where
+    name :: String
+    default name :: String
+    name = "" -- Use Tag type name???
+    description :: String
+    default description :: String
+    description = ""
+    method' :: m
+    path :: p
+    query :: q
+    headers :: h
+    body :: b
+    handlers :: Args p q h b r -> Bool
+    responsder :: r
+
+data Foo
+
+-- instance Contract Foo where
+--     name = "" -- Use Tag type name???
+--     description = ""
+--     method' = True
+--     path = True
+--     query = False
+--     headers = ()
+--     body = ()
+--     handlers = \_ -> True
+--     responsder = 24
+
+data Args p q h b r = Args
+    { p' :: p
+    , q' :: q
+    , h' :: h
+    , b' :: b
+    , r' :: r
+    , m :: Bool
+    }
+
+constructor :: forall a p q h b r. Contract a => Args p q h b r
+constructor = Args
+    { p' = path @a
+    , q' = query @a
+    , h' = headers @a
+    , b' = body @a
+    , r' = responsder @a
+    , m = True
+    }

@@ -171,9 +171,9 @@ type family Handler p env where
     Handler x _ = TypeError.TypeError (TypeError.Text "Can't create Handler for type: " TypeError.:<>: TypeError.ShowType x)
 
 {-
--- snoc :: forall (p :: P) (a :: Type). a -> PList p -> PList (p ::: a)
--- snoc x Start = Start ::: x
--- snoc x (t :/= h) = HCons h (snoc t x)
+snoc :: forall (p :: P) (a :: Type). a -> PList p -> PList (p ::: a)
+snoc x Start = Start ::: x
+snoc x (t :/= h) = HCons h (snoc t x)
 
 flipper :: PList p -> PList (Reverse p)
 flipper Start = Start
