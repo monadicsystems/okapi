@@ -3,8 +3,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Req.Headers (
-    ReqHeaders,
-    HeadersParseError (..),
+    Headers,
+    ParseError (..),
     parse,
     print,
     raw,
@@ -21,32 +21,32 @@ import Prelude hiding (print)
 
 type IsoHttpApiData a = (HTTP.Api.FromHttpApiData a, HTTP.Api.ToHttpApiData a)
 
-type ReqHeaders :: Type -> Type
-data ReqHeaders a where
-    Raw :: ReqHeaders HTTP.RequestHeaders
-    Param :: IsoHttpApiData a => HTTP.HeaderName -> ReqHeaders a
-    Optional :: Codec ReqHeaders a a -> ReqHeaders (Maybe a)
+type Headers :: Type -> Type
+data Headers a where
+    Raw :: Headers HTTP.RequestHeaders
+    Param :: IsoHttpApiData a => HTTP.HeaderName -> Headers a
+    Optional :: Codec Headers a a -> Headers (Maybe a)
 
-data HeadersParseError = HeadersParseError
+data ParseError = ParseError
 
-type instance StateOf ReqHeaders = HTTP.RequestHeaders
-type instance ParseErrorOf ReqHeaders = HeadersParseError
+type instance StateOf Headers = HTTP.RequestHeaders
+type instance ParseErrorOf Headers = ParseError
 
-parse :: Codec ReqHeaders i o -> HTTP.RequestHeaders -> (Either HeadersParseError o, HTTP.RequestHeaders)
+parse :: Codec Headers i o -> HTTP.RequestHeaders -> (Either ParseError o, HTTP.RequestHeaders)
 parse = Codec.parser headersAlg
   where
     headersAlg = undefined
 
-print :: Codec ReqHeaders i o -> i -> HTTP.RequestHeaders
+print :: Codec Headers i o -> i -> HTTP.RequestHeaders
 print = Codec.printer headersPrinter
   where
     headersPrinter = undefined
 
-raw :: Codec ReqHeaders HTTP.RequestHeaders HTTP.RequestHeaders
+raw :: Codec Headers HTTP.RequestHeaders HTTP.RequestHeaders
 raw = Embed Raw
 
-param :: IsoHttpApiData a => HTTP.HeaderName -> Codec ReqHeaders a a
+param :: IsoHttpApiData a => HTTP.HeaderName -> Codec Headers a a
 param key = Embed (Param key)
 
-optional :: Codec ReqHeaders a a -> Codec ReqHeaders (Maybe a) (Maybe a)
+optional :: Codec Headers a a -> Codec Headers (Maybe a) (Maybe a)
 optional c = Embed (Optional c)

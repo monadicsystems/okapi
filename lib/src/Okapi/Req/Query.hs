@@ -4,7 +4,7 @@
 
 module Okapi.Req.Query (
     Query,
-    QueryParseError (..),
+    ParseError (..),
     parse,
     print,
     raw,
@@ -30,12 +30,12 @@ data Query a where
     Flag :: Text -> Query Bool
     Optional :: Codec Query a a -> Query (Maybe a)
 
-data QueryParseError = QueryParseError
+data ParseError = ParseError
 
 type instance StateOf Query = HTTP.Query
-type instance ParseErrorOf Query = QueryParseError
+type instance ParseErrorOf Query = ParseError
 
-parse :: Codec Query i o -> HTTP.Query -> (Either QueryParseError o, HTTP.Query)
+parse :: Codec Query i o -> HTTP.Query -> (Either ParseError o, HTTP.Query)
 parse = Codec.parser queryAlg
   where
     queryAlg = undefined

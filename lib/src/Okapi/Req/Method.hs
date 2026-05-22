@@ -6,7 +6,7 @@
 module Okapi.Req.Method (
     KnownMethod (..),
     Method,
-    MethodParseError (..),
+    ParseError (..),
     parse,
     print,
     raw,
@@ -31,12 +31,12 @@ data Method a where
     StdMethod :: Method HTTP.StdMethod
     Method :: forall (m :: Kind.METHOD). Method (KnownMethod m)
 
-data MethodParseError = MethodParseError
+data ParseError = ParseError
 
 type instance StateOf Method = HTTP.Method
-type instance ParseErrorOf Method = MethodParseError
+type instance ParseErrorOf Method = ParseError
 
-parse :: Codec Method i o -> HTTP.Method -> (Either MethodParseError o, HTTP.Method)
+parse :: Codec Method i o -> HTTP.Method -> (Either ParseError o, HTTP.Method)
 parse = Codec.parser methodAlg
   where
     methodAlg = undefined

@@ -3,8 +3,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Res.Headers (
-    ResHeaders,
-    ResHeadersParseError (..),
+    Headers,
+    ParseError (..),
     parse,
     print,
     raw,
@@ -21,32 +21,32 @@ import Prelude hiding (print)
 
 type IsoHttpApiData a = (HTTP.Api.FromHttpApiData a, HTTP.Api.ToHttpApiData a)
 
-type ResHeaders :: Type -> Type
-data ResHeaders a where
-    Raw :: ResHeaders HTTP.ResponseHeaders
-    Param :: IsoHttpApiData a => HTTP.HeaderName -> ResHeaders a
-    Optional :: Codec ResHeaders a a -> ResHeaders (Maybe a)
+type Headers :: Type -> Type
+data Headers a where
+    Raw :: Headers HTTP.ResponseHeaders
+    Param :: IsoHttpApiData a => HTTP.HeaderName -> Headers a
+    Optional :: Codec Headers a a -> Headers (Maybe a)
 
-data ResHeadersParseError = ResHeadersParseError
+data ParseError = ParseError
 
-type instance StateOf ResHeaders = HTTP.ResponseHeaders
-type instance ParseErrorOf ResHeaders = ResHeadersParseError
+type instance StateOf Headers = HTTP.ResponseHeaders
+type instance ParseErrorOf Headers = ParseError
 
-parse :: Codec ResHeaders i o -> HTTP.ResponseHeaders -> (Either ResHeadersParseError o, HTTP.ResponseHeaders)
+parse :: Codec Headers i o -> HTTP.ResponseHeaders -> (Either ParseError o, HTTP.ResponseHeaders)
 parse = Codec.parser resHeadersAlg
   where
     resHeadersAlg = undefined
 
-print :: Codec ResHeaders i o -> i -> HTTP.ResponseHeaders
+print :: Codec Headers i o -> i -> HTTP.ResponseHeaders
 print = Codec.printer resHeadersPrinter
   where
     resHeadersPrinter = undefined
 
-raw :: Codec ResHeaders HTTP.ResponseHeaders HTTP.ResponseHeaders
+raw :: Codec Headers HTTP.ResponseHeaders HTTP.ResponseHeaders
 raw = Embed Raw
 
-param :: IsoHttpApiData a => HTTP.HeaderName -> Codec ResHeaders a a
+param :: IsoHttpApiData a => HTTP.HeaderName -> Codec Headers a a
 param key = Embed (Param key)
 
-optional :: Codec ResHeaders a a -> Codec ResHeaders (Maybe a) (Maybe a)
+optional :: Codec Headers a a -> Codec Headers (Maybe a) (Maybe a)
 optional c = Embed (Optional c)

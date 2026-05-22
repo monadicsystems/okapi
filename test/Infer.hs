@@ -88,7 +88,7 @@ getUserEndpoint = getUserReq :-> getUserResCodec
 -- Minimal partial signature: only the monad IO is given; the rest is inferred.
 getUserServer :: Server IO _
 getUserServer = fn \(_req, _waiReq) ->
-    pure $ OkRes $ Res.resValue 200 ("blah", "foo") (pure "")
+    pure $ OkRes $ Res.value 200 ("blah", "foo") (pure "")
 
 -- ---------------------------------------------------------------------------
 

@@ -3,9 +3,9 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Req.Body (
-    ReqBody,
+    Body,
     IsoJson,
-    BodyParseError (..),
+    ParseError (..),
     parse,
     print,
     raw,
@@ -21,28 +21,28 @@ import Prelude hiding (print)
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 
-type ReqBody :: Type -> Type
-data ReqBody a where
-    Raw :: ReqBody (IO LBS.ByteString)
-    Json :: IsoJson a => ReqBody (IO a)
+type Body :: Type -> Type
+data Body a where
+    Raw :: Body (IO LBS.ByteString)
+    Json :: IsoJson a => Body (IO a)
 
-data BodyParseError = BodyParseError
+data ParseError = ParseError
 
-type instance StateOf ReqBody = LBS.ByteString
-type instance ParseErrorOf ReqBody = BodyParseError
+type instance StateOf Body = LBS.ByteString
+type instance ParseErrorOf Body = ParseError
 
-parse :: Codec ReqBody i o -> LBS.ByteString -> (Either BodyParseError o, LBS.ByteString)
+parse :: Codec Body i o -> LBS.ByteString -> (Either ParseError o, LBS.ByteString)
 parse = Codec.parser bodyAlg
   where
     bodyAlg = undefined
 
-print :: Codec ReqBody i o -> i -> LBS.ByteString
+print :: Codec Body i o -> i -> LBS.ByteString
 print = Codec.printer bodyPrinter
   where
     bodyPrinter = undefined
 
-raw :: Codec ReqBody (IO LBS.ByteString) (IO LBS.ByteString)
+raw :: Codec Body (IO LBS.ByteString) (IO LBS.ByteString)
 raw = Embed Raw
 
-json :: IsoJson a => Codec ReqBody (IO a) (IO a)
+json :: IsoJson a => Codec Body (IO a) (IO a)
 json = Embed Json

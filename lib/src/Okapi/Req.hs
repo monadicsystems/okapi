@@ -8,27 +8,27 @@ import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Kind qualified as Kind
-import Okapi.Req.Body (ReqBody)
-import Okapi.Req.Headers (ReqHeaders)
+import Okapi.Req.Body (Body)
+import Okapi.Req.Headers (Headers)
 import Okapi.Req.Method (KnownMethod (..), Method)
 import Okapi.Req.Path (Path)
 import Okapi.Req.Query (Query)
 
 data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
-  { method_ :: f Method m
-  , path_ :: f Path p
-  , query_ :: f Query q
-  , reqHeaders_ :: f ReqHeaders h
-  , reqBody_ :: f ReqBody (IO b)
+  { method_     :: f Method m
+  , path_       :: f Path p
+  , query_      :: f Query q
+  , reqHeaders_ :: f Headers h
+  , reqBody_    :: f Body (IO b)
   }
 
-reqValue :: m -> p -> q -> h -> IO b -> Req Value m p q h b
-reqValue m p q h b = Req
-    { method_      = Value m
-    , path_        = Value p
-    , query_       = Value q
-    , reqHeaders_  = Value h
-    , reqBody_     = Value b
+value :: m -> p -> q -> h -> IO b -> Req Value m p q h b
+value m p q h b = Req
+    { method_     = Value m
+    , path_       = Value p
+    , query_      = Value q
+    , reqHeaders_ = Value h
+    , reqBody_    = Value b
     }
 
 req ::
@@ -97,14 +97,14 @@ query ::
 query = undefined
 
 reqHeaders ::
-  Codec ReqHeaders h h ->
+  Codec Headers h h ->
   ( Req IsoCodec m p q HTTP.RequestHeaders b ->
     Req IsoCodec m p q h b
   )
 reqHeaders = undefined
 
 reqBody ::
-  Codec ReqBody b b ->
+  Codec Body b b ->
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )

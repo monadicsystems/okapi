@@ -7,7 +7,7 @@
 module Okapi.Res.Status (
     KnownStatus (..),
     Status,
-    StatusParseError (..),
+    ParseError (..),
     parse,
     print,
     raw,
@@ -58,12 +58,12 @@ data Status a where
     Raw :: Status HTTP.Status
     Status :: forall (s :: Kind.STATUS). Status (KnownStatus s)
 
-data StatusParseError = StatusParseError
+data ParseError = ParseError
 
 type instance StateOf Status = HTTP.Status
-type instance ParseErrorOf Status = StatusParseError
+type instance ParseErrorOf Status = ParseError
 
-parse :: Codec Status i o -> HTTP.Status -> (Either StatusParseError o, HTTP.Status)
+parse :: Codec Status i o -> HTTP.Status -> (Either ParseError o, HTTP.Status)
 parse = Codec.parser statusAlg
   where
     statusAlg = undefined

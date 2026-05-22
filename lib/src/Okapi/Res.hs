@@ -6,18 +6,18 @@ import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec, Value (..))
 import Okapi.Kind (STATUS (..))
-import Okapi.Res.Body (ResBody)
-import Okapi.Res.Headers (ResHeaders)
+import Okapi.Res.Body (Body)
+import Okapi.Res.Headers (Headers)
 import Okapi.Res.Status (KnownStatus, Status)
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
-  { status_ :: f Status s
-  , resHeaders_ :: f ResHeaders h
-  , resBody_ :: f ResBody (IO b)
+  { status_     :: f Status s
+  , resHeaders_ :: f Headers h
+  , resBody_    :: f Body (IO b)
   }
 
-resValue :: s -> h -> IO b -> Res Value s h b
-resValue s h b = Res
+value :: s -> h -> IO b -> Res Value s h b
+value s h b = Res
     { status_     = Value s
     , resHeaders_ = Value h
     , resBody_    = Value b
@@ -36,14 +36,14 @@ serverError :: Res IsoCodec (KnownStatus S500) HTTP.ResponseHeaders LBS.ByteStri
 serverError = undefined
 
 resHeaders ::
-  Codec ResHeaders h h ->
+  Codec Headers h h ->
   ( Res IsoCodec s HTTP.ResponseHeaders b ->
     Res IsoCodec s h b
   )
 resHeaders = undefined
 
 resBody ::
-  Codec ResBody b b ->
+  Codec Body b b ->
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
