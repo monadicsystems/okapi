@@ -1,15 +1,16 @@
 module Okapi.Req where
 
+import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Kind (Type)
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Codec (IsoCodec)
+import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Kind qualified as Kind
 import Okapi.Req.Body (ReqBody)
 import Okapi.Req.Headers (ReqHeaders)
-import Okapi.Req.Method (KnownMethod (..), Method (..))
+import Okapi.Req.Method (KnownMethod (..), Method)
 import Okapi.Req.Path (Path)
 import Okapi.Req.Query (Query)
 
@@ -18,10 +19,19 @@ data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
   , path_ :: f Path p
   , query_ :: f Query q
   , reqHeaders_ :: f ReqHeaders h
-  , reqBody_ :: f ReqBody b
+  , reqBody_ :: f ReqBody (IO b)
   }
 
-request ::
+reqValue :: m -> p -> q -> h -> IO b -> Req Value m p q h b
+reqValue m p q h b = Req
+    { method_      = Value m
+    , path_        = Value p
+    , query_       = Value q
+    , reqHeaders_  = Value h
+    , reqBody_     = Value b
+    }
+
+req ::
   Req
     IsoCodec
     HTTP.Method
@@ -29,7 +39,7 @@ request ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-request = undefined
+req = undefined
 
 get ::
   Req
@@ -39,7 +49,7 @@ get ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-get = request & method GET
+get = req & method GET
 
 post ::
   Req
@@ -49,7 +59,7 @@ post ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-post = request & method POST
+post = req & method POST
 
 delete ::
   Req
@@ -59,7 +69,7 @@ delete ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-delete = request & method DELETE
+delete = req & method DELETE
 
 method ::
   KnownMethod m ->
@@ -73,29 +83,39 @@ stdMethod ::
 stdMethod = undefined
 
 path ::
-  IsoCodec Path p ->
+  Codec Path p p ->
   ( Req IsoCodec m [Text.Text] q h b ->
     Req IsoCodec m p q h b
   )
 path = undefined
 
 query ::
-  IsoCodec Query q ->
+  Codec Query q q ->
   ( Req IsoCodec m p HTTP.Query h b ->
     Req IsoCodec m p q h b
   )
 query = undefined
 
 reqHeaders ::
-  IsoCodec ReqHeaders h ->
+  Codec ReqHeaders h h ->
   ( Req IsoCodec m p q HTTP.RequestHeaders b ->
     Req IsoCodec m p q h b
   )
 reqHeaders = undefined
 
 reqBody ::
-  IsoCodec ReqBody b ->
+  Codec ReqBody b b ->
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
 reqBody = undefined
+
+type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
+
+json ::
+  forall m p q h b.
+  (IsoJson b) =>
+  ( Req IsoCodec m p q h LBS.ByteString ->
+    Req IsoCodec m p q h b
+  )
+json = undefined

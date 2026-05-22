@@ -1,12 +1,24 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Req.Method where
+module Okapi.Req.Method (
+    KnownMethod (..),
+    Method,
+    MethodParseError (..),
+    parse,
+    print,
+    raw,
+    std,
+    known,
+) where
 
-import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
+import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
+import Okapi.Codec qualified as Codec
 import Okapi.Kind qualified as Kind (METHOD (..))
+import Prelude hiding (print)
 
 data KnownMethod (m :: Kind.METHOD) where
     GET :: KnownMethod Kind.GET
@@ -14,10 +26,31 @@ data KnownMethod (m :: Kind.METHOD) where
     PUT :: KnownMethod Kind.PUT
     DELETE :: KnownMethod Kind.DELETE
 
-type Method :: Type -> Type
 data Method a where
+    Raw :: Method HTTP.Method
     StdMethod :: Method HTTP.StdMethod
     Method :: forall (m :: Kind.METHOD). Method (KnownMethod m)
-    -- Lit   :: Text -> Path ()
-    -- Param :: (Typeable a, IsoHttpApiData a) => Path a
-    -- Blob  :: (Typeable a, IsoHttpApiData a) => Path (NonEmpty a)
+
+data MethodParseError = MethodParseError
+
+type instance StateOf Method = HTTP.Method
+type instance ParseErrorOf Method = MethodParseError
+
+parse :: Codec Method i o -> HTTP.Method -> (Either MethodParseError o, HTTP.Method)
+parse = Codec.parser methodAlg
+  where
+    methodAlg = undefined
+
+print :: Codec Method i o -> i -> HTTP.Method
+print = Codec.printer methodPrinter
+  where
+    methodPrinter = undefined
+
+raw :: Codec Method HTTP.Method HTTP.Method
+raw = Embed Raw
+
+std :: Codec Method HTTP.StdMethod HTTP.StdMethod
+std = Embed StdMethod
+
+known :: forall (m :: Kind.METHOD). Codec Method (KnownMethod m) (KnownMethod m)
+known = Embed Method

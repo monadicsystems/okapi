@@ -45,6 +45,7 @@ library
         Okapi.ResAlt
     build-depends:
         base ^>=4.20.0.0,
+        aeson,
         bytestring,
         http-api-data,
         http-types,
@@ -52,4 +53,30 @@ library
         text,
         wai
     hs-source-dirs:   src
+    default-language: GHC2024
+
+test-suite okapi-examples
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Main.hs
+    hs-source-dirs:   ../test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-types,
+        text,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-infer
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Infer.hs
+    hs-source-dirs:   ../test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-types,
+        text,
+        okapi
     default-language: GHC2024

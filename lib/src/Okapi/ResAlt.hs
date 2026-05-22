@@ -63,8 +63,8 @@ class
     (Generic (r Value)) =>
     GenericResAlt (r :: ((Type -> Type) -> Type -> Type) -> Type)
     where
-    resAlt ::
+    resCase ::
         ResChains
             (ResCodecs (GCode (Rep (r Value))))
             (IsoCodec ResAlt (r Value))
-    resAlt = undefined
+    resCase = undefined
