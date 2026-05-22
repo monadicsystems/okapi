@@ -57,7 +57,7 @@ okWithHeaders
     :: Res IsoCodec (KnownStatus Kind.S200) OkHeaders LBS.ByteString
 okWithHeaders
     = Res.ok
-    & Res.resHeaders do
+    & Res.headers do
         ct  <- fst =. ResHeaders.param "content-type"
         loc <- snd =. ResHeaders.param "location"
         pure (ct, loc)
@@ -69,7 +69,7 @@ notFoundWithRetry
     :: Res IsoCodec (KnownStatus Kind.S404) RetryAfter LBS.ByteString
 notFoundWithRetry
     = Res.notFound
-    & Res.resHeaders (ResHeaders.param "retry-after")
+    & Res.headers (ResHeaders.param "retry-after")
 
 -- | 500 — raw response headers, no specialisation
 serverErrorPlain

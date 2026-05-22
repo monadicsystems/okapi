@@ -18,8 +18,8 @@ data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
   { method_     :: f Method m
   , path_       :: f Path p
   , query_      :: f Query q
-  , reqHeaders_ :: f Headers h
-  , reqBody_    :: f Body (IO b)
+  , headers_ :: f Headers h
+  , body_    :: f Body (IO b)
   }
 
 value :: m -> p -> q -> h -> IO b -> Req Value m p q h b
@@ -27,8 +27,8 @@ value m p q h b = Req
     { method_     = Value m
     , path_       = Value p
     , query_      = Value q
-    , reqHeaders_ = Value h
-    , reqBody_    = Value b
+    , headers_ = Value h
+    , body_    = Value b
     }
 
 req ::
@@ -96,19 +96,19 @@ query ::
   )
 query = undefined
 
-reqHeaders ::
+headers ::
   Codec Headers h h ->
   ( Req IsoCodec m p q HTTP.RequestHeaders b ->
     Req IsoCodec m p q h b
   )
-reqHeaders = undefined
+headers = undefined
 
-reqBody ::
+body ::
   Codec Body b b ->
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
-reqBody = undefined
+body = undefined
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 

@@ -12,15 +12,15 @@ import Okapi.Res.Status (KnownStatus, Status)
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
   { status_     :: f Status s
-  , resHeaders_ :: f Headers h
-  , resBody_    :: f Body (IO b)
+  , headers_ :: f Headers h
+  , body_    :: f Body (IO b)
   }
 
 value :: s -> h -> IO b -> Res Value s h b
 value s h b = Res
     { status_     = Value s
-    , resHeaders_ = Value h
-    , resBody_    = Value b
+    , headers_ = Value h
+    , body_    = Value b
     }
 
 res :: Res IsoCodec HTTP.Status HTTP.ResponseHeaders LBS.ByteString
@@ -35,19 +35,19 @@ notFound = undefined
 serverError :: Res IsoCodec (KnownStatus S500) HTTP.ResponseHeaders LBS.ByteString
 serverError = undefined
 
-resHeaders ::
+headers ::
   Codec Headers h h ->
   ( Res IsoCodec s HTTP.ResponseHeaders b ->
     Res IsoCodec s h b
   )
-resHeaders = undefined
+headers = undefined
 
-resBody ::
+body ::
   Codec Body b b ->
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
-resBody = undefined
+body = undefined
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 

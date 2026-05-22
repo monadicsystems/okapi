@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures -Wno-missing-signatures #-}
 
 module Main where
@@ -48,7 +49,7 @@ type OkHeaders = (Text, Text)
 
 okWithHeaders
     = Res.ok
-    & Res.resHeaders do
+    & Res.headers do
         ct  <- fst =. ResHeaders.param "content-type"
         loc <- snd =. ResHeaders.param "location"
         pure (ct, loc)
@@ -57,7 +58,7 @@ type RetryAfter = Int
 
 notFoundWithRetry
     = Res.notFound
-    & Res.resHeaders (ResHeaders.param @RetryAfter "retry-after")
+    & Res.headers (ResHeaders.param @RetryAfter "retry-after")
 
 serverErrorPlain = Res.serverError
 
@@ -69,15 +70,12 @@ data GetUserRes f
     = OkRes       (Res f (KnownStatus Kind.S200) OkHeaders LBS.ByteString)
     | NotFoundRes (Res f (KnownStatus Kind.S404) RetryAfter LBS.ByteString)
     | ErrorRes    (Res f (KnownStatus Kind.S500) HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic)
+    deriving (Generic, GenericResAlt)
 
-instance GenericResAlt GetUserRes
-
-getUserResCodec
-    = resCase @GetUserRes
-        okWithHeaders
-        notFoundWithRetry
-        serverErrorPlain
+getUserResCodec = resCase @GetUserRes
+    okWithHeaders
+    notFoundWithRetry
+    serverErrorPlain
 
 -- ---------------------------------------------------------------------------
 -- Endpoint + server
