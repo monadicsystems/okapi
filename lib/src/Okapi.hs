@@ -1,262 +1,117 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE ImportQualifiedPost #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE QualifiedDo #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Okapi where
 
-import Control.Natural qualified as Natural
 import Data.ByteString.Lazy qualified as LBS
-import Data.ByteString.Lazy.Char8 qualified as LBSChar8
-import Data.Functor.Identity qualified as Identity
-import Data.List qualified as List
-import Data.List.NonEmpty qualified as NonEmpty
+import Data.Kind (Type)
 import Data.Text qualified as Text
-import Data.Tree qualified as Tree
-import Data.Typeable qualified as Typeable
-import Data.Vault.Lazy qualified as Vault
-import Network.HTTP.Types qualified as HTTP
-import Network.Wai qualified as Wai
-import Network.Wai.Handler.Warp qualified as Warp
-import Network.Wai.Middleware.RequestLogger qualified as Wai
-import Okapi.App
-import Okapi.App qualified as App
-import Okapi.Headers qualified as Headers
-import Okapi.Route qualified as Route
-
-import Text.Pretty.Simple qualified as Pretty
-import Web.HttpApiData qualified as Web
-
 {-
-test1 :: IO ()
-test1 = do
-  apiTreeRep <- forest testAPI
-  putStrLn $ Tree.drawTree apiTreeRep
-  where
-    -- Warp.run 1234 $ (build testAPI id) backupWaiApp
+import Network.HTTP.Types (Headers, Path, Query, StdMethod)
 
-    backupWaiApp = \req resp -> do
-      resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
-    testAPI :: [App]
-    testAPI =
-      [ lit
-          "" -- Won't be matched because you can't request http://localhost:1234/
-          [ get_ id \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "The trailing slash"
-          ],
-        lit
-          "hello"
-          [ get_ id \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "world",
-            lit
-              ""
-              [ get_ id \req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] "Trailing slash after \"hello\""
-              ],
-            lit
-              "world"
-              [ get_ id \req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] "!"
-              ]
-          ],
-        get_ id \req -> do
-          return $ Wai.responseLBS HTTP.status200 [] "You made a GET request to :ROOT:"
-      ]
+data GET
 
-test2 :: IO ()
-test2 = do
-  apiTreeRep <- forest testAPI
-  putStrLn $ Tree.drawTree apiTreeRep
-  where
-    -- Warp.run 1234 $ (build testAPI id) backupWaiApp
+data POST
 
-    backupWaiApp = \req resp -> do
-      resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
-    testAPI :: [App]
-    testAPI =
-      lit
-        "" -- Won't be matched because you can't request http://localhost:1234/
-        [ get_ id \req -> do
-            return $ Wai.responseLBS HTTP.status200 [] "The trailing slash"
-        ]
-        : lit
-          "hello"
-          [ get_ id \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "world",
-            lit
-              ""
-              [ get_ id \req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] "Trailing slash after \"hello\""
-              ],
-            lit
-              "world"
-              [ get_ id \req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] "!"
-              ]
-          ]
-        : ( get_ id \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "You made a GET request to :ROOT:"
-          )
-        : []
+data Request m p q h b
 
-test3 :: IO ()
-test3 = do
-  apiTreeRep <- forest testAPI
-  putStrLn $ Tree.drawTree apiTreeRep
-  where
-    -- Warp.run 1234 $ (build testAPI id) backupWaiApp
+instance Functor (Contract pre post i) where
+      fmap = Fmap
 
-    backupWaiApp = \_ resp -> do
-      resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
-    testAPI :: [App]
-    testAPI =
-      [ lit
-          "numbers"
-          [ lit
-              "add"
-              [ param @Int \xS ->
-                  [ param @Int \yS ->
-                      [ getIO_ \req -> do
-                          let magic = Secret.tell req
-                              x = magic xS
-                              y = magic yS
-                          return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show (x + y)
-                      ]
-                  ]
-              ],
-            getIO_ \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
-          ]
-      ]
+instance Applicative (Contract pre pre i) where
+      pure = Pure
+      (<*>) = Apply
 
-data Op = Add | Sub | Mul
+--------------------------------------------------------------------------------
+-- Expr data family: protocol-specific primitives
+--------------------------------------------------------------------------------
 
-instance Web.FromHttpApiData Op where
-  parseUrlPiece "add" = Right Add
-  parseUrlPiece "sub" = Right Sub
-  parseUrlPiece "mul" = Right Mul
-  parseUrlPiece _ = Left undefined
-
-test4 :: IO ()
-test4 = do
-  apiTreeRep <- forest testAPI
-  putStrLn $ Tree.drawTree apiTreeRep
-  where
-    -- Warp.run 1234 $ Wai.logStdoutDev $ build testAPI id backupWaiApp
-
-    backupWaiApp = \_ resp -> do
-      resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
-    testAPI :: [App]
-    testAPI =
-      [ lit
-          "numbers"
-          [ param @Op \opS ->
-              [ param @Int \xS ->
-                  [ param @Int \yS ->
-                      [ getIO_ \req -> do
-                          let x = Secret.tell req xS
-                              y = Secret.tell req yS
-                              answer = case Secret.tell req opS of
-                                Add -> x + y
-                                Sub -> x - y
-                                Mul -> x * y
-                          return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show answer
-                      ]
-                  ],
-                getIO_ \req -> do
-                  return $ Wai.responseLBS HTTP.status200 [] $ case Secret.tell req opS of
-                    Add -> "Add two numbers."
-                    Sub -> "Subtract one number from another."
-                    Mul -> "Multiply two numbers."
-              ],
-            getIO_ \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
-          ]
-      ]
-
-instance Web.ToHttpApiData Op where
-  toUrlPiece Add = "add"
-  toUrlPiece Sub = "sub"
-  toUrlPiece Mul = "mul"
-
-test5 :: IO ()
-test5 = do
-  apiTreeRep <- forest testAPI
-  -- apiEndpoints <- endpoints testAPI
-  putStrLn $ Tree.drawTree apiTreeRep
-  where
-    -- Pretty.pPrint $ map curl $ List.reverse apiEndpoints
-
-    -- Warp.run 1234 $ build testAPI id backupWaiApp
-
-    backupWaiApp = \_ resp -> do
-      resp $ Wai.responseLBS HTTP.status404 [] "The test app failed..."
-    testAPI :: [App]
-    testAPI =
-      [ lit "numbers" $
-          [ getIO_ \req -> do
-              return $ Wai.responseLBS HTTP.status200 [] "Use /add, /sub, or /mul"
-          ]
-            ++ map opAPI [Add, Sub, Mul]
-      ]
-
-opAPI :: Op -> App
-opAPI op =
-  match
-    op
-    [ getIO_ \req -> do
-        return $ Wai.responseLBS HTTP.status200 [] $ case op of
-          Add -> "Add two numbers."
-          Sub -> "Subtract one number from another."
-          Mul -> "Multiply two numbers.",
-      param @Int \xS ->
-        [ param @Int \yS ->
-            [ getIO_ \req -> do
-                let x = Secret.tell req xS
-                    y = Secret.tell req yS
-                    answer = case op of
-                      Add -> x + y
-                      Sub -> x - y
-                      Mul -> x * y
-                return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show answer
-            ]
-        ]
-          ++ case op of
-            Mul ->
-              [ getIO_ \req -> do
-                  let x = Secret.tell req xS
-                  return $ Wai.responseLBS HTTP.status200 [] $ LBSChar8.pack $ show (x * x)
-              ]
-            _ -> []
-    ]
+{- | Expr is a kind-polymorphic data family. Each instance picks its own kind
+  for the index parameters and declares the available primitives for that kind.
 -}
--- test6 :: IO ()
--- test6 = do
---   apiTreeRep <- forest testAPI
---   putStrLn $ Tree.drawTree apiTreeRep
---   where
---     backupWaiApp = \req resp -> do
---       resp $ Wai.responseLBS HTTP.status200 [] "The test app failed..."
---     testAPI :: [App]
---     testAPI =
---       [ endpoint HTTP.GET (do Route.lit "user";) id \_ req -> do
---           undefined
---       , endpoint HTTP.POST (do Route.lit "user"; id' <- Route.param @Int; return id') id \userIDS req -> do
---           let userID = Secret.tell req userIDS
---           undefined
---       ]
+
+--------------------------------------------------------------------------------
+-- Sub-DSL: PathContract
+--
+-- A simplified path contract used to refine the path slot. In a real library
+-- this would itself be a full Contract over a PathExpr data family; here it
+-- is kept minimal to test composition without dragging in the full framework.
+--------------------------------------------------------------------------------
+
+{- | A bidirectional path contract that extracts (on parse) and consumes (on print)
+  a value of type p. "Normalized" means input type equals output type, which
+  signals the sub-DSL is ready to be plugged into the outer Contract.
+-}
+data PathContract i o where
+      PathLit :: String -> PathContract () ()
+
+-- More constructors (variable segments, sequencing, etc.) would go here.
+-- Kept minimal for the prototype.
+
+--------------------------------------------------------------------------------
+-- Expr instance for Request-indexed primitives
+--------------------------------------------------------------------------------
+
+data instance Expr (pre :: Request) (post :: Request) i o where
+      -- | Fix the method slot to GET. Precondition: method is ANY. Postcondition: method is GET.
+      --   Using Method twice with different methods fails because the second call's
+      --   precondition 'ANY does not unify with the already-set method.
+      Method :: Expr ('Request 'ANY p q h b) ('Request m p q h b) () ()
+      -- | Fix the path slot to whatever type the inner PathContract produces.
+      --   Precondition: path slot is the unrefined AnyPath. Postcondition: path slot is p.
+      Path ::
+            PathContract p p ->
+            Expr ('Request m AnyPath q h b) ('Request m p q h b) p p
+
+--------------------------------------------------------------------------------
+-- Smart constructors for the primitives
+--------------------------------------------------------------------------------
+
+-- | Specify the HTTP method.
+method :: Contract ('Request 'ANY p q h b) ('Request m p q h b) () ()
+method = Lift Method
+
+-- | Specify the path via a PathContract.
+path ::
+      PathContract p p ->
+      Contract ('Request m AnyPath q h b) ('Request m p q h b) p p
+path pc = Lift (Path pc)
+
+--------------------------------------------------------------------------------
+-- Example contracts (these are the actual tests; uncomment to verify behavior)
+--------------------------------------------------------------------------------
+
+-- This should typecheck: method alone, starting from the initial state.
+example1 :: Contract InitialRequest ('Request m AnyPath AnyQuery AnyHeaders AnyBody) () ()
+example1 = method
+
+-- This should typecheck: a path alone, starting from the initial state.
+example2 :: Contract InitialRequest ('Request 'ANY () AnyQuery AnyHeaders AnyBody) () ()
+example2 = path (PathLit "users")
+
+-- To test composition properly we need indexed Apply, not the plain Applicative.
+-- That's the next step. For now, this file should compile as-is, which validates
+-- the kind-polymorphic Contract, the Expr data family instance, the refinement
+-- indexing, and the smart constructors.
+
+--------------------------------------------------------------------------------
+-- What to try after this compiles:
+--
+--   1. Add a second method variant and verify `method *> method` fails to typecheck
+--      (requires implementing an indexed *> first).
+--   2. Add Response as a second kind and verify that Request-indexed and
+--      Response-indexed contracts cannot mix.
+--   3. Add a Function constructor that combines a request contract and a response
+--      contract, with a Complete constraint asserting all slots are refined.
+--   4. Wire up QualifiedDo + IxApplicative for ergonomic construction syntax.
+--------------------------------------------------------------------------------
+-}
