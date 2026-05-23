@@ -1,11 +1,11 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# OPTIONS_GHC -Wno-partial-type-signatures -Wno-missing-signatures #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module Main where
 
@@ -14,9 +14,9 @@ import Data.Function ((&))
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Codec ((=.))
+import Okapi.Codec ((=.), value)
 import Okapi.Kind qualified as Kind
-import Okapi.Mode (Endpoint (..), Server, fn)
+import Okapi.Mode (Endpoint (..), fn)
 import Okapi.Req qualified as Req
 import Okapi.Req.Path qualified as Path
 import Okapi.Req.Query qualified as Query
@@ -33,12 +33,12 @@ import Okapi.ResAlt (GenericResAlt (..), resCase)
 getUserReq
     = Req.get
     & Req.path do
-        _ <- Path.lit "users"
+        _      <- Path.lit "users"
         userId <- Path.param @Text
         pure userId
     & Req.query do
         nameFilter <- fst =. Query.optional (Query.param @Text "filter")
-        limit  <- snd =. Query.optional (Query.param @Int  "limit")
+        limit      <- snd =. Query.optional (Query.param @Int  "limit")
         pure (nameFilter, limit)
 
 -- ---------------------------------------------------------------------------
@@ -83,10 +83,11 @@ getUserResCodec = resCase @GetUserRes
 
 getUserEndpoint = getUserReq :-> getUserResCodec
 
--- Minimal partial signature: only the monad IO is given; the rest is inferred.
-getUserServer :: Server IO _
-getUserServer = fn \(_req, _waiReq) ->
-    pure $ OkRes $ Res.value 200 ("blah", "foo") (pure "")
+getUserServer = fn \(reqData, _waiReq) -> do
+    print (snd $ reqData.query_.value :: Maybe Int)
+    pure $ OkRes $ Res.value 200 ("blah", "foo") do
+        putStrLn "Returning..."
+        pure ""
 
 -- ---------------------------------------------------------------------------
 
