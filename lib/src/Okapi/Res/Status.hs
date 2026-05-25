@@ -56,7 +56,7 @@ instance Num (KnownStatus Kind.S500) where
 type Status :: Type -> Type
 data Status a where
     Raw :: Status HTTP.Status
-    Status :: forall (s :: Kind.STATUS). Status (KnownStatus s)
+    Status :: KnownStatus s -> Status (KnownStatus s)
 
 data ParseError = ParseError
 

@@ -11,16 +11,17 @@ import Okapi.Res.Headers (Headers)
 import Okapi.Res.Status (KnownStatus, Status)
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
-  { status_     :: f Status s
+  { status_ :: f Status s
   , headers_ :: f Headers h
-  , body_    :: f Body (IO b)
+  , body_ :: f Body (IO b)
   }
 
 value :: s -> h -> IO b -> Res Value s h b
-value s h b = Res
-    { status_     = Value s
+value s h b =
+  Res
+    { status_ = Value s
     , headers_ = Value h
-    , body_    = Value b
+    , body_ = Value b
     }
 
 res :: Res IsoCodec HTTP.Status HTTP.ResponseHeaders LBS.ByteString
@@ -36,14 +37,14 @@ serverError :: Res IsoCodec (KnownStatus S500) HTTP.ResponseHeaders LBS.ByteStri
 serverError = undefined
 
 headers ::
-  Codec Headers h h ->
+  IsoCodec Headers h ->
   ( Res IsoCodec s HTTP.ResponseHeaders b ->
     Res IsoCodec s h b
   )
 headers = undefined
 
 body ::
-  Codec Body b b ->
+  IsoCodec Body b ->
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
@@ -52,7 +53,6 @@ body = undefined
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 
 json ::
-  forall s h b.
   (IsoJson b) =>
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b

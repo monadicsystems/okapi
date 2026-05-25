@@ -29,7 +29,7 @@ data KnownMethod (m :: Kind.METHOD) where
 data Method a where
     Raw :: Method HTTP.Method
     StdMethod :: Method HTTP.StdMethod
-    Method :: forall (m :: Kind.METHOD). Method (KnownMethod m)
+    Method :: KnownMethod m -> Method (KnownMethod m)
 
 data ParseError = ParseError
 

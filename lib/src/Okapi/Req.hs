@@ -15,20 +15,21 @@ import Okapi.Req.Path (Path)
 import Okapi.Req.Query (Query)
 
 data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
-  { method_     :: f Method m
-  , path_       :: f Path p
-  , query_      :: f Query q
+  { method_ :: f Method m
+  , path_ :: f Path p
+  , query_ :: f Query q
   , headers_ :: f Headers h
-  , body_    :: f Body (IO b)
+  , body_ :: f Body (IO b)
   }
 
 value :: m -> p -> q -> h -> IO b -> Req Value m p q h b
-value m p q h b = Req
-    { method_     = Value m
-    , path_       = Value p
-    , query_      = Value q
+value m p q h b =
+  Req
+    { method_ = Value m
+    , path_ = Value p
+    , query_ = Value q
     , headers_ = Value h
-    , body_    = Value b
+    , body_ = Value b
     }
 
 req ::
@@ -83,28 +84,28 @@ stdMethod ::
 stdMethod = undefined
 
 path ::
-  Codec Path p p ->
+  IsoCodec Path p ->
   ( Req IsoCodec m [Text.Text] q h b ->
     Req IsoCodec m p q h b
   )
 path = undefined
 
 query ::
-  Codec Query q q ->
+  IsoCodec Query q ->
   ( Req IsoCodec m p HTTP.Query h b ->
     Req IsoCodec m p q h b
   )
 query = undefined
 
 headers ::
-  Codec Headers h h ->
+  IsoCodec Headers h ->
   ( Req IsoCodec m p q HTTP.RequestHeaders b ->
     Req IsoCodec m p q h b
   )
 headers = undefined
 
 body ::
-  Codec Body b b ->
+  IsoCodec Body b ->
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
@@ -113,7 +114,6 @@ body = undefined
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 
 json ::
-  forall m p q h b.
   (IsoJson b) =>
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
