@@ -31,6 +31,7 @@ library
         Okapi.Codec
         Okapi.Kind
         Okapi.Mode
+        Okapi.OpenApi
         Okapi.Pattern
         Okapi.Req
         Okapi.Req.Body
@@ -49,6 +50,9 @@ library
         bytestring,
         http-api-data,
         http-types,
+        insert-ordered-containers,
+        lens,
+        openapi3,
         profunctors,
         text,
         wai
@@ -79,4 +83,19 @@ test-suite okapi-infer
         http-types,
         text,
         okapi
+    default-language: GHC2024
+
+test-suite okapi-openapi
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          OpenApi.hs
+    hs-source-dirs:   ../test
+    build-depends:
+        base ^>=4.20.0.0,
+        aeson,
+        bytestring,
+        http-types,
+        text,
+        okapi,
+        openapi3
     default-language: GHC2024

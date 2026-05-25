@@ -12,8 +12,15 @@ module Okapi.Req.Method (
     raw,
     std,
     known,
+    knownMethodToStd,
+    extractMethod,
+    KGET,
+    KPOST,
+    KPUT,
+    KDELETE,
 ) where
 
+import Control.Applicative ((<|>))
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
@@ -25,6 +32,11 @@ data KnownMethod (m :: Kind.METHOD) where
     POST :: KnownMethod Kind.POST
     PUT :: KnownMethod Kind.PUT
     DELETE :: KnownMethod Kind.DELETE
+
+type KGET    = KnownMethod Kind.GET
+type KPOST   = KnownMethod Kind.POST
+type KPUT    = KnownMethod Kind.PUT
+type KDELETE = KnownMethod Kind.DELETE
 
 data Method a where
     Raw :: Method HTTP.Method
@@ -52,5 +64,19 @@ raw = Embed Raw
 std :: Codec Method HTTP.StdMethod HTTP.StdMethod
 std = Embed StdMethod
 
-known :: forall (m :: Kind.METHOD). Codec Method (KnownMethod m) (KnownMethod m)
-known = Embed Method
+known :: KnownMethod m -> Codec Method (KnownMethod m) (KnownMethod m)
+known km = Embed (Method km)
+
+knownMethodToStd :: KnownMethod m -> HTTP.StdMethod
+knownMethodToStd GET    = HTTP.GET
+knownMethodToStd POST   = HTTP.POST
+knownMethodToStd PUT    = HTTP.PUT
+knownMethodToStd DELETE = HTTP.DELETE
+
+extractMethod :: Codec Method i o -> Maybe HTTP.StdMethod
+extractMethod (Embed (Method km)) = Just (knownMethodToStd km)
+extractMethod (Embed _)           = Nothing
+extractMethod (FMap _ c)          = extractMethod c
+extractMethod (LMap _ c)          = extractMethod c
+extractMethod (Apply cf cx)       = extractMethod cf <|> extractMethod cx
+extractMethod (Pure _)            = Nothing

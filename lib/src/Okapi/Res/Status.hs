@@ -12,8 +12,14 @@ module Okapi.Res.Status (
     print,
     raw,
     known,
+    knownStatusToHTTP,
+    extractStatus,
+    KS200,
+    KS404,
+    KS500,
 ) where
 
+import Control.Applicative ((<|>))
 import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
@@ -25,6 +31,10 @@ data KnownStatus (s :: Kind.STATUS) where
     S200 :: KnownStatus Kind.S200
     S404 :: KnownStatus Kind.S404
     S500 :: KnownStatus Kind.S500
+
+type KS200 = KnownStatus Kind.S200
+type KS404 = KnownStatus Kind.S404
+type KS500 = KnownStatus Kind.S500
 
 instance Num (KnownStatus Kind.S200) where
     fromInteger 200 = S200
@@ -75,5 +85,18 @@ print = undefined
 raw :: Codec Status HTTP.Status HTTP.Status
 raw = Embed Raw
 
-known :: forall (s :: Kind.STATUS). Codec Status (KnownStatus s) (KnownStatus s)
-known = Embed Status
+known :: KnownStatus s -> Codec Status (KnownStatus s) (KnownStatus s)
+known ks = Embed (Status ks)
+
+knownStatusToHTTP :: KnownStatus s -> HTTP.Status
+knownStatusToHTTP S200 = HTTP.status200
+knownStatusToHTTP S404 = HTTP.status404
+knownStatusToHTTP S500 = HTTP.status500
+
+extractStatus :: Codec Status i o -> Maybe HTTP.Status
+extractStatus (Embed (Status ks)) = Just (knownStatusToHTTP ks)
+extractStatus (Embed Raw)         = Nothing
+extractStatus (FMap _ c)          = extractStatus c
+extractStatus (LMap _ c)          = extractStatus c
+extractStatus (Apply cf cx)       = extractStatus cf <|> extractStatus cx
+extractStatus (Pure _)            = Nothing

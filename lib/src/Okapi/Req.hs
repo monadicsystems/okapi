@@ -7,29 +7,32 @@ import Data.Kind (Type)
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
-import Okapi.Kind qualified as Kind
 import Okapi.Req.Body (Body)
+import Okapi.Req.Body qualified as Body
 import Okapi.Req.Headers (Headers)
-import Okapi.Req.Method (KnownMethod (..), Method)
+import Okapi.Req.Headers qualified as Headers
+import Okapi.Req.Method (KnownMethod (..), Method, known, KGET, KPOST, KDELETE)
+import Okapi.Req.Method qualified as Method
 import Okapi.Req.Path (Path)
+import Okapi.Req.Path qualified as Path
 import Okapi.Req.Query (Query)
+import Okapi.Req.Query qualified as Query
 
 data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
   { method_ :: f Method m
-  , path_ :: f Path p
-  , query_ :: f Query q
+  , path_   :: f Path p
+  , query_  :: f Query q
   , headers_ :: f Headers h
-  , body_ :: f Body (IO b)
+  , body_    :: f Body (IO b)
   }
 
 value :: m -> p -> q -> h -> IO b -> Req Value m p q h b
-value m p q h b =
-  Req
-    { method_ = Value m
-    , path_ = Value p
-    , query_ = Value q
+value m p q h b = Req
+    { method_  = Value m
+    , path_    = Value p
+    , query_   = Value q
     , headers_ = Value h
-    , body_ = Value b
+    , body_    = Value b
     }
 
 req ::
@@ -40,12 +43,18 @@ req ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-req = undefined
+req = Req
+    { method_  = IsoCodec Method.raw
+    , path_    = IsoCodec Path.raw
+    , query_   = IsoCodec Query.raw
+    , headers_ = IsoCodec Headers.raw
+    , body_    = IsoCodec Body.raw
+    }
 
 get ::
   Req
     IsoCodec
-    (KnownMethod Kind.GET)
+    KGET
     [Text.Text]
     HTTP.Query
     HTTP.RequestHeaders
@@ -55,7 +64,7 @@ get = req & method GET
 post ::
   Req
     IsoCodec
-    (KnownMethod Kind.POST)
+    KPOST
     [Text.Text]
     HTTP.Query
     HTTP.RequestHeaders
@@ -65,7 +74,7 @@ post = req & method POST
 delete ::
   Req
     IsoCodec
-    (KnownMethod Kind.DELETE)
+    KDELETE
     [Text.Text]
     HTTP.Query
     HTTP.RequestHeaders
@@ -76,7 +85,7 @@ method ::
   KnownMethod m ->
   Req IsoCodec HTTP.Method p q h b ->
   Req IsoCodec (KnownMethod m) p q h b
-method = undefined
+method km r = r { method_ = IsoCodec (known km) }
 
 stdMethod ::
   Req IsoCodec HTTP.Method p q h b ->
@@ -84,36 +93,37 @@ stdMethod ::
 stdMethod = undefined
 
 path ::
-  IsoCodec Path p ->
+  Codec Path p p ->
   ( Req IsoCodec m [Text.Text] q h b ->
     Req IsoCodec m p q h b
   )
-path = undefined
+path c r = r { path_ = IsoCodec c }
 
 query ::
-  IsoCodec Query q ->
+  Codec Query q q ->
   ( Req IsoCodec m p HTTP.Query h b ->
     Req IsoCodec m p q h b
   )
-query = undefined
+query c r = r { query_ = IsoCodec c }
 
 headers ::
-  IsoCodec Headers h ->
+  Codec Headers h h ->
   ( Req IsoCodec m p q HTTP.RequestHeaders b ->
     Req IsoCodec m p q h b
   )
-headers = undefined
+headers c r = r { headers_ = IsoCodec c }
 
 body ::
-  IsoCodec Body b ->
+  Codec Body (IO b) (IO b) ->
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
-body = undefined
+body c r = r { body_ = IsoCodec c }
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 
 json ::
+  forall m p q h b.
   (IsoJson b) =>
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b

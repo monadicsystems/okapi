@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Req.Headers (
-    Headers,
+    Headers (..),
     ParseError (..),
     parse,
     print,

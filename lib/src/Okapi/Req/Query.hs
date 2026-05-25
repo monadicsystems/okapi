@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Req.Query (
-    Query,
+    Query (..),
     ParseError (..),
     parse,
     print,

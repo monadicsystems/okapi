@@ -4,51 +4,68 @@ import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Codec (Codec, IsoCodec, Value (..))
-import Okapi.Kind (STATUS (..))
+import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Res.Body (Body)
+import Okapi.Res.Body qualified as Body
 import Okapi.Res.Headers (Headers)
-import Okapi.Res.Status (KnownStatus, Status)
+import Okapi.Res.Headers qualified as ResHeaders
+import Okapi.Res.Status (Status, KS200, KS404, KS500)
+import Okapi.Res.Status qualified as Status
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
-  { status_ :: f Status s
+  { status_  :: f Status s
   , headers_ :: f Headers h
-  , body_ :: f Body (IO b)
+  , body_    :: f Body (IO b)
   }
 
 value :: s -> h -> IO b -> Res Value s h b
-value s h b =
-  Res
-    { status_ = Value s
+value s h b = Res
+    { status_  = Value s
     , headers_ = Value h
-    , body_ = Value b
+    , body_    = Value b
     }
 
-res :: Res IsoCodec HTTP.Status HTTP.ResponseHeaders LBS.ByteString
-res = undefined
+ok :: Res IsoCodec KS200 HTTP.ResponseHeaders LBS.ByteString
+ok = Res
+    { status_  = IsoCodec (Status.known Status.S200)
+    , headers_ = IsoCodec ResHeaders.raw
+    , body_    = IsoCodec Body.raw
+    }
 
-ok :: Res IsoCodec (KnownStatus S200) HTTP.ResponseHeaders LBS.ByteString
-ok = undefined
+notFound :: Res IsoCodec KS404 HTTP.ResponseHeaders LBS.ByteString
+notFound = Res
+    { status_  = IsoCodec (Status.known Status.S404)
+    , headers_ = IsoCodec ResHeaders.raw
+    , body_    = IsoCodec Body.raw
+    }
 
-notFound :: Res IsoCodec (KnownStatus S404) HTTP.ResponseHeaders LBS.ByteString
-notFound = undefined
-
-serverError :: Res IsoCodec (KnownStatus S500) HTTP.ResponseHeaders LBS.ByteString
-serverError = undefined
+serverError :: Res IsoCodec KS500 HTTP.ResponseHeaders LBS.ByteString
+serverError = Res
+    { status_  = IsoCodec (Status.known Status.S500)
+    , headers_ = IsoCodec ResHeaders.raw
+    , body_    = IsoCodec Body.raw
+    }
 
 headers ::
-  IsoCodec Headers h ->
+  Codec Headers h h ->
   ( Res IsoCodec s HTTP.ResponseHeaders b ->
     Res IsoCodec s h b
   )
-headers = undefined
+headers c r = r { headers_ = IsoCodec c }
 
 body ::
-  IsoCodec Body b ->
+  Codec Body (IO b) (IO b) ->
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
-body = undefined
+body c r = r { body_ = IsoCodec c }
+
+res :: Res IsoCodec HTTP.Status HTTP.ResponseHeaders LBS.ByteString
+res = Res
+    { status_  = IsoCodec Status.raw
+    , headers_ = IsoCodec ResHeaders.raw
+    , body_    = IsoCodec Body.raw
+    }
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
 

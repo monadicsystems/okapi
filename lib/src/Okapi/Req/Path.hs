@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Req.Path (
-    Path,
+    Path (..),
     ParseError (..),
     lit,
     param,

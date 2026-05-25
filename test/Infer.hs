@@ -15,7 +15,6 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec ((=.), value)
-import Okapi.Kind qualified as Kind
 import Okapi.Mode (Endpoint (..), fn)
 import Okapi.Req qualified as Req
 import Okapi.Req.Path qualified as Path
@@ -23,7 +22,7 @@ import Okapi.Req.Query qualified as Query
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
 import Okapi.Res.Headers qualified as ResHeaders
-import Okapi.Res.Status (KnownStatus)
+import Okapi.Res.Status (KS200, KS404, KS500)
 import Okapi.ResAlt (GenericResAlt (..), resCase)
 
 -- ---------------------------------------------------------------------------
@@ -67,9 +66,9 @@ serverErrorPlain = Res.serverError
 -- ---------------------------------------------------------------------------
 
 data GetUserRes f
-    = OkRes       (Res f (KnownStatus Kind.S200) OkHeaders LBS.ByteString)
-    | NotFoundRes (Res f (KnownStatus Kind.S404) RetryAfter LBS.ByteString)
-    | ErrorRes    (Res f (KnownStatus Kind.S500) HTTP.ResponseHeaders LBS.ByteString)
+    = OkRes       (Res f KS200 OkHeaders LBS.ByteString)
+    | NotFoundRes (Res f KS404 RetryAfter LBS.ByteString)
+    | ErrorRes    (Res f KS500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 getUserResCodec = resCase @GetUserRes
