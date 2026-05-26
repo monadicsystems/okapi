@@ -128,4 +128,4 @@ json ::
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
-json = undefined
+json = body Body.json

@@ -12,6 +12,7 @@
 module Okapi.ResAlt where
 
 import Data.Kind (Type)
+import Data.OpenApi (ToSchema)
 import Data.Proxy (Proxy (..))
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:+:) (..))
 import Okapi.Codec (Codec (..), IsoCodec (..), Value)
@@ -21,7 +22,7 @@ import Okapi.Res (Res)
 -- ResAlt GADT
 
 data ResAlt a where
-    OneResAlt    :: Res IsoCodec s h b -> ResAlt (Res Value s h b)
+    OneResAlt    :: ToSchema b => Res IsoCodec s h b -> ResAlt (Res Value s h b)
     ChoiceResAlt :: ResAlt a -> ResAlt b -> ResAlt (Either a b)
 
 -- ---------------------------------------------------------------------------
@@ -33,7 +34,7 @@ data ResAlt a where
 
 newtype Only s h b (f :: (Type -> Type) -> Type -> Type) = Only {runOnly :: Res f s h b}
 
-only :: Res IsoCodec s h b -> IsoCodec ResAlt (Only s h b Value)
+only :: ToSchema b => Res IsoCodec s h b -> IsoCodec ResAlt (Only s h b Value)
 only res = IsoCodec $ FMap Only $ LMap runOnly $ Embed (OneResAlt res)
 
 -- ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ instance GResAlt f => GResAlt (C1 m f) where
 
 -- S1 leaf — single Res field
 
-instance GResAlt (S1 m (Rec0 (Res Value s h b))) where
+instance ToSchema b => GResAlt (S1 m (Rec0 (Res Value s h b))) where
     type GResOut (S1 m (Rec0 (Res Value s h b))) = Res Value s h b
     gResCase _ k codec = k (OneResAlt codec)
     gTo _ x            = M1 (K1 x)

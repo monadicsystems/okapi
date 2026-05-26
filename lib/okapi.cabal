@@ -48,6 +48,7 @@ library
         base ^>=4.20.0.0,
         aeson,
         bytestring,
+        case-insensitive,
         http-api-data,
         http-types,
         insert-ordered-containers,

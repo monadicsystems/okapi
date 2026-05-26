@@ -1,10 +1,10 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 
 module Main where
@@ -13,6 +13,7 @@ import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.Function ((&))
+import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
@@ -26,7 +27,10 @@ import Okapi.Res (Res)
 import Okapi.Res qualified as Res
 import Okapi.Res.Headers qualified as ResHeaders
 import Okapi.Res.Status (KS200, KS404, KS500)
-import Okapi.ResAlt (GenericResAlt (..))
+import Okapi.ResAlt (GenericResAlt (..), only)
+
+-- ---------------------------------------------------------------------------
+-- GET /users/:id
 
 type OkHeaders = (Text, Text)
 type RetryAfter = Int
@@ -55,8 +59,24 @@ getUserReq = Req.get
 
 getUserEndpoint = getUserReq :-> resCase @GetUserRes okRes notFoundRes errRes
 
+-- ---------------------------------------------------------------------------
+-- POST /users
+
+data CreateUserBody = CreateUserBody
+    { username :: Text
+    , email    :: Text
+    } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
+
+createUserReq = Req.post
+    & Req.path (Path.lit "users")
+    & Req.json @CreateUserBody
+
+createUserEndpoint = createUserReq :-> only (Res.ok & Res.json @CreateUserBody)
+
+-- ---------------------------------------------------------------------------
+
 main :: IO ()
 main = do
-    let spec = endpointToOpenApi getUserEndpoint
+    let spec = endpointToOpenApi getUserEndpoint <> endpointToOpenApi createUserEndpoint
     LBS8.putStrLn (Aeson.encode spec)
     putStrLn "okapi openapi compiled"

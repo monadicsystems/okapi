@@ -74,4 +74,4 @@ json ::
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
-json = undefined
+json = body Body.json

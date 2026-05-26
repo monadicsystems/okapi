@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Req.Body (
-    Body,
+    Body (..),
     IsoJson,
     ParseError (..),
     parse,
