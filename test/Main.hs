@@ -16,11 +16,8 @@ import Okapi.Mode (Endpoint (..), Server, Signature, fn)
 import Okapi.Req (Req)
 import Okapi.Req qualified as Req
 import Okapi.Req.Method (KGET)
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query qualified as Query
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
-import Okapi.Res.Headers qualified as ResHeaders
 import Okapi.Res.Status (KS200, KS404, KS500)
 import Okapi.ResAlt (GenericResAlt (..), ResAlt, resCase)
 
@@ -40,10 +37,10 @@ getUserReq
 getUserReq
     = Req.get
     & Req.path do
-        _ <- Path.lit "users"
-        userId <- Path.param @Text
+        _ <- Req.lit @Text "users"
+        userId <- Req.seg @Text "userId"
         pure userId
-    & Req.query (Query.optional (Query.param "filter"))
+    & Req.query (Req.paramOpt "filter")
 
 -- ---------------------------------------------------------------------------
 -- Responses
@@ -57,8 +54,8 @@ okWithHeaders
 okWithHeaders
     = Res.ok
     & Res.headers do
-        ct  <- fst =. ResHeaders.param "content-type"
-        loc <- snd =. ResHeaders.param "location"
+        ct  <- fst =. Res.header "content-type"
+        loc <- snd =. Res.header "location"
         pure (ct, loc)
 
 -- | 404 — one retry-after header
@@ -68,7 +65,7 @@ notFoundWithRetry
     :: Res IsoCodec KS404 RetryAfter LBS.ByteString
 notFoundWithRetry
     = Res.notFound
-    & Res.headers (ResHeaders.param "retry-after")
+    & Res.headers (Res.header "retry-after")
 
 -- | 500 — raw response headers, no specialisation
 serverErrorPlain

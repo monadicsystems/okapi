@@ -17,11 +17,8 @@ import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec ((=.), value)
 import Okapi.Mode (Endpoint (..), fn)
 import Okapi.Req qualified as Req
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query qualified as Query
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
-import Okapi.Res.Headers qualified as ResHeaders
 import Okapi.Res.Status (KS200, KS404, KS500)
 import Okapi.ResAlt (GenericResAlt (..), resCase)
 
@@ -32,12 +29,12 @@ import Okapi.ResAlt (GenericResAlt (..), resCase)
 getUserReq
     = Req.get
     & Req.path do
-        _      <- Path.lit "users"
-        userId <- Path.param @Text
+        _      <- Req.lit @Text "users"
+        userId <- Req.seg @Text "userId"
         pure userId
     & Req.query do
-        nameFilter <- fst =. Query.optional (Query.param @Text "filter")
-        limit      <- snd =. Query.optional (Query.param @Int  "limit")
+        nameFilter <- fst =. Req.paramOpt @Text "filter"
+        limit      <- snd =. Req.paramOpt @Int  "limit"
         pure (nameFilter, limit)
 
 -- ---------------------------------------------------------------------------
@@ -49,15 +46,15 @@ type OkHeaders = (Text, Text)
 okWithHeaders
     = Res.ok
     & Res.headers do
-        ct  <- fst =. ResHeaders.param "content-type"
-        loc <- snd =. ResHeaders.param "location"
+        ct  <- fst =. Res.header "content-type"
+        loc <- snd =. Res.header "location"
         pure (ct, loc)
 
 type RetryAfter = Int
 
 notFoundWithRetry
     = Res.notFound
-    & Res.headers (ResHeaders.param @RetryAfter "retry-after")
+    & Res.headers (Res.header @RetryAfter "retry-after")
 
 serverErrorPlain = Res.serverError
 

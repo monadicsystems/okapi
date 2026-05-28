@@ -4,9 +4,12 @@ import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Kind (Type)
+import Data.List.NonEmpty (NonEmpty)
+import Data.OpenApi (ToSchema)
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
+import Okapi.Data (FromHeaderData, FromPathData, FromQueryData, ToHeaderData, ToPathData, ToQueryData)
 import Okapi.Req.Body (Body)
 import Okapi.Req.Body qualified as Body
 import Okapi.Req.Headers (Headers)
@@ -17,6 +20,7 @@ import Okapi.Req.Path (Path)
 import Okapi.Req.Path qualified as Path
 import Okapi.Req.Query (Query)
 import Okapi.Req.Query qualified as Query
+import Data.Typeable (Typeable)
 
 data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
   { method_ :: f Method m
@@ -120,12 +124,48 @@ body ::
   )
 body c r = r { body_ = IsoCodec c }
 
-type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
+type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 
 json ::
-  forall m p q h b.
+  forall b m p q h.
   (IsoJson b) =>
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
 json = body Body.json
+
+-- ---------------------------------------------------------------------------
+-- Path DSL re-exports
+
+lit :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
+lit x = Path.lit x
+
+seg :: (Typeable a, ToPathData a, FromPathData a) => Text.Text -> Codec Path a a
+seg n = Path.seg n
+
+segs :: (Typeable a, ToPathData a, FromPathData a) => Codec Path (NonEmpty a) (NonEmpty a)
+segs = Path.segs
+
+-- ---------------------------------------------------------------------------
+-- Query DSL re-exports
+
+param :: (Typeable a, ToQueryData a, FromQueryData a) => Text.Text -> Codec Query a a
+param k = Query.param k
+
+paramOpt :: (Typeable a, ToQueryData a, FromQueryData a) => Text.Text -> Codec Query (Maybe a) (Maybe a)
+paramOpt k = Query.paramOpt k
+
+flag :: Text.Text -> Codec Query () ()
+flag k = Query.flag k
+
+flagOpt :: Text.Text -> Codec Query Bool Bool
+flagOpt k = Query.flagOpt k
+
+-- ---------------------------------------------------------------------------
+-- Request Headers DSL re-exports
+
+header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
+header k = Headers.header k
+
+headerOpt :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
+headerOpt k = Headers.headerOpt k

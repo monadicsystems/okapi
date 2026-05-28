@@ -15,11 +15,12 @@ module Okapi.Req.Body (
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
+import Data.OpenApi (ToSchema)
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
 import Prelude hiding (print)
 
-type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
+type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 
 type Body :: Type -> Type
 data Body a where

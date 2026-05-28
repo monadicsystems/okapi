@@ -3,8 +3,11 @@ module Okapi.Res where
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
+import Data.OpenApi (ToSchema)
+import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
+import Okapi.Data (FromHeaderData, ToHeaderData)
 import Okapi.Res.Body (Body)
 import Okapi.Res.Body qualified as Body
 import Okapi.Res.Headers (Headers)
@@ -67,11 +70,21 @@ res = Res
     , body_    = IsoCodec Body.raw
     }
 
-type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a)
+type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 
 json ::
-  (IsoJson b) =>
+  forall b s h.
+  IsoJson b =>
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
 json = body Body.json
+
+-- ---------------------------------------------------------------------------
+-- Response Headers DSL re-exports
+
+header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
+header k = ResHeaders.header k
+
+headerOpt :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
+headerOpt k = ResHeaders.headerOpt k

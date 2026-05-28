@@ -21,11 +21,8 @@ import Okapi.Codec ((=.))
 import Okapi.Mode (Endpoint (..))
 import Okapi.OpenApi (endpointToOpenApi)
 import Okapi.Req qualified as Req
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query qualified as Query
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
-import Okapi.Res.Headers qualified as ResHeaders
 import Okapi.Res.Status (KS200, KS404, KS500)
 import Okapi.ResAlt (GenericResAlt (..), only)
 
@@ -42,22 +39,25 @@ data GetUserRes f
     deriving (Generic, GenericResAlt)
 
 okRes = Res.ok & Res.headers do
-    ct  <- fst =. ResHeaders.param "content-type"
-    loc <- snd =. ResHeaders.param "location"
+    ct  <- fst =. Res.header "content-type"
+    loc <- snd =. Res.header "location"
     pure (ct, loc)
 
-notFoundRes = Res.notFound & Res.headers (ResHeaders.param @RetryAfter "retry-after")
+notFoundRes = Res.notFound & Res.headers (Res.header @RetryAfter "retry-after")
 
 errRes = Res.serverError
 
 getUserReq = Req.get
     & Req.path do
-        _ <- Path.lit "users"
-        userId <- Path.param @Text
+        _ <- Req.lit @Text "users"
+        userId <- Req.seg @Text "userId"
         pure userId
-    & Req.query (Query.optional (Query.param @Text "filter"))
+    & Req.query (Req.paramOpt @Text "filter")
 
-getUserEndpoint = getUserReq :-> resCase @GetUserRes okRes notFoundRes errRes
+getUserEndpoint = getUserReq :-> resCase @GetUserRes
+    okRes
+    notFoundRes
+    errRes
 
 -- ---------------------------------------------------------------------------
 -- POST /users
@@ -68,7 +68,7 @@ data CreateUserBody = CreateUserBody
     } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
 createUserReq = Req.post
-    & Req.path (Path.lit "users")
+    & Req.path (Req.lit @Text "users")
     & Req.json @CreateUserBody
 
 createUserEndpoint = createUserReq :-> only (Res.ok & Res.json @CreateUserBody)
@@ -77,6 +77,5 @@ createUserEndpoint = createUserReq :-> only (Res.ok & Res.json @CreateUserBody)
 
 main :: IO ()
 main = do
-    let spec = endpointToOpenApi getUserEndpoint <> endpointToOpenApi createUserEndpoint
-    LBS8.putStrLn (Aeson.encode spec)
+    LBS8.putStrLn (Aeson.encode (endpointToOpenApi createUserEndpoint <> endpointToOpenApi getUserEndpoint))
     putStrLn "okapi openapi compiled"

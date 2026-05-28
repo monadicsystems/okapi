@@ -9,8 +9,9 @@ module Okapi.Req.Query (
     print,
     raw,
     param,
+    paramOpt,
     flag,
-    optional,
+    flagOpt,
 ) where
 
 import Data.Kind (Type)
@@ -18,17 +19,16 @@ import Data.Text (Text)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Web.HttpApiData qualified as HTTP.Api
+import Okapi.Data (IsoQueryData)
 import Prelude hiding (print)
-
-type IsoHttpApiData a = (HTTP.Api.FromHttpApiData a, HTTP.Api.ToHttpApiData a)
 
 type Query :: Type -> Type
 data Query a where
-    Raw :: Query HTTP.Query
-    Param :: IsoHttpApiData a => Text -> Query a
-    Flag :: Text -> Query Bool
-    Optional :: Codec Query a a -> Query (Maybe a)
+    Raw      :: Query HTTP.Query
+    Param    :: IsoQueryData a => Text -> Query a
+    ParamOpt :: IsoQueryData a => Text -> Query (Maybe a)
+    Flag     :: Text -> Query ()
+    FlagOpt  :: Text -> Query Bool
 
 data ParseError = ParseError
 
@@ -48,11 +48,14 @@ print = Codec.printer queryPrinter
 raw :: Codec Query HTTP.Query HTTP.Query
 raw = Embed Raw
 
-param :: IsoHttpApiData a => Text -> Codec Query a a
+param :: IsoQueryData a => Text -> Codec Query a a
 param key = Embed (Param key)
 
-flag :: Text -> Codec Query Bool Bool
+paramOpt :: IsoQueryData a => Text -> Codec Query (Maybe a) (Maybe a)
+paramOpt key = Embed (ParamOpt key)
+
+flag :: Text -> Codec Query () ()
 flag key = Embed (Flag key)
 
-optional :: Codec Query a a -> Codec Query (Maybe a) (Maybe a)
-optional c = Embed (Optional c)
+flagOpt :: Text -> Codec Query Bool Bool
+flagOpt key = Embed (FlagOpt key)

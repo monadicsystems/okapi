@@ -29,6 +29,7 @@ library
     exposed-modules:
         Okapi
         Okapi.Codec
+        Okapi.Data
         Okapi.Kind
         Okapi.Mode
         Okapi.OpenApi
@@ -49,13 +50,16 @@ library
         aeson,
         bytestring,
         case-insensitive,
-        http-api-data,
         http-types,
         insert-ordered-containers,
         lens,
         openapi3,
         profunctors,
+        scientific,
         text,
+        time,
+        uuid,
+        vector,
         wai
     hs-source-dirs:   src
     default-language: GHC2024

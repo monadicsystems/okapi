@@ -8,24 +8,22 @@ module Okapi.Res.Headers (
     parse,
     print,
     raw,
-    param,
-    optional,
+    header,
+    headerOpt,
 ) where
 
 import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Web.HttpApiData qualified as HTTP.Api
+import Okapi.Data (IsoHeaderData)
 import Prelude hiding (print)
-
-type IsoHttpApiData a = (HTTP.Api.FromHttpApiData a, HTTP.Api.ToHttpApiData a)
 
 type Headers :: Type -> Type
 data Headers a where
-    Raw :: Headers HTTP.ResponseHeaders
-    Param :: IsoHttpApiData a => HTTP.HeaderName -> Headers a
-    Optional :: Codec Headers a a -> Headers (Maybe a)
+    Raw       :: Headers HTTP.ResponseHeaders
+    Header    :: IsoHeaderData a => HTTP.HeaderName -> Headers a
+    HeaderOpt :: IsoHeaderData a => HTTP.HeaderName -> Headers (Maybe a)
 
 data ParseError = ParseError
 
@@ -45,8 +43,8 @@ print = Codec.printer resHeadersPrinter
 raw :: Codec Headers HTTP.ResponseHeaders HTTP.ResponseHeaders
 raw = Embed Raw
 
-param :: IsoHttpApiData a => HTTP.HeaderName -> Codec Headers a a
-param key = Embed (Param key)
+header :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers a a
+header key = Embed (Header key)
 
-optional :: Codec Headers a a -> Codec Headers (Maybe a) (Maybe a)
-optional c = Embed (Optional c)
+headerOpt :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
+headerOpt key = Embed (HeaderOpt key)

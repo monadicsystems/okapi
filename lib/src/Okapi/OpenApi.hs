@@ -4,15 +4,17 @@
 
 module Okapi.OpenApi (endpointToOpenApi) where
 
+import Control.Applicative ((<|>))
 import Control.Lens ((&), (.~), (?~))
 import Data.ByteString.Char8 qualified as BS8
 import Data.CaseInsensitive qualified as CI
 import Data.HashMap.Strict.InsOrd qualified as IHM
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
-import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..), Referenced (..), Response, Responses (..))
+import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..), Referenced (..), Response, Responses (..), toSchema)
 import Data.OpenApi qualified as OA
 import Data.Proxy (Proxy (..))
+import Data.Typeable (TypeRep, typeRep)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Network.HTTP.Types qualified as HTTP
@@ -27,95 +29,126 @@ import Okapi.Req.Path (Path)
 import Okapi.Req.Path qualified as Path
 import Okapi.Req.Query (Query)
 import Okapi.Req.Query qualified as Query
-import Okapi.Res (Res, status_)
+import Okapi.Res (status_)
 import Okapi.Res qualified as ORes
 import Okapi.Res.Body qualified as ResBody
 import Okapi.Res.Headers qualified as ResH
 import Okapi.Res.Status qualified as Status
 import Okapi.ResAlt (ResAlt (..))
+import Okapi.Data (ToPathData (..))
 
 -- ---------------------------------------------------------------------------
 -- Path
 
-data PathPiece = PLit Text | PParam Int
+data PathPiece = PLit Text | PParam Text OA.Schema
 
-walkPath :: Codec Path i o -> ([PathPiece], Int) -> ([PathPiece], Int)
-walkPath (Embed (Path.Lit t)) (ps, n) = (ps ++ [PLit t], n)
-walkPath (Embed Path.Param)   (ps, n) = (ps ++ [PParam n], n + 1)
-walkPath (Embed Path.Blob)    (ps, n) = (ps ++ [PParam n], n + 1)
-walkPath (Embed Path.Raw)     s       = s
-walkPath (FMap _ c)           s       = walkPath c s
-walkPath (LMap _ c)           s       = walkPath c s
-walkPath (Apply cf cx)        s       = walkPath cx (walkPath cf s)
-walkPath (Pure _)             s       = s
+walkPath :: Codec Path i o -> [PathPiece] -> [PathPiece]
+walkPath (Embed (Path.Lit x))     ps = ps ++ [PLit (toUrlPiece x)]
+walkPath (Embed h@(Path.Seg n))   ps = ps ++ [PParam n (typeRepSchema (typeRep (proxyOf h)))]
+walkPath (Embed Path.Segs)        ps = ps ++ [PParam "segs" (mempty & OA.type_ ?~ OA.OpenApiString)]
+walkPath (Embed Path.Raw)         ps = ps
+walkPath (FMap _ c)               ps = walkPath c ps
+walkPath (LMap _ c)               ps = walkPath c ps
+walkPath (Apply cf cx)            ps = walkPath cx (walkPath cf ps)
+walkPath (Pure _)                 ps = ps
 
 pathTemplate :: [PathPiece] -> FilePath
 pathTemplate pieces = "/" <> intercalate "/" (map piece pieces)
   where
-    piece (PLit t)   = T.unpack t
-    piece (PParam n) = "{param" <> show n <> "}"
+    piece (PLit t)     = T.unpack t
+    piece (PParam n _) = "{" <> T.unpack n <> "}"
 
 pathOAParams :: [PathPiece] -> [Param]
 pathOAParams pieces =
-    [ mkParam ("param" <> T.pack (show n)) ParamPath True
-    | PParam n <- pieces
+    [ mkParamWithSchema name ParamPath True sc
+    | PParam name sc <- pieces
     ]
 
 -- ---------------------------------------------------------------------------
 -- Query
 
 extractQueryParams :: Codec Query i o -> [Param]
-extractQueryParams (Embed (Query.Param key))  = [mkParam key ParamQuery True]
-extractQueryParams (Embed (Query.Flag key))   = [mkParam key ParamQuery False]
-extractQueryParams (Embed (Query.Optional c)) = map makeOptional (extractQueryParams c)
-extractQueryParams (Embed Query.Raw)          = []
-extractQueryParams (FMap _ c)                 = extractQueryParams c
-extractQueryParams (LMap _ c)                 = extractQueryParams c
-extractQueryParams (Apply cf cx)              = extractQueryParams cf ++ extractQueryParams cx
-extractQueryParams (Pure _)                   = []
+extractQueryParams (Embed (Query.Param key))    = [mkParam key ParamQuery True]
+extractQueryParams (Embed (Query.ParamOpt key)) = [mkParam key ParamQuery False]
+extractQueryParams (Embed (Query.Flag key))     = [mkParam key ParamQuery True]
+extractQueryParams (Embed (Query.FlagOpt key))  = [mkParam key ParamQuery False]
+extractQueryParams (Embed Query.Raw)             = []
+extractQueryParams (FMap _ c)                    = extractQueryParams c
+extractQueryParams (LMap _ c)                    = extractQueryParams c
+extractQueryParams (Apply cf cx)                 = extractQueryParams cf ++ extractQueryParams cx
+extractQueryParams (Pure _)                      = []
+
+-- ---------------------------------------------------------------------------
+-- Header schema — Typeable-based dispatch for scalar header value types
+
+proxyOf :: f a -> Proxy a
+proxyOf _ = Proxy
+
+innerProxyOf :: f (Maybe a) -> Proxy a
+innerProxyOf _ = Proxy
+
+typeRepSchema :: TypeRep -> OA.Schema
+typeRepSchema tr
+    | tr == typeRep (Proxy :: Proxy T.Text)  = mempty & OA.type_ ?~ OA.OpenApiString
+    | tr == typeRep (Proxy :: Proxy Int)     = mempty & OA.type_ ?~ OA.OpenApiInteger
+    | tr == typeRep (Proxy :: Proxy Integer) = mempty & OA.type_ ?~ OA.OpenApiInteger
+    | tr == typeRep (Proxy :: Proxy Bool)    = mempty & OA.type_ ?~ OA.OpenApiBoolean
+    | otherwise                              = mempty & OA.type_ ?~ OA.OpenApiString
 
 -- ---------------------------------------------------------------------------
 -- Request headers
 
 extractHeaderParams :: Codec Headers i o -> [Param]
-extractHeaderParams (Embed (ReqH.Param key))  = [mkParam (hdrName key) ParamHeader True]
-extractHeaderParams (Embed (ReqH.Optional c)) = map makeOptional (extractHeaderParams c)
-extractHeaderParams (Embed ReqH.Raw)          = []
-extractHeaderParams (FMap _ c)                = extractHeaderParams c
-extractHeaderParams (LMap _ c)                = extractHeaderParams c
-extractHeaderParams (Apply cf cx)             = extractHeaderParams cf ++ extractHeaderParams cx
-extractHeaderParams (Pure _)                  = []
+extractHeaderParams (Embed hdr) = case hdr of
+    h@(ReqH.Header    key) -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
+    h@(ReqH.HeaderOpt key) -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
+    ReqH.Raw               -> []
+extractHeaderParams (FMap _ c)    = extractHeaderParams c
+extractHeaderParams (LMap _ c)    = extractHeaderParams c
+extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParams cx
+extractHeaderParams (Pure _)      = []
 
 -- ---------------------------------------------------------------------------
 -- Response headers
 
-extractResHeaders :: Codec ResH.Headers i o -> [(Text, Bool)]
-extractResHeaders (Embed (ResH.Param key))  = [(hdrName key, True)]
-extractResHeaders (Embed (ResH.Optional c)) = map (\(n, _) -> (n, False)) (extractResHeaders c)
-extractResHeaders (Embed ResH.Raw)          = []
-extractResHeaders (FMap _ c)                = extractResHeaders c
-extractResHeaders (LMap _ c)                = extractResHeaders c
-extractResHeaders (Apply cf cx)             = extractResHeaders cf ++ extractResHeaders cx
-extractResHeaders (Pure _)                  = []
+extractResHeaders :: Codec ResH.Headers i o -> [(Text, Bool, OA.Schema)]
+extractResHeaders (Embed hdr) = case hdr of
+    h@(ResH.Header    key) -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
+    h@(ResH.HeaderOpt key) -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
+    ResH.Raw               -> []
+extractResHeaders (FMap _ c)    = extractResHeaders c
+extractResHeaders (LMap _ c)    = extractResHeaders c
+extractResHeaders (Apply cf cx) = extractResHeaders cf ++ extractResHeaders cx
+extractResHeaders (Pure _)      = []
 
 -- ---------------------------------------------------------------------------
--- Body detection
+-- Body schema extraction — evidence lives in the Json GADT constructor
+--
+-- Helpers pass the GADT-refined Body value so the existential type is visible.
 
-isJsonReqBody :: Codec ReqBody.Body i o -> Bool
-isJsonReqBody (Embed ReqBody.Json) = True
-isJsonReqBody (Embed _)            = False
-isJsonReqBody (FMap _ c)           = isJsonReqBody c
-isJsonReqBody (LMap _ c)           = isJsonReqBody c
-isJsonReqBody (Apply cf cx)        = isJsonReqBody cf || isJsonReqBody cx
-isJsonReqBody (Pure _)             = False
+reqBodySchemaOf :: forall a. ReqBody.IsoJson a => ReqBody.Body (IO a) -> OA.Schema
+reqBodySchemaOf _ = toSchema (Proxy @a)
 
-isJsonResBody :: Codec ResBody.Body i o -> Bool
-isJsonResBody (Embed ResBody.Json) = True
-isJsonResBody (Embed _)            = False
-isJsonResBody (FMap _ c)           = isJsonResBody c
-isJsonResBody (LMap _ c)           = isJsonResBody c
-isJsonResBody (Apply cf cx)        = isJsonResBody cf || isJsonResBody cx
-isJsonResBody (Pure _)             = False
+resBodySchemaOf :: forall a. ResBody.IsoJson a => ResBody.Body (IO a) -> OA.Schema
+resBodySchemaOf _ = toSchema (Proxy @a)
+
+extractReqBodySchema :: Codec ReqBody.Body i o -> Maybe OA.Schema
+extractReqBodySchema (Embed body)   = case body of
+    ReqBody.Json -> Just (reqBodySchemaOf body)
+    _            -> Nothing
+extractReqBodySchema (FMap _ c)    = extractReqBodySchema c
+extractReqBodySchema (LMap _ c)    = extractReqBodySchema c
+extractReqBodySchema (Apply cf cx) = extractReqBodySchema cf <|> extractReqBodySchema cx
+extractReqBodySchema (Pure _)      = Nothing
+
+extractResBodySchema :: Codec ResBody.Body i o -> Maybe OA.Schema
+extractResBodySchema (Embed body)   = case body of
+    ResBody.Json -> Just (resBodySchemaOf body)
+    _            -> Nothing
+extractResBodySchema (FMap _ c)    = extractResBodySchema c
+extractResBodySchema (LMap _ c)    = extractResBodySchema c
+extractResBodySchema (Apply cf cx) = extractResBodySchema cf <|> extractResBodySchema cx
+extractResBodySchema (Pure _)      = Nothing
 
 -- ---------------------------------------------------------------------------
 -- ResAlt walker
@@ -123,16 +156,14 @@ isJsonResBody (Pure _)             = False
 data ResInfo = ResInfo
     { resStatus     :: HTTP.Status
     , resBodySchema :: Maybe OA.Schema
-    , resHdrNames   :: [(Text, Bool)]
+    , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
 extractResInfos :: ResAlt a -> [ResInfo]
-extractResInfos (OneResAlt (res :: Res IsoCodec s h b)) =
+extractResInfos (OneResAlt res) =
     [ ResInfo
         { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus (isoCodec (status_ res)))
-        , resBodySchema = if isJsonResBody (isoCodec (ORes.body_ res))
-                          then Just (OA.toSchema (Proxy @b))
-                          else Nothing
+        , resBodySchema = extractResBodySchema (isoCodec (ORes.body_ res))
         , resHdrNames   = extractResHeaders (isoCodec (ORes.headers_ res))
         }
     ]
@@ -157,8 +188,12 @@ mkParam n loc req_ = mempty
     & OA.in_      .~ loc
     & OA.required ?~ req_
 
-makeOptional :: Param -> Param
-makeOptional p = p & OA.required ?~ False
+mkParamWithSchema :: Text -> ParamLocation -> Bool -> OA.Schema -> Param
+mkParamWithSchema n loc req_ sc = mempty
+    & OA.name     .~ n
+    & OA.in_      .~ loc
+    & OA.required ?~ req_
+    & OA.schema   ?~ Inline sc
 
 mkResResponse :: ResInfo -> Response
 mkResResponse ri =
@@ -173,12 +208,12 @@ applyResBodySchema (Just sc) r = r
     & OA.content .~ IHM.singleton "application/json"
         (mempty & OA.schema ?~ Inline sc)
 
-applyResHeaders :: [(Text, Bool)] -> Response -> Response
+applyResHeaders :: [(Text, Bool, OA.Schema)] -> Response -> Response
 applyResHeaders [] r = r
 applyResHeaders hs r = r
     & OA.headers .~ IHM.fromList
-        [ (name, Inline (mempty & OA.required ?~ req_))
-        | (name, req_) <- hs
+        [ (name, Inline (mempty & OA.required ?~ req_ & OA.schema ?~ Inline sc))
+        | (name, req_, sc) <- hs
         ]
 
 applyReqBodySchema :: Maybe OA.Schema -> Operation -> Operation
@@ -199,22 +234,17 @@ setMethod _           op pi_ = pi_ { _pathItemGet    = Just op }
 -- ---------------------------------------------------------------------------
 -- Main
 
-endpointToOpenApi
-    :: forall m p q h b r
-    .  OA.ToSchema b
-    => Endpoint (Signature m p q h b r)
-    -> OpenApi
+endpointToOpenApi :: Endpoint (Signature m p q h b r) -> OpenApi
 endpointToOpenApi (req :-> IsoCodec resAlt) =
     let
-        stdMeth     = fromMaybe HTTP.GET (Method.extractMethod (isoCodec (method_ req)))
-        (pieces, _) = walkPath (isoCodec (path_ req)) ([], 0)
-        qParams     = extractQueryParams (isoCodec (query_ req))
-        hParams     = extractHeaderParams (isoCodec (headers_ req))
-        resInfos    = walkResAltCodec resAlt
-        reqBody     = if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
-                         && isJsonReqBody (isoCodec (body_ req))
-                      then Just (OA.toSchema (Proxy @b))
-                      else Nothing
+        stdMeth  = fromMaybe HTTP.GET (Method.extractMethod (isoCodec (method_ req)))
+        pieces   = walkPath (isoCodec (path_ req)) []
+        qParams  = extractQueryParams (isoCodec (query_ req))
+        hParams  = extractHeaderParams (isoCodec (headers_ req))
+        resInfos = walkResAltCodec resAlt
+        reqBody  = if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
+                   then extractReqBodySchema (isoCodec (body_ req))
+                   else Nothing
         op = mempty
             & OA.parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
             & OA.responses  .~ Responses Nothing
