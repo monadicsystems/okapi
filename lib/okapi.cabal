@@ -70,7 +70,7 @@ test-suite okapi-examples
     import:           warnings
     type:             exitcode-stdio-1.0
     main-is:          Main.hs
-    hs-source-dirs:   ../test
+    hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         bytestring,
@@ -83,7 +83,7 @@ test-suite okapi-infer
     import:           warnings
     type:             exitcode-stdio-1.0
     main-is:          Infer.hs
-    hs-source-dirs:   ../test
+    hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         bytestring,
@@ -97,7 +97,7 @@ test-suite okapi-openapi
     import:           warnings
     type:             exitcode-stdio-1.0
     main-is:          OpenApi.hs
-    hs-source-dirs:   ../test
+    hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         aeson,
@@ -113,7 +113,7 @@ test-suite okapi-roundtrip
     ghc-options:      -threaded
     type:             exitcode-stdio-1.0
     main-is:          RoundTrip.hs
-    hs-source-dirs:   ../test
+    hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         bytestring,
