@@ -10,6 +10,9 @@ module Okapi.Data (
     ToHeaderData (..),
     FromHeaderData (..),
     IsoHeaderData,
+    ToCookieData (..),
+    FromCookieData (..),
+    IsoCookieData,
 ) where
 
 import Data.Bifunctor (first)
