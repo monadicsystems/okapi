@@ -23,7 +23,7 @@ import Okapi.OpenApi (endpointToOpenApi)
 import Okapi.Req qualified as Req
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
-import Okapi.Res.Status (KS200, KS404, KS500)
+import Okapi.Res.Status (S200, S404, S500)
 import Okapi.ResAlt (GenericResAlt (..), only)
 
 -- ---------------------------------------------------------------------------
@@ -33,26 +33,29 @@ type OkHeaders = (Text, Text)
 type RetryAfter = Int
 
 data GetUserRes f
-    = OkRes       (Res f KS200 OkHeaders LBS.ByteString)
-    | NotFoundRes (Res f KS404 RetryAfter LBS.ByteString)
-    | ErrorRes    (Res f KS500 HTTP.ResponseHeaders LBS.ByteString)
+    = OkRes       (Res f S200 OkHeaders LBS.ByteString)
+    | NotFoundRes (Res f S404 RetryAfter LBS.ByteString)
+    | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
-okRes = Res.ok & Res.headers do
-    ct  <- fst =. Res.header "content-type"
-    loc <- snd =. Res.header "location"
-    pure (ct, loc)
+okRes
+    = Res.ok
+    & Res.headers do
+        ct  <- fst =. Res.header "content-type"
+        loc <- snd =. Res.header "location"
+        pure (ct, loc)
 
 notFoundRes = Res.notFound & Res.headers (Res.header @RetryAfter "retry-after")
 
 errRes = Res.serverError
 
-getUserReq = Req.get
+getUserReq
+    = Req.get
     & Req.path do
         _ <- Req.lit @Text "users"
         userId <- Req.seg @Text "userId"
         pure userId
-    & Req.query (Req.paramOpt @Text "filter")
+    & Req.query (Req.param' @Text "filter")
 
 getUserEndpoint = getUserReq :-> resCase @GetUserRes
     okRes

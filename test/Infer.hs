@@ -19,7 +19,7 @@ import Okapi.Mode (Endpoint (..), fn)
 import Okapi.Req qualified as Req
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
-import Okapi.Res.Status (KS200, KS404, KS500)
+import Okapi.Res.Status (S200, S404, S500)
 import Okapi.ResAlt (GenericResAlt (..), resCase)
 
 -- ---------------------------------------------------------------------------
@@ -30,11 +30,11 @@ getUserReq
     = Req.get
     & Req.path do
         _      <- Req.lit @Text "users"
-        userId <- Req.seg @Text "userId"
+        userId <- Req.seg @Int "userId"
         pure userId
     & Req.query do
-        nameFilter <- fst =. Req.paramOpt @Text "filter"
-        limit      <- snd =. Req.paramOpt @Int  "limit"
+        nameFilter <- fst =. Req.param' @Text "filter"
+        limit      <- snd =. Req.param' @Int  "limit"
         pure (nameFilter, limit)
 
 -- ---------------------------------------------------------------------------
@@ -63,9 +63,9 @@ serverErrorPlain = Res.serverError
 -- ---------------------------------------------------------------------------
 
 data GetUserRes f
-    = OkRes       (Res f KS200 OkHeaders LBS.ByteString)
-    | NotFoundRes (Res f KS404 RetryAfter LBS.ByteString)
-    | ErrorRes    (Res f KS500 HTTP.ResponseHeaders LBS.ByteString)
+    = OkRes       (Res f S200 OkHeaders LBS.ByteString)
+    | NotFoundRes (Res f S404 RetryAfter LBS.ByteString)
+    | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 getUserResCodec = resCase @GetUserRes

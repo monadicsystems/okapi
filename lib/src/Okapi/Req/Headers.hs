@@ -9,7 +9,7 @@ module Okapi.Req.Headers (
     print,
     raw,
     header,
-    headerOpt,
+    header',
 ) where
 
 import Data.Kind (Type)
@@ -46,5 +46,5 @@ raw = Embed Raw
 header :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers a a
 header key = Embed (Header key)
 
-headerOpt :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
-headerOpt key = Embed (HeaderOpt key)
+header' :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
+header' key = Embed (HeaderOpt key)

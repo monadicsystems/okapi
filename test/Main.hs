@@ -15,10 +15,10 @@ import Okapi.Codec (IsoCodec (..), Value, (=.))
 import Okapi.Mode (Endpoint (..), Server, Signature, fn)
 import Okapi.Req (Req)
 import Okapi.Req qualified as Req
-import Okapi.Req.Method (KGET)
+import Okapi.Req.Method (GET)
 import Okapi.Res (Res)
 import Okapi.Res qualified as Res
-import Okapi.Res.Status (KS200, KS404, KS500)
+import Okapi.Res.Status (S200, S404, S500)
 import Okapi.ResAlt (GenericResAlt (..), ResAlt, resCase)
 
 -- ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ import Okapi.ResAlt (GenericResAlt (..), ResAlt, resCase)
 getUserReq
     :: Req
         IsoCodec
-        KGET
+        GET
         Text
         (Maybe Text)
         HTTP.RequestHeaders
@@ -40,7 +40,7 @@ getUserReq
         _ <- Req.lit @Text "users"
         userId <- Req.seg @Text "userId"
         pure userId
-    & Req.query (Req.paramOpt "filter")
+    & Req.query (Req.param' "filter")
 
 -- ---------------------------------------------------------------------------
 -- Responses
@@ -50,7 +50,7 @@ getUserReq
 type OkHeaders = (Text, Text)
 
 okWithHeaders
-    :: Res IsoCodec KS200 OkHeaders LBS.ByteString
+    :: Res IsoCodec S200 OkHeaders LBS.ByteString
 okWithHeaders
     = Res.ok
     & Res.headers do
@@ -62,14 +62,14 @@ okWithHeaders
 type RetryAfter = Int
 
 notFoundWithRetry
-    :: Res IsoCodec KS404 RetryAfter LBS.ByteString
+    :: Res IsoCodec S404 RetryAfter LBS.ByteString
 notFoundWithRetry
     = Res.notFound
     & Res.headers (Res.header "retry-after")
 
 -- | 500 — raw response headers, no specialisation
 serverErrorPlain
-    :: Res IsoCodec KS500 HTTP.ResponseHeaders LBS.ByteString
+    :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
 serverErrorPlain = Res.serverError
 
 -- ---------------------------------------------------------------------------
@@ -77,9 +77,9 @@ serverErrorPlain = Res.serverError
 -- ---------------------------------------------------------------------------
 
 data GetUserRes f
-    = OkRes       (Res f KS200 OkHeaders LBS.ByteString)
-    | NotFoundRes (Res f KS404 RetryAfter LBS.ByteString)
-    | ErrorRes    (Res f KS500 HTTP.ResponseHeaders LBS.ByteString)
+    = OkRes       (Res f S200 OkHeaders LBS.ByteString)
+    | NotFoundRes (Res f S404 RetryAfter LBS.ByteString)
+    | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic)
 
 instance GenericResAlt GetUserRes
@@ -98,7 +98,7 @@ getUserResCodec =
 getUserEndpoint
     :: Endpoint
         ( Signature
-            KGET
+            GET
             Text
             (Maybe Text)
             HTTP.RequestHeaders
@@ -111,7 +111,7 @@ getUserServer
     :: Server
         IO
         ( Signature
-            KGET
+            GET
             Text
             (Maybe Text)
             HTTP.RequestHeaders

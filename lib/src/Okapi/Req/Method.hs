@@ -14,34 +14,34 @@ module Okapi.Req.Method (
     known,
     knownMethodToStd,
     extractMethod,
-    KGET,
-    KPOST,
-    KPUT,
-    KDELETE,
+    GET,
+    POST,
+    PUT,
+    DELETE,
 ) where
 
 import Control.Applicative ((<|>))
+import GHC.TypeLits (Symbol)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Kind qualified as Kind (METHOD (..))
 import Prelude hiding (print)
 
-data KnownMethod (m :: Kind.METHOD) where
-    GET :: KnownMethod Kind.GET
-    POST :: KnownMethod Kind.POST
-    PUT :: KnownMethod Kind.PUT
-    DELETE :: KnownMethod Kind.DELETE
+data KnownMethod (m :: Symbol) where
+    GET    :: KnownMethod "GET"
+    POST   :: KnownMethod "POST"
+    PUT    :: KnownMethod "PUT"
+    DELETE :: KnownMethod "DELETE"
 
-type KGET    = KnownMethod Kind.GET
-type KPOST   = KnownMethod Kind.POST
-type KPUT    = KnownMethod Kind.PUT
-type KDELETE = KnownMethod Kind.DELETE
+type GET    = KnownMethod "GET"
+type POST   = KnownMethod "POST"
+type PUT    = KnownMethod "PUT"
+type DELETE = KnownMethod "DELETE"
 
 data Method a where
-    Raw :: Method HTTP.Method
+    Raw       :: Method HTTP.Method
     StdMethod :: Method HTTP.StdMethod
-    Method :: KnownMethod m -> Method (KnownMethod m)
+    Method    :: KnownMethod m -> Method (KnownMethod m)
 
 data ParseError = ParseError
 

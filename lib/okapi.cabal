@@ -30,7 +30,6 @@ library
         Okapi
         Okapi.Codec
         Okapi.Data
-        Okapi.Kind
         Okapi.Mode
         Okapi.OpenApi
         Okapi.Pattern

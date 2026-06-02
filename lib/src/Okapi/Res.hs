@@ -12,7 +12,7 @@ import Okapi.Res.Body (Body)
 import Okapi.Res.Body qualified as Body
 import Okapi.Res.Headers (Headers)
 import Okapi.Res.Headers qualified as ResHeaders
-import Okapi.Res.Status (Status, KS200, KS404, KS500)
+import Okapi.Res.Status (Status, S200, S404, S500)
 import Okapi.Res.Status qualified as Status
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
@@ -28,21 +28,21 @@ value s h b = Res
     , body_    = Value b
     }
 
-ok :: Res IsoCodec KS200 HTTP.ResponseHeaders LBS.ByteString
+ok :: Res IsoCodec S200 HTTP.ResponseHeaders LBS.ByteString
 ok = Res
     { status_  = IsoCodec (Status.known Status.S200)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw
     }
 
-notFound :: Res IsoCodec KS404 HTTP.ResponseHeaders LBS.ByteString
+notFound :: Res IsoCodec S404 HTTP.ResponseHeaders LBS.ByteString
 notFound = Res
     { status_  = IsoCodec (Status.known Status.S404)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw
     }
 
-serverError :: Res IsoCodec KS500 HTTP.ResponseHeaders LBS.ByteString
+serverError :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
 serverError = Res
     { status_  = IsoCodec (Status.known Status.S500)
     , headers_ = IsoCodec ResHeaders.raw
@@ -86,5 +86,5 @@ json = body Body.json
 header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
 header k = ResHeaders.header k
 
-headerOpt :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
-headerOpt k = ResHeaders.headerOpt k
+header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
+header' k = ResHeaders.header' k

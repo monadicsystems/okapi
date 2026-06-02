@@ -9,9 +9,9 @@ module Okapi.Req.Query (
     print,
     raw,
     param,
-    paramOpt,
+    param',
     flag,
-    flagOpt,
+    flag',
 ) where
 
 import Data.Kind (Type)
@@ -51,11 +51,11 @@ raw = Embed Raw
 param :: IsoQueryData a => Text -> Codec Query a a
 param key = Embed (Param key)
 
-paramOpt :: IsoQueryData a => Text -> Codec Query (Maybe a) (Maybe a)
-paramOpt key = Embed (ParamOpt key)
+param' :: IsoQueryData a => Text -> Codec Query (Maybe a) (Maybe a)
+param' key = Embed (ParamOpt key)
 
 flag :: Text -> Codec Query () ()
 flag key = Embed (Flag key)
 
-flagOpt :: Text -> Codec Query Bool Bool
-flagOpt key = Embed (FlagOpt key)
+flag' :: Text -> Codec Query Bool Bool
+flag' key = Embed (FlagOpt key)

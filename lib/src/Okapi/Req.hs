@@ -14,7 +14,7 @@ import Okapi.Req.Body (Body)
 import Okapi.Req.Body qualified as Body
 import Okapi.Req.Headers (Headers)
 import Okapi.Req.Headers qualified as Headers
-import Okapi.Req.Method (KnownMethod (..), Method, known, KGET, KPOST, KDELETE)
+import Okapi.Req.Method (KnownMethod (..), Method, known, GET, POST, DELETE)
 import Okapi.Req.Method qualified as Method
 import Okapi.Req.Path (Path)
 import Okapi.Req.Path qualified as Path
@@ -58,7 +58,7 @@ req = Req
 get ::
   Req
     IsoCodec
-    KGET
+    GET
     [Text.Text]
     HTTP.Query
     HTTP.RequestHeaders
@@ -68,7 +68,7 @@ get = req & method GET
 post ::
   Req
     IsoCodec
-    KPOST
+    POST
     [Text.Text]
     HTTP.Query
     HTTP.RequestHeaders
@@ -78,7 +78,7 @@ post = req & method POST
 delete ::
   Req
     IsoCodec
-    KDELETE
+    DELETE
     [Text.Text]
     HTTP.Query
     HTTP.RequestHeaders
@@ -152,14 +152,14 @@ segs = Path.segs
 param :: (Typeable a, ToQueryData a, FromQueryData a) => Text.Text -> Codec Query a a
 param k = Query.param k
 
-paramOpt :: (Typeable a, ToQueryData a, FromQueryData a) => Text.Text -> Codec Query (Maybe a) (Maybe a)
-paramOpt k = Query.paramOpt k
+param' :: (Typeable a, ToQueryData a, FromQueryData a) => Text.Text -> Codec Query (Maybe a) (Maybe a)
+param' k = Query.param' k
 
 flag :: Text.Text -> Codec Query () ()
 flag k = Query.flag k
 
-flagOpt :: Text.Text -> Codec Query Bool Bool
-flagOpt k = Query.flagOpt k
+flag' :: Text.Text -> Codec Query Bool Bool
+flag' k = Query.flag' k
 
 -- ---------------------------------------------------------------------------
 -- Request Headers DSL re-exports
@@ -167,5 +167,5 @@ flagOpt k = Query.flagOpt k
 header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
 header k = Headers.header k
 
-headerOpt :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
-headerOpt k = Headers.headerOpt k
+header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
+header' k = Headers.header' k

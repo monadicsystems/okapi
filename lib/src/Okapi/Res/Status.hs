@@ -14,49 +14,49 @@ module Okapi.Res.Status (
     known,
     knownStatusToHTTP,
     extractStatus,
-    KS200,
-    KS404,
-    KS500,
+    S200,
+    S404,
+    S500,
 ) where
 
 import Control.Applicative ((<|>))
 import Data.Kind (Type)
+import GHC.TypeLits (Nat)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Kind qualified as Kind (STATUS (..))
 import Prelude hiding (print)
 
-data KnownStatus (s :: Kind.STATUS) where
-    S200 :: KnownStatus Kind.S200
-    S404 :: KnownStatus Kind.S404
-    S500 :: KnownStatus Kind.S500
+data KnownStatus (s :: Nat) where
+    S200 :: KnownStatus 200
+    S404 :: KnownStatus 404
+    S500 :: KnownStatus 500
 
-type KS200 = KnownStatus Kind.S200
-type KS404 = KnownStatus Kind.S404
-type KS500 = KnownStatus Kind.S500
+type S200 = KnownStatus 200
+type S404 = KnownStatus 404
+type S500 = KnownStatus 500
 
-instance Num (KnownStatus Kind.S200) where
+instance Num (KnownStatus 200) where
     fromInteger 200 = S200
-    fromInteger _ = error "KnownStatus S200: expected 200"
+    fromInteger _ = error "KnownStatus 200: expected 200"
     S200 + S200 = S200
     S200 * S200 = S200
     abs = id
     signum _ = S200
     negate = id
 
-instance Num (KnownStatus Kind.S404) where
+instance Num (KnownStatus 404) where
     fromInteger 404 = S404
-    fromInteger _ = error "KnownStatus S404: expected 404"
+    fromInteger _ = error "KnownStatus 404: expected 404"
     S404 + S404 = S404
     S404 * S404 = S404
     abs = id
     signum _ = S404
     negate = id
 
-instance Num (KnownStatus Kind.S500) where
+instance Num (KnownStatus 500) where
     fromInteger 500 = S500
-    fromInteger _ = error "KnownStatus S500: expected 500"
+    fromInteger _ = error "KnownStatus 500: expected 500"
     S500 + S500 = S500
     S500 * S500 = S500
     abs = id
@@ -65,7 +65,7 @@ instance Num (KnownStatus Kind.S500) where
 
 type Status :: Type -> Type
 data Status a where
-    Raw :: Status HTTP.Status
+    Raw    :: Status HTTP.Status
     Status :: KnownStatus s -> Status (KnownStatus s)
 
 data ParseError = ParseError
