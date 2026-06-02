@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -31,6 +32,9 @@ data KnownStatus (s :: Nat) where
     S200 :: KnownStatus 200
     S404 :: KnownStatus 404
     S500 :: KnownStatus 500
+
+deriving instance Eq   (KnownStatus s)
+deriving instance Show (KnownStatus s)
 
 type S200 = KnownStatus 200
 type S404 = KnownStatus 404
@@ -68,7 +72,7 @@ data Status a where
     Raw    :: Status HTTP.Status
     Status :: KnownStatus s -> Status (KnownStatus s)
 
-data ParseError = ParseError
+data ParseError = ParseError deriving (Eq, Show)
 
 type instance StateOf Status = HTTP.Status
 type instance ParseErrorOf Status = ParseError
@@ -76,11 +80,22 @@ type instance ParseErrorOf Status = ParseError
 parse :: Codec Status i o -> HTTP.Status -> (Either ParseError o, HTTP.Status)
 parse = Codec.parser statusAlg
   where
-    statusAlg = undefined
+    statusAlg :: forall a. Status a -> HTTP.Status -> (Either ParseError a, HTTP.Status)
+    statusAlg Raw         s = (Right s, s)
+    statusAlg (Status ks) s
+        | s == knownStatusToHTTP ks = (Right ks, s)
+        | otherwise                 = (Left ParseError, s)
 
--- HTTP.Status is not a Monoid so Codec.printer cannot be used here.
 print :: Codec Status i o -> i -> HTTP.Status
-print = undefined
+print = go
+  where
+    go :: forall i' o'. Codec Status i' o' -> i' -> HTTP.Status
+    go (Embed (Status ks)) _ = knownStatusToHTTP ks
+    go (Embed Raw)         s = s
+    go (FMap _ c)          i = go c i
+    go (LMap f c)          i = go c (f i)
+    go (Apply cf _)        i = go cf i
+    go (Pure _)            _ = HTTP.status200
 
 raw :: Codec Status HTTP.Status HTTP.Status
 raw = Embed Raw

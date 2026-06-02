@@ -17,14 +17,14 @@ import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:+:
 import Okapi.Codec (Codec (..), IsoCodec (..), Value)
 import Okapi.Res (Res)
 
--- ---------------------------------------------------------------------------
+
 -- ResAlt GADT
 
 data ResAlt a where
     OneResAlt    :: Res IsoCodec s h b -> ResAlt (Res Value s h b)
     ChoiceResAlt :: ResAlt a -> ResAlt b -> ResAlt (Either a b)
 
--- ---------------------------------------------------------------------------
+
 -- only: single-response smart constructor
 
 newtype Only s h b (f :: (Type -> Type) -> Type -> Type) = Only {runOnly :: Res f s h b}
@@ -32,7 +32,7 @@ newtype Only s h b (f :: (Type -> Type) -> Type -> Type) = Only {runOnly :: Res 
 only :: Res IsoCodec s h b -> IsoCodec ResAlt (Only s h b Value)
 only res = IsoCodec $ FMap Only $ LMap runOnly $ Embed (OneResAlt res)
 
--- ---------------------------------------------------------------------------
+
 -- GResFunc: curried codec-constructor type for each generic rep node
 
 type family GResFunc (f :: Type -> Type) (r :: Type) :: Type where
@@ -41,7 +41,7 @@ type family GResFunc (f :: Type -> Type) (r :: Type) :: Type where
     GResFunc (S1 m (Rec0 (Res Value s h b))) r = Res IsoCodec s h b -> r
     GResFunc (f :+: g)                       r = GResFunc f (GResFunc g r)
 
--- ---------------------------------------------------------------------------
+
 -- GResAlt: walks the generic Rep, building the codec tree
 
 class GResAlt (f :: Type -> Type) where
@@ -88,7 +88,7 @@ instance (GResAlt f, GResAlt g) => GResAlt (f :+: g) where
     gFrom (L1 x)    = Left  (runGFrom @f x)
     gFrom (R1 x)    = Right (runGFrom @g x)
 
--- ---------------------------------------------------------------------------
+
 -- GenericResAlt: user-facing class for sum response types
 
 class

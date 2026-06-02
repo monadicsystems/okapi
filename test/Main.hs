@@ -21,11 +21,6 @@ import Okapi.Res qualified as Res
 import Okapi.Res.Status (S200, S404, S500)
 import Okapi.ResAlt (GenericResAlt (..), ResAlt, resCase)
 
--- ---------------------------------------------------------------------------
--- Request
--- ---------------------------------------------------------------------------
-
--- | GET /users/:id?filter=<text>
 getUserReq
     :: Req
         IsoCodec
@@ -42,11 +37,6 @@ getUserReq
         pure userId
     & Req.query (Req.param' "filter")
 
--- ---------------------------------------------------------------------------
--- Responses
--- ---------------------------------------------------------------------------
-
--- | 200 — typed content-type and location headers
 type OkHeaders = (Text, Text)
 
 okWithHeaders
@@ -58,7 +48,6 @@ okWithHeaders
         loc <- snd =. Res.header "location"
         pure (ct, loc)
 
--- | 404 — one retry-after header
 type RetryAfter = Int
 
 notFoundWithRetry
@@ -67,14 +56,9 @@ notFoundWithRetry
     = Res.notFound
     & Res.headers (Res.header "retry-after")
 
--- | 500 — raw response headers, no specialisation
 serverErrorPlain
     :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
 serverErrorPlain = Res.serverError
-
--- ---------------------------------------------------------------------------
--- Response sum type
--- ---------------------------------------------------------------------------
 
 data GetUserRes f
     = OkRes       (Res f S200 OkHeaders LBS.ByteString)
@@ -90,10 +74,6 @@ getUserResCodec =
         okWithHeaders
         notFoundWithRetry
         serverErrorPlain
-
--- ---------------------------------------------------------------------------
--- Endpoint + server
--- ---------------------------------------------------------------------------
 
 getUserEndpoint
     :: Endpoint
@@ -119,8 +99,6 @@ getUserServer
             GetUserRes
         )
 getUserServer = fn \(_req, _waiReq) -> undefined
-
--- ---------------------------------------------------------------------------
 
 main :: IO ()
 main = putStrLn "okapi examples compiled"

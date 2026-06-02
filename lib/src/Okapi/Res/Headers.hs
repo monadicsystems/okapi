@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -15,12 +16,16 @@ module Okapi.Res.Headers (
 ) where
 
 import Data.ByteString (ByteString)
+import Data.ByteString.Builder qualified as Builder
+import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
+import Data.List (partition)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data (IsoHeaderData, IsoCookieData)
+import Okapi.Data (IsoHeaderData, IsoCookieData, parseHeader, toHeader, parseCookieValue, toCookieValue)
 import Prelude hiding (print)
+import Web.Cookie qualified as Cookie
 
 type Headers :: Type -> Type
 data Headers a where
@@ -30,7 +35,7 @@ data Headers a where
     SetCookie    :: IsoCookieData a => ByteString -> Headers a
     SetCookieOpt :: IsoCookieData a => ByteString -> Headers (Maybe a)
 
-data ParseError = ParseError
+data ParseError = ParseError deriving (Eq, Show)
 
 type instance StateOf Headers = HTTP.ResponseHeaders
 type instance ParseErrorOf Headers = ParseError
@@ -38,12 +43,61 @@ type instance ParseErrorOf Headers = ParseError
 parse :: Codec Headers i o -> HTTP.ResponseHeaders -> (Either ParseError o, HTTP.ResponseHeaders)
 parse = Codec.parser resHeadersAlg
   where
-    resHeadersAlg = undefined
+    resHeadersAlg :: forall a. Headers a -> HTTP.ResponseHeaders -> (Either ParseError a, HTTP.ResponseHeaders)
+    resHeadersAlg Raw hs = (Right hs, [])
+    resHeadersAlg (Header key) hs =
+        case partition (\(k, _) -> k == key) hs of
+            ([], _)             -> (Left ParseError, hs)
+            ((_, v) : _, rest)  -> case parseHeader v of
+                Left _  -> (Left ParseError, hs)
+                Right x -> (Right x, rest)
+    resHeadersAlg (HeaderOpt key) hs =
+        case partition (\(k, _) -> k == key) hs of
+            ([], _)             -> (Right Nothing, hs)
+            ((_, v) : _, rest)  -> case parseHeader v of
+                Left _  -> (Right Nothing, rest)
+                Right x -> (Right (Just x), rest)
+    resHeadersAlg (SetCookie name) hs =
+        case partition (isSetCookieFor name) hs of
+            ([], _)             -> (Left ParseError, hs)
+            ((_, v) : _, rest)  ->
+                let val = Cookie.setCookieValue (Cookie.parseSetCookie v)
+                in case parseCookieValue val of
+                    Left _  -> (Left ParseError, hs)
+                    Right x -> (Right x, rest)
+    resHeadersAlg (SetCookieOpt name) hs =
+        case partition (isSetCookieFor name) hs of
+            ([], _)             -> (Right Nothing, hs)
+            ((_, v) : _, rest)  ->
+                let val = Cookie.setCookieValue (Cookie.parseSetCookie v)
+                in case parseCookieValue val of
+                    Left _  -> (Right Nothing, rest)
+                    Right x -> (Right (Just x), rest)
+
+isSetCookieFor :: ByteString -> (HTTP.HeaderName, ByteString) -> Bool
+isSetCookieFor name ("set-cookie", v) =
+    Cookie.setCookieName (Cookie.parseSetCookie v) == name
+isSetCookieFor _ _ = False
 
 print :: Codec Headers i o -> i -> HTTP.ResponseHeaders
 print = Codec.printer resHeadersPrinter
   where
-    resHeadersPrinter = undefined
+    resHeadersPrinter :: forall a. Headers a -> a -> HTTP.ResponseHeaders
+    resHeadersPrinter Raw hs                    = hs
+    resHeadersPrinter (Header key) x            = [(key, toHeader x)]
+    resHeadersPrinter (HeaderOpt _) Nothing     = []
+    resHeadersPrinter (HeaderOpt key) (Just x)  = [(key, toHeader x)]
+    resHeadersPrinter (SetCookie name) x        = [renderSC name x]
+    resHeadersPrinter (SetCookieOpt _) Nothing  = []
+    resHeadersPrinter (SetCookieOpt name) (Just x) = [renderSC name x]
+
+renderSC :: IsoCookieData a => ByteString -> a -> (HTTP.HeaderName, ByteString)
+renderSC name x =
+    let sc = Cookie.defaultSetCookie
+              { Cookie.setCookieName  = name
+              , Cookie.setCookieValue = toCookieValue x
+              }
+    in ("set-cookie", LBS.toStrict (Builder.toLazyByteString (Cookie.renderSetCookie sc)))
 
 raw :: Codec Headers HTTP.ResponseHeaders HTTP.ResponseHeaders
 raw = Embed Raw

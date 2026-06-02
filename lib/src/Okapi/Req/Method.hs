@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -33,6 +34,9 @@ data KnownMethod (m :: Symbol) where
     PUT    :: KnownMethod "PUT"
     DELETE :: KnownMethod "DELETE"
 
+deriving instance Eq   (KnownMethod m)
+deriving instance Show (KnownMethod m)
+
 type GET    = KnownMethod "GET"
 type POST   = KnownMethod "POST"
 type PUT    = KnownMethod "PUT"
@@ -43,7 +47,7 @@ data Method a where
     StdMethod :: Method HTTP.StdMethod
     Method    :: KnownMethod m -> Method (KnownMethod m)
 
-data ParseError = ParseError
+data ParseError = ParseError deriving (Eq, Show)
 
 type instance StateOf Method = HTTP.Method
 type instance ParseErrorOf Method = ParseError
@@ -51,12 +55,22 @@ type instance ParseErrorOf Method = ParseError
 parse :: Codec Method i o -> HTTP.Method -> (Either ParseError o, HTTP.Method)
 parse = Codec.parser methodAlg
   where
-    methodAlg = undefined
+    methodAlg :: forall a. Method a -> HTTP.Method -> (Either ParseError a, HTTP.Method)
+    methodAlg Raw         m = (Right m, m)
+    methodAlg StdMethod   m = case HTTP.parseMethod m of
+        Left _   -> (Left ParseError, m)
+        Right sm -> (Right sm, m)
+    methodAlg (Method km) m
+        | m == HTTP.renderStdMethod (knownMethodToStd km) = (Right km, m)
+        | otherwise                                       = (Left ParseError, m)
 
 print :: Codec Method i o -> i -> HTTP.Method
 print = Codec.printer methodPrinter
   where
-    methodPrinter = undefined
+    methodPrinter :: forall a. Method a -> a -> HTTP.Method
+    methodPrinter Raw         m  = m
+    methodPrinter StdMethod   sm = HTTP.renderStdMethod sm
+    methodPrinter (Method km) _  = HTTP.renderStdMethod (knownMethodToStd km)
 
 raw :: Codec Method HTTP.Method HTTP.Method
 raw = Embed Raw

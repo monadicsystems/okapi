@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -15,12 +16,15 @@ module Okapi.Req.Headers (
 ) where
 
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import Data.Kind (Type)
+import Data.List (partition)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data (IsoHeaderData, IsoCookieData)
+import Okapi.Data (IsoHeaderData, IsoCookieData, parseHeader, toHeader, parseCookieValue, toCookieValue)
 import Prelude hiding (print)
+import Web.Cookie (parseCookies)
 
 type Headers :: Type -> Type
 data Headers a where
@@ -30,7 +34,7 @@ data Headers a where
     Cookie    :: IsoCookieData a => ByteString -> Headers a
     CookieOpt :: IsoCookieData a => ByteString -> Headers (Maybe a)
 
-data ParseError = ParseError
+data ParseError = ParseError deriving (Eq, Show)
 
 type instance StateOf Headers = HTTP.RequestHeaders
 type instance ParseErrorOf Headers = ParseError
@@ -38,12 +42,56 @@ type instance ParseErrorOf Headers = ParseError
 parse :: Codec Headers i o -> HTTP.RequestHeaders -> (Either ParseError o, HTTP.RequestHeaders)
 parse = Codec.parser headersAlg
   where
-    headersAlg = undefined
+    headersAlg :: forall a. Headers a -> HTTP.RequestHeaders -> (Either ParseError a, HTTP.RequestHeaders)
+    headersAlg Raw hs = (Right hs, [])
+    headersAlg (Header key) hs =
+        case partition (\(k, _) -> k == key) hs of
+            ([], _)             -> (Left ParseError, hs)
+            ((_, v) : _, rest)  -> case parseHeader v of
+                Left _  -> (Left ParseError, hs)
+                Right x -> (Right x, rest)
+    headersAlg (HeaderOpt key) hs =
+        case partition (\(k, _) -> k == key) hs of
+            ([], _)             -> (Right Nothing, hs)
+            ((_, v) : _, rest)  -> case parseHeader v of
+                Left _  -> (Right Nothing, rest)
+                Right x -> (Right (Just x), rest)
+    headersAlg (Cookie name) hs =
+        let allCookieBS           = BS.intercalate "; " [v | ("cookie", v) <- hs]
+            cookies               = parseCookies allCookieBS
+            (found, remaining)    = partition (\(k, _) -> k == name) cookies
+            stripped              = filter (\(k, _) -> k /= "cookie") hs
+            reEncoded             = BS.intercalate "; " (map (\(k, v) -> k <> "=" <> v) remaining)
+            newHs                 = if BS.null reEncoded then stripped else ("cookie", reEncoded) : stripped
+        in case found of
+            []           -> (Left ParseError, hs)
+            ((_, v) : _) -> case parseCookieValue v of
+                Left _  -> (Left ParseError, hs)
+                Right x -> (Right x, newHs)
+    headersAlg (CookieOpt name) hs =
+        let allCookieBS           = BS.intercalate "; " [v | ("cookie", v) <- hs]
+            cookies               = parseCookies allCookieBS
+            (found, remaining)    = partition (\(k, _) -> k == name) cookies
+            stripped              = filter (\(k, _) -> k /= "cookie") hs
+            reEncoded             = BS.intercalate "; " (map (\(k, v) -> k <> "=" <> v) remaining)
+            newHs                 = if BS.null reEncoded then stripped else ("cookie", reEncoded) : stripped
+        in case found of
+            []           -> (Right Nothing, hs)
+            ((_, v) : _) -> case parseCookieValue v of
+                Left _  -> (Right Nothing, newHs)
+                Right x -> (Right (Just x), newHs)
 
 print :: Codec Headers i o -> i -> HTTP.RequestHeaders
 print = Codec.printer headersPrinter
   where
-    headersPrinter = undefined
+    headersPrinter :: forall a. Headers a -> a -> HTTP.RequestHeaders
+    headersPrinter Raw hs                   = hs
+    headersPrinter (Header key) x           = [(key, toHeader x)]
+    headersPrinter (HeaderOpt _) Nothing    = []
+    headersPrinter (HeaderOpt key) (Just x) = [(key, toHeader x)]
+    headersPrinter (Cookie name) x          = [("cookie", name <> "=" <> toCookieValue x)]
+    headersPrinter (CookieOpt _) Nothing    = []
+    headersPrinter (CookieOpt name) (Just x) = [("cookie", name <> "=" <> toCookieValue x)]
 
 raw :: Codec Headers HTTP.RequestHeaders HTTP.RequestHeaders
 raw = Embed Raw

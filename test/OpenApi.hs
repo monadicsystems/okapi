@@ -26,9 +26,6 @@ import Okapi.Res qualified as Res
 import Okapi.Res.Status (S200, S404, S500)
 import Okapi.ResAlt (GenericResAlt (..), only)
 
--- ---------------------------------------------------------------------------
--- GET /users/:id
-
 type OkHeaders = (Text, Text)
 type RetryAfter = Int
 
@@ -62,9 +59,6 @@ getUserEndpoint = getUserReq :-> resCase @GetUserRes
     notFoundRes
     errRes
 
--- ---------------------------------------------------------------------------
--- POST /users
-
 data CreateUserBody = CreateUserBody
     { username :: Text
     , email    :: Text
@@ -75,8 +69,6 @@ createUserReq = Req.post
     & Req.json @CreateUserBody
 
 createUserEndpoint = createUserReq :-> only (Res.ok & Res.json @CreateUserBody)
-
--- ---------------------------------------------------------------------------
 
 main :: IO ()
 main = do

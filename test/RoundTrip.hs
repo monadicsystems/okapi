@@ -1,0 +1,221 @@
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
+
+module Main where
+
+import Data.ByteString.Builder qualified as Builder
+import Data.ByteString.Lazy qualified as LBS
+import Data.Function ((&))
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Network.HTTP.Types qualified as HTTP
+import Network.Wai qualified as Wai
+import Network.Wai.Internal qualified as WaiI
+import Okapi.Codec ((=.), IsoCodec (..), Value (..), value)
+import Okapi.Mode (Endpoint (..), parseRequest, parseResponse, printRequest, printResponse)
+import Okapi.Req qualified as Req
+import Okapi.Req.Headers qualified as ReqH
+import Okapi.Req.Method qualified as Method
+import Okapi.Req.Path qualified as Path
+import Okapi.Req.Query qualified as Query
+import Okapi.Res (Res)
+import Okapi.Res qualified as Res
+import Okapi.Res.Status (KnownStatus (..), S200, S404, S500)
+import Okapi.Res.Status qualified as Status
+import Okapi.ResAlt (GenericResAlt (..), resCase)
+import System.Exit (exitFailure)
+
+assertEq :: (Show a, Eq a) => String -> a -> a -> IO ()
+assertEq name expected actual
+    | expected == actual = putStrLn ("PASS: " ++ name)
+    | otherwise = do
+        putStrLn ("FAIL: " ++ name)
+        putStrLn ("  expected: " ++ show expected)
+        putStrLn ("  actual:   " ++ show actual)
+        exitFailure
+
+assertRight :: Show e => String -> Either e a -> (a -> IO ()) -> IO ()
+assertRight name (Left e) _ = do
+    putStrLn ("FAIL: " ++ name ++ " - unexpected Left: " ++ show e)
+    exitFailure
+assertRight name (Right x) k = do
+    putStrLn ("PASS: " ++ name)
+    k x
+
+waiResBody :: Wai.Response -> LBS.ByteString
+waiResBody (WaiI.ResponseBuilder _ _ b) = Builder.toLazyByteString b
+waiResBody _                            = LBS.empty
+
+test_methodRoundTrip :: IO ()
+test_methodRoundTrip = do
+    let codec = Method.known Method.GET
+    let printed = Method.print codec Method.GET
+    assertEq "method: print GET" "GET" printed
+    let (parsed, _) = Method.parse codec printed
+    assertEq "method: parse GET" (Right Method.GET) parsed
+
+    let codec2 = Method.known Method.DELETE
+    let printed2 = Method.print codec2 Method.DELETE
+    assertEq "method: print DELETE" "DELETE" printed2
+    let (parsed2, _) = Method.parse codec2 printed2
+    assertEq "method: parse DELETE" (Right Method.DELETE) parsed2
+
+test_pathRoundTrip :: IO ()
+test_pathRoundTrip = do
+    let req = Req.get & Req.path do
+            _ <- Req.lit @Text "users"
+            userId <- Req.seg @Text "userId"
+            pure userId
+    let pathCodec = isoCodec req.path_
+    let printed = Path.print pathCodec "alice"
+    assertEq "path: print [users,alice]" ["users", "alice"] printed
+    let (parsed, _) = Path.parse pathCodec printed
+    assertEq "path: parse alice" (Right "alice") parsed
+
+test_queryRoundTrip :: IO ()
+test_queryRoundTrip = do
+    let pCodec = Query.param @Text "filter"
+    let printed = Query.print pCodec "hello"
+    assertEq "query: param print" [("filter", Just "hello")] printed
+    let (parsed, _) = Query.parse pCodec printed
+    assertEq "query: param parse" (Right "hello") parsed
+
+    let oCodec = Query.param' @Text "search"
+    let printedN = Query.print oCodec Nothing
+    assertEq "query: param' Nothing print" [] printedN
+    let (parsedN, _) = Query.parse oCodec printedN
+    assertEq "query: param' Nothing parse" (Right Nothing) parsedN
+    let printedJ = Query.print oCodec (Just "foo")
+    assertEq "query: param' Just print" [("search", Just "foo")] printedJ
+    let (parsedJ, _) = Query.parse oCodec printedJ
+    assertEq "query: param' Just parse" (Right (Just "foo")) parsedJ
+
+    let fCodec = Query.flag "active"
+    let printedF = Query.print fCodec ()
+    assertEq "query: flag print" [("active", Nothing)] printedF
+    let (parsedF, _) = Query.parse fCodec printedF
+    assertEq "query: flag parse" (Right ()) parsedF
+
+    let foCodec = Query.flag' "debug"
+    let printedFT = Query.print foCodec True
+    assertEq "query: flag' True print" [("debug", Nothing)] printedFT
+    let (parsedFT, _) = Query.parse foCodec printedFT
+    assertEq "query: flag' True parse" (Right True) parsedFT
+    let printedFF = Query.print foCodec False
+    assertEq "query: flag' False print" [] printedFF
+    let (parsedFF, _) = Query.parse foCodec printedFF
+    assertEq "query: flag' False parse" (Right False) parsedFF
+
+test_headersRoundTrip :: IO ()
+test_headersRoundTrip = do
+    let hCodec = ReqH.header @Text "x-api-key"
+    let printed = ReqH.print hCodec "secret"
+    assertEq "headers: header print" [("x-api-key", "secret")] printed
+    let (parsed, _) = ReqH.parse hCodec printed
+    assertEq "headers: header parse" (Right "secret") parsed
+
+    let oCodec = ReqH.header' @Text "x-opt"
+    let printedN = ReqH.print oCodec Nothing
+    assertEq "headers: header' Nothing print" [] printedN
+    let (parsedN, _) = ReqH.parse oCodec printedN
+    assertEq "headers: header' Nothing parse" (Right Nothing) parsedN
+    let printedJ = ReqH.print oCodec (Just "val")
+    assertEq "headers: header' Just print" [("x-opt", "val")] printedJ
+    let (parsedJ, _) = ReqH.parse oCodec printedJ
+    assertEq "headers: header' Just parse" (Right (Just "val")) parsedJ
+
+    let cCodec = ReqH.cookie @Text "session"
+    let printedC = ReqH.print cCodec "abc123"
+    assertEq "headers: cookie print" [("cookie", "session=abc123")] printedC
+    let (parsedC, _) = ReqH.parse cCodec printedC
+    assertEq "headers: cookie parse" (Right "abc123") parsedC
+
+test_statusRoundTrip :: IO ()
+test_statusRoundTrip = do
+    let c200 = Status.known S200
+    let p200 = Status.print c200 S200
+    assertEq "status: print S200" HTTP.status200 p200
+    let (r200, _) = Status.parse c200 p200
+    assertEq "status: parse S200" (Right S200) r200
+
+    let c404 = Status.known S404
+    let p404 = Status.print c404 S404
+    assertEq "status: print S404" HTTP.status404 p404
+    let (r404, _) = Status.parse c404 p404
+    assertEq "status: parse S404" (Right S404) r404
+
+    let c500 = Status.known S500
+    let p500 = Status.print c500 S500
+    assertEq "status: print S500" HTTP.status500 p500
+    let (r500, _) = Status.parse c500 p500
+    assertEq "status: parse S500" (Right S500) r500
+
+data GetUserRes f
+    = OkRes       (Res f S200 (Text, Text) LBS.ByteString)
+    | NotFoundRes (Res f S404 Int LBS.ByteString)
+    | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
+    deriving (Generic, GenericResAlt)
+
+endpoint =
+    ( Req.get
+      & Req.path do
+          _ <- Req.lit @Text "users"
+          uid <- Req.seg @Text "uid"
+          pure uid
+      & Req.query (Req.param' @Text "filter")
+    ) :->
+    resCase @GetUserRes
+        (Res.ok & Res.headers do
+            ct  <- fst =. Res.header @Text "content-type"
+            loc <- snd =. Res.header @Text "location"
+            pure (ct, loc))
+        (Res.notFound & Res.headers (Res.header @Int "retry-after"))
+        Res.serverError
+
+test_reqRoundTrip :: IO ()
+test_reqRoundTrip = do
+    let rv = Req.value Method.GET "alice" (Just "active") [] (pure "request-body")
+    waiReq <- printRequest endpoint rv
+    body   <- Wai.strictRequestBody waiReq
+    assertEq "req: method" "GET"              (Wai.requestMethod waiReq)
+    assertEq "req: path"   ["users", "alice"] (Wai.pathInfo      waiReq)
+    assertEq "req: query"  [("filter", Just "active")] (Wai.queryString waiReq)
+    assertEq "req: body"   "request-body"     body
+    case parseRequest endpoint waiReq of
+        Left e     -> do { putStrLn ("FAIL: req parse: " ++ show e); exitFailure }
+        Right parsed -> do
+            putStrLn "PASS: req parse"
+            assertEq "req: path value" ("alice" :: Text) (value parsed.path_)
+
+test_resRoundTrip :: IO ()
+test_resRoundTrip = do
+    let okVal = OkRes (Res.value S200 ("text/html", "/home") (pure "response-body"))
+    waiRes <- printResponse endpoint okVal
+    assertEq "res: ok status"  HTTP.status200 (Wai.responseStatus  waiRes)
+    assertEq "res: ok body"    "response-body" (waiResBody waiRes)
+    assertRight "res: ok parse" (parseResponse endpoint waiRes) $ \_ ->
+        putStrLn "PASS: res: ok reconstruct"
+
+    let nfVal = NotFoundRes (Res.value S404 (42 :: Int) (pure "not-found-body"))
+    waiRes2 <- printResponse endpoint nfVal
+    assertEq "res: 404 status"  HTTP.status404   (Wai.responseStatus waiRes2)
+    assertEq "res: 404 body"    "not-found-body" (waiResBody waiRes2)
+    assertRight "res: 404 parse" (parseResponse endpoint waiRes2) $ \_ ->
+        putStrLn "PASS: res: 404 reconstruct"
+
+main :: IO ()
+main = do
+    test_methodRoundTrip
+    test_pathRoundTrip
+    test_queryRoundTrip
+    test_headersRoundTrip
+    test_statusRoundTrip
+    test_reqRoundTrip
+    test_resRoundTrip
+    putStrLn "all round-trip tests passed"

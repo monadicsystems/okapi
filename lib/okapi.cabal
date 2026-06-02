@@ -105,3 +105,17 @@ test-suite okapi-openapi
         okapi,
         openapi3
     default-language: GHC2024
+
+test-suite okapi-roundtrip
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          RoundTrip.hs
+    hs-source-dirs:   ../test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-types,
+        text,
+        wai,
+        okapi
+    default-language: GHC2024

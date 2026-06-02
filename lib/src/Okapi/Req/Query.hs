@@ -15,11 +15,13 @@ module Okapi.Req.Query (
 ) where
 
 import Data.Kind (Type)
+import Data.List (partition)
 import Data.Text (Text)
+import Data.Text.Encoding (decodeUtf8Lenient, encodeUtf8)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data (IsoQueryData)
+import Okapi.Data (IsoQueryData, parseQueryParam, toQueryParam)
 import Prelude hiding (print)
 
 type Query :: Type -> Type
@@ -30,7 +32,7 @@ data Query a where
     Flag     :: Text -> Query ()
     FlagOpt  :: Text -> Query Bool
 
-data ParseError = ParseError
+data ParseError = ParseError deriving (Eq, Show)
 
 type instance StateOf Query = HTTP.Query
 type instance ParseErrorOf Query = ParseError
@@ -38,12 +40,42 @@ type instance ParseErrorOf Query = ParseError
 parse :: Codec Query i o -> HTTP.Query -> (Either ParseError o, HTTP.Query)
 parse = Codec.parser queryAlg
   where
-    queryAlg = undefined
+    queryAlg :: forall a. Query a -> HTTP.Query -> (Either ParseError a, HTTP.Query)
+    queryAlg Raw q = (Right q, [])
+    queryAlg (Param key) q =
+        case partition (\(k, _) -> k == encodeUtf8 key) q of
+            ([], _)                   -> (Left ParseError, q)
+            ((_, Nothing) : _, _)     -> (Left ParseError, q)
+            ((_, Just v) : _, rest)   -> case parseQueryParam (decodeUtf8Lenient v) of
+                Left _  -> (Left ParseError, q)
+                Right x -> (Right x, rest)
+    queryAlg (ParamOpt key) q =
+        case partition (\(k, _) -> k == encodeUtf8 key) q of
+            ([], _)                   -> (Right Nothing, q)
+            ((_, Nothing) : _, rest)  -> (Right Nothing, rest)
+            ((_, Just v) : _, rest)   -> case parseQueryParam (decodeUtf8Lenient v) of
+                Left _  -> (Right Nothing, rest)
+                Right x -> (Right (Just x), rest)
+    queryAlg (Flag key) q =
+        case partition (\(k, _) -> k == encodeUtf8 key) q of
+            ([], _)       -> (Left ParseError, q)
+            (_ : _, rest) -> (Right (), rest)
+    queryAlg (FlagOpt key) q =
+        case partition (\(k, _) -> k == encodeUtf8 key) q of
+            ([], _)       -> (Right False, q)
+            (_ : _, rest) -> (Right True, rest)
 
 print :: Codec Query i o -> i -> HTTP.Query
 print = Codec.printer queryPrinter
   where
-    queryPrinter = undefined
+    queryPrinter :: forall a. Query a -> a -> HTTP.Query
+    queryPrinter Raw q                   = q
+    queryPrinter (Param key) x           = [(encodeUtf8 key, Just (encodeUtf8 (toQueryParam x)))]
+    queryPrinter (ParamOpt _) Nothing    = []
+    queryPrinter (ParamOpt key) (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (toQueryParam x)))]
+    queryPrinter (Flag key) ()           = [(encodeUtf8 key, Nothing)]
+    queryPrinter (FlagOpt key) True      = [(encodeUtf8 key, Nothing)]
+    queryPrinter (FlagOpt _) False       = []
 
 raw :: Codec Query HTTP.Query HTTP.Query
 raw = Embed Raw

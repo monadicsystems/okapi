@@ -28,7 +28,7 @@ data Path a where
     Segs :: IsoPathData a => Path (NonEmpty a)
     Raw  :: Path [Text]
 
-data ParseError = ParseError
+data ParseError = ParseError deriving (Eq, Show)
 
 type instance StateOf Path = [Text]
 type instance ParseErrorOf Path = ParseError
