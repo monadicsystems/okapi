@@ -1,15 +1,16 @@
 module Okapi.Req where
 
 import Data.Aeson qualified as Aeson
+import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
 import Data.OpenApi (ToSchema)
 import Data.Text qualified as Text
+import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
-import Data.ByteString (ByteString)
 import Okapi.Data (FromCookieData, FromHeaderData, FromPathData, FromQueryData, ToCookieData, ToHeaderData, ToPathData, ToQueryData)
 import Okapi.Req.Body (Body)
 import Okapi.Req.Body qualified as Body
@@ -21,7 +22,6 @@ import Okapi.Req.Path (Path)
 import Okapi.Req.Path qualified as Path
 import Okapi.Req.Query (Query)
 import Okapi.Req.Query qualified as Query
-import Data.Typeable (Typeable)
 
 data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
   { method_ :: f Method m
@@ -135,9 +135,6 @@ json ::
   )
 json = body Body.json
 
--- ---------------------------------------------------------------------------
--- Path DSL re-exports
-
 lit :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
 lit x = Path.lit x
 
@@ -146,9 +143,6 @@ seg n = Path.seg n
 
 segs :: (Typeable a, ToPathData a, FromPathData a) => Codec Path (NonEmpty a) (NonEmpty a)
 segs = Path.segs
-
--- ---------------------------------------------------------------------------
--- Query DSL re-exports
 
 param :: (Typeable a, ToQueryData a, FromQueryData a) => Text.Text -> Codec Query a a
 param k = Query.param k
@@ -161,9 +155,6 @@ flag k = Query.flag k
 
 flag' :: Text.Text -> Codec Query Bool Bool
 flag' k = Query.flag' k
-
--- ---------------------------------------------------------------------------
--- Request Headers DSL re-exports
 
 header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
 header k = Headers.header k

@@ -1,14 +1,14 @@
 module Okapi.Res where
 
 import Data.Aeson qualified as Aeson
+import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
 import Data.OpenApi (ToSchema)
 import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
-import Okapi.Data (FromHeaderData, ToHeaderData)
-import Web.Cookie qualified as Cookie
+import Okapi.Data (FromCookieData, FromHeaderData, ToCookieData, ToHeaderData)
 import Okapi.Res.Body (Body)
 import Okapi.Res.Body qualified as Body
 import Okapi.Res.Headers (Headers)
@@ -81,17 +81,14 @@ json ::
   )
 json = body Body.json
 
--- ---------------------------------------------------------------------------
--- Response Headers DSL re-exports
-
 header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
 header k = ResHeaders.header k
 
 header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
 header' k = ResHeaders.header' k
 
-setCookie :: Codec Headers Cookie.SetCookie Cookie.SetCookie
-setCookie = ResHeaders.setCookie
+setCookie :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers a a
+setCookie name = ResHeaders.setCookie name
 
-setCookie' :: Codec Headers (Maybe Cookie.SetCookie) (Maybe Cookie.SetCookie)
-setCookie' = ResHeaders.setCookie'
+setCookie' :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers (Maybe a) (Maybe a)
+setCookie' name = ResHeaders.setCookie' name

@@ -14,21 +14,21 @@ module Okapi.Res.Headers (
     setCookie',
 ) where
 
+import Data.ByteString (ByteString)
 import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data (IsoHeaderData)
+import Okapi.Data (IsoHeaderData, IsoCookieData)
 import Prelude hiding (print)
-import Web.Cookie qualified as Cookie
 
 type Headers :: Type -> Type
 data Headers a where
     Raw          :: Headers HTTP.ResponseHeaders
     Header       :: IsoHeaderData a => HTTP.HeaderName -> Headers a
     HeaderOpt    :: IsoHeaderData a => HTTP.HeaderName -> Headers (Maybe a)
-    SetCookie    :: Headers Cookie.SetCookie
-    SetCookieOpt :: Headers (Maybe Cookie.SetCookie)
+    SetCookie    :: IsoCookieData a => ByteString -> Headers a
+    SetCookieOpt :: IsoCookieData a => ByteString -> Headers (Maybe a)
 
 data ParseError = ParseError
 
@@ -54,8 +54,8 @@ header key = Embed (Header key)
 header' :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
 header' key = Embed (HeaderOpt key)
 
-setCookie :: Codec Headers Cookie.SetCookie Cookie.SetCookie
-setCookie = Embed SetCookie
+setCookie :: IsoCookieData a => ByteString -> Codec Headers a a
+setCookie name = Embed (SetCookie name)
 
-setCookie' :: Codec Headers (Maybe Cookie.SetCookie) (Maybe Cookie.SetCookie)
-setCookie' = Embed SetCookieOpt
+setCookie' :: IsoCookieData a => ByteString -> Codec Headers (Maybe a) (Maybe a)
+setCookie' name = Embed (SetCookieOpt name)

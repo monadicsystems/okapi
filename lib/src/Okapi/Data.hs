@@ -32,8 +32,6 @@ import Data.Vector (Vector)
 import Data.Vector qualified as V
 import Text.Read (readMaybe)
 
--- ---------------------------------------------------------------------------
--- Type classes
 
 class ToPathData a where
     toUrlPiece :: a -> Text
@@ -59,8 +57,6 @@ class FromHeaderData a where
 
 type IsoHeaderData a = (ToHeaderData a, FromHeaderData a, Typeable a)
 
--- ---------------------------------------------------------------------------
--- Helpers
 
 parseHeaderViaText :: FromQueryData a => ByteString -> Either Text a
 parseHeaderViaText bs = first (T.pack . show) (decodeUtf8' bs) >>= parseQueryParam
@@ -73,8 +69,6 @@ readEither typeName t = case readMaybe (T.unpack t) of
     Just n  -> Right n
     Nothing -> Left ("Invalid " <> typeName <> ": " <> t)
 
--- ---------------------------------------------------------------------------
--- Bool
 
 instance ToPathData Bool where
     toUrlPiece True  = "true"
@@ -93,8 +87,6 @@ instance FromQueryData Bool where parseQueryParam = parseUrlPiece
 instance ToHeaderData  Bool where toHeader        = toHeaderViaText
 instance FromHeaderData Bool where parseHeader    = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Char
 
 instance ToPathData Char where
     toUrlPiece = T.singleton
@@ -107,8 +99,6 @@ instance FromPathData Char where
 instance ToQueryData  Char where toQueryParam    = toUrlPiece
 instance FromQueryData Char where parseQueryParam = parseUrlPiece
 
--- ---------------------------------------------------------------------------
--- Int
 
 instance ToPathData   Int where toUrlPiece      = T.pack . show
 instance FromPathData  Int where parseUrlPiece   = readEither "Int"
@@ -117,8 +107,6 @@ instance FromQueryData Int where parseQueryParam = parseUrlPiece
 instance ToHeaderData  Int where toHeader        = toHeaderViaText
 instance FromHeaderData Int where parseHeader    = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Int16, Int32, Int64
 
 instance ToPathData    Int16 where toUrlPiece      = T.pack . show
 instance FromPathData  Int16 where parseUrlPiece   = readEither "Int16"
@@ -141,8 +129,6 @@ instance FromQueryData Int64 where parseQueryParam = parseUrlPiece
 instance ToHeaderData  Int64 where toHeader        = toHeaderViaText
 instance FromHeaderData Int64 where parseHeader    = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Float, Double
 
 instance ToPathData   Float where toUrlPiece      = T.pack . show
 instance FromPathData  Float where parseUrlPiece   = readEither "Float"
@@ -158,16 +144,12 @@ instance FromQueryData Double where parseQueryParam = parseUrlPiece
 instance ToHeaderData  Double where toHeader        = toHeaderViaText
 instance FromHeaderData Double where parseHeader    = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Scientific (query + header)
 
 instance ToQueryData   Scientific where toQueryParam    = T.pack . show
 instance FromQueryData Scientific where parseQueryParam = readEither "Scientific"
 instance ToHeaderData  Scientific where toHeader        = toHeaderViaText
 instance FromHeaderData Scientific where parseHeader    = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Text
 
 instance ToPathData   Text where toUrlPiece      = id
 instance FromPathData  Text where parseUrlPiece   = Right
@@ -176,14 +158,10 @@ instance FromQueryData Text where parseQueryParam = Right
 instance ToHeaderData  Text where toHeader        = encodeUtf8
 instance FromHeaderData Text where parseHeader    = first (T.pack . show) . decodeUtf8'
 
--- ---------------------------------------------------------------------------
--- ByteString (header only)
 
 instance ToHeaderData   ByteString where toHeader    = id
 instance FromHeaderData ByteString where parseHeader = Right
 
--- ---------------------------------------------------------------------------
--- Day (query + header)
 
 instance ToQueryData Day where
     toQueryParam = T.pack . formatTime defaultTimeLocale "%Y-%m-%d"
@@ -196,8 +174,6 @@ instance FromQueryData Day where
 instance ToHeaderData  Day where toHeader    = toHeaderViaText
 instance FromHeaderData Day where parseHeader = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- LocalTime (query + header)
 
 instance ToQueryData LocalTime where
     toQueryParam = T.pack . formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%S"
@@ -210,8 +186,6 @@ instance FromQueryData LocalTime where
 instance ToHeaderData  LocalTime where toHeader    = toHeaderViaText
 instance FromHeaderData LocalTime where parseHeader = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- UTCTime (query + header)
 
 instance ToQueryData UTCTime where
     toQueryParam = T.pack . formatTime defaultTimeLocale "%Y-%m-%dT%H:%M:%SZ"
@@ -224,8 +198,6 @@ instance FromQueryData UTCTime where
 instance ToHeaderData  UTCTime where toHeader    = toHeaderViaText
 instance FromHeaderData UTCTime where parseHeader = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- TimeOfDay (query + header)
 
 instance ToQueryData TimeOfDay where
     toQueryParam = T.pack . formatTime defaultTimeLocale "%H:%M:%S"
@@ -238,8 +210,6 @@ instance FromQueryData TimeOfDay where
 instance ToHeaderData  TimeOfDay where toHeader    = toHeaderViaText
 instance FromHeaderData TimeOfDay where parseHeader = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- (TimeOfDay, TimeZone) (header only)
 
 instance ToHeaderData (TimeOfDay, TimeZone) where
     toHeader (tod, tz) = encodeUtf8 . T.pack $
@@ -252,8 +222,6 @@ instance FromHeaderData (TimeOfDay, TimeZone) where
             Just zt -> Right (localTimeOfDay (zonedTimeToLocalTime zt), zonedTimeZone zt)
             Nothing -> Left ("Invalid (TimeOfDay, TimeZone): " <> t)
 
--- ---------------------------------------------------------------------------
--- DiffTime (header only)
 
 instance ToHeaderData DiffTime where
     toHeader = encodeUtf8 . T.pack . show . (realToFrac :: DiffTime -> Double)
@@ -265,8 +233,6 @@ instance FromHeaderData DiffTime where
             Just d  -> Right (realToFrac d)
             Nothing -> Left ("Invalid DiffTime: " <> t)
 
--- ---------------------------------------------------------------------------
--- UUID (path + query + header)
 
 instance ToPathData UUID where
     toUrlPiece = UUID.toText
@@ -285,8 +251,6 @@ instance FromQueryData UUID where
 instance ToHeaderData  UUID where toHeader        = toHeaderViaText
 instance FromHeaderData UUID where parseHeader    = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Maybe a (query + header)
 
 instance ToQueryData a => ToQueryData (Maybe a) where
     toQueryParam Nothing  = ""
@@ -306,8 +270,6 @@ instance FromHeaderData a => FromHeaderData (Maybe a) where
         | BS.null bs = Right Nothing
         | otherwise  = fmap Just (parseHeader bs)
 
--- ---------------------------------------------------------------------------
--- [a] and Vector a (query only)
 
 instance ToQueryData a => ToQueryData [a] where
     toQueryParam = T.intercalate "," . map toQueryParam
@@ -323,8 +285,6 @@ instance ToQueryData a => ToQueryData (Vector a) where
 instance FromQueryData a => FromQueryData (Vector a) where
     parseQueryParam t = fmap V.fromList (parseQueryParam t)
 
--- ---------------------------------------------------------------------------
--- Cookie data classes
 
 class ToCookieData a where
     toCookieValue :: a -> ByteString
@@ -334,12 +294,9 @@ class FromCookieData a where
 
 type IsoCookieData a = (ToCookieData a, FromCookieData a, Typeable a)
 
--- Helpers that delegate to header encoding (same wire format)
 parseCookieViaText :: FromQueryData a => ByteString -> Either Text a
 parseCookieViaText = parseHeaderViaText
 
--- ---------------------------------------------------------------------------
--- Cookie instances
 
 instance ToCookieData   Bool where toCookieValue   = toHeaderViaText
 instance FromCookieData Bool where parseCookieValue = parseCookieViaText

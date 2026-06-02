@@ -22,10 +22,6 @@ import Okapi.Res qualified as Res
 import Okapi.Res.Status (S200, S404, S500)
 import Okapi.ResAlt (GenericResAlt (..), resCase)
 
--- ---------------------------------------------------------------------------
--- Request
--- ---------------------------------------------------------------------------
-
 getUserReq
     = Req.get
     & Req.path do
@@ -36,10 +32,6 @@ getUserReq
         nameFilter <- fst =. Req.param' @Text "filter"
         limit      <- snd =. Req.param' @Int  "limit"
         pure (nameFilter, limit)
-
--- ---------------------------------------------------------------------------
--- Responses
--- ---------------------------------------------------------------------------
 
 type OkHeaders = (Text, Text)
 
@@ -58,10 +50,6 @@ notFoundWithRetry
 
 serverErrorPlain = Res.serverError
 
--- ---------------------------------------------------------------------------
--- Response sum type
--- ---------------------------------------------------------------------------
-
 data GetUserRes f
     = OkRes       (Res f S200 OkHeaders LBS.ByteString)
     | NotFoundRes (Res f S404 RetryAfter LBS.ByteString)
@@ -73,10 +61,6 @@ getUserResCodec = resCase @GetUserRes
     notFoundWithRetry
     serverErrorPlain
 
--- ---------------------------------------------------------------------------
--- Endpoint + server
--- ---------------------------------------------------------------------------
-
 getUserEndpoint = getUserReq :-> getUserResCodec
 
 getUserServer = fn \(reqData, _waiReq) -> do
@@ -84,10 +68,6 @@ getUserServer = fn \(reqData, _waiReq) -> do
     pure $ OkRes $ Res.value 200 ("blah", "foo") do
         putStrLn "Returning..."
         pure ""
-
--- ---------------------------------------------------------------------------
--- Cookie examples
--- ---------------------------------------------------------------------------
 
 cookieReq
     = Req.get
@@ -98,19 +78,15 @@ cookieReq
 
 cookieReqOptional
     = Req.get
-    & Req.headers do
-        theme <- Req.cookie' @Text "theme"
-        pure theme
+    & Req.headers (Req.cookie' @Text "theme")
 
 cookieRes
     = Res.ok
-    & Res.headers Res.setCookie
+    & Res.headers (Res.setCookie @Text "session")
 
 cookieResOptional
     = Res.ok
-    & Res.headers Res.setCookie'
-
--- ---------------------------------------------------------------------------
+    & Res.headers (Res.setCookie' @Text "theme")
 
 main :: IO ()
 main = putStrLn "okapi inference compiled"

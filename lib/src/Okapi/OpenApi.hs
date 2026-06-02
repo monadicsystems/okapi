@@ -37,9 +37,6 @@ import Okapi.Res.Status qualified as Status
 import Okapi.ResAlt (ResAlt (..))
 import Okapi.Data (ToPathData (..))
 
--- ---------------------------------------------------------------------------
--- Path
-
 data PathPiece = PLit Text | PParam Text OA.Schema
 
 walkPath :: Codec Path i o -> [PathPiece] -> [PathPiece]
@@ -64,9 +61,6 @@ pathOAParams pieces =
     | PParam name sc <- pieces
     ]
 
--- ---------------------------------------------------------------------------
--- Query
-
 extractQueryParams :: Codec Query i o -> [Param]
 extractQueryParams (Embed (Query.Param key))    = [mkParam key ParamQuery True]
 extractQueryParams (Embed (Query.ParamOpt key)) = [mkParam key ParamQuery False]
@@ -77,9 +71,6 @@ extractQueryParams (FMap _ c)                    = extractQueryParams c
 extractQueryParams (LMap _ c)                    = extractQueryParams c
 extractQueryParams (Apply cf cx)                 = extractQueryParams cf ++ extractQueryParams cx
 extractQueryParams (Pure _)                      = []
-
--- ---------------------------------------------------------------------------
--- Header schema — Typeable-based dispatch for scalar header value types
 
 proxyOf :: f a -> Proxy a
 proxyOf _ = Proxy
@@ -95,40 +86,29 @@ typeRepSchema tr
     | tr == typeRep (Proxy :: Proxy Bool)    = mempty & OA.type_ ?~ OA.OpenApiBoolean
     | otherwise                              = mempty & OA.type_ ?~ OA.OpenApiString
 
--- ---------------------------------------------------------------------------
--- Request headers
-
 extractHeaderParams :: Codec Headers i o -> [Param]
 extractHeaderParams (Embed hdr) = case hdr of
-    h@(ReqH.Header    key) -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
-    h@(ReqH.HeaderOpt key) -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
+    h@(ReqH.Header    key)  -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
+    h@(ReqH.HeaderOpt key)  -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
     h@(ReqH.Cookie    name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie True  (typeRepSchema (typeRep (proxyOf h)))]
     h@(ReqH.CookieOpt name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie False (typeRepSchema (typeRep (innerProxyOf h)))]
-    ReqH.Raw               -> []
+    ReqH.Raw                -> []
 extractHeaderParams (FMap _ c)    = extractHeaderParams c
 extractHeaderParams (LMap _ c)    = extractHeaderParams c
 extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParams cx
 extractHeaderParams (Pure _)      = []
 
--- ---------------------------------------------------------------------------
--- Response headers
-
 extractResHeaders :: Codec ResH.Headers i o -> [(Text, Bool, OA.Schema)]
 extractResHeaders (Embed hdr) = case hdr of
-    h@(ResH.Header    key) -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
-    h@(ResH.HeaderOpt key) -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
-    ResH.SetCookie         -> []
-    ResH.SetCookieOpt      -> []
-    ResH.Raw               -> []
+    h@(ResH.Header    key)  -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
+    h@(ResH.HeaderOpt key)  -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
+    h@(ResH.SetCookie    name) -> [(T.pack (BS8.unpack name), True,  typeRepSchema (typeRep (proxyOf h)))]
+    h@(ResH.SetCookieOpt name) -> [(T.pack (BS8.unpack name), False, typeRepSchema (typeRep (innerProxyOf h)))]
+    ResH.Raw                -> []
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c
 extractResHeaders (Apply cf cx) = extractResHeaders cf ++ extractResHeaders cx
 extractResHeaders (Pure _)      = []
-
--- ---------------------------------------------------------------------------
--- Body schema extraction — evidence lives in the Json GADT constructor
---
--- Helpers pass the GADT-refined Body value so the existential type is visible.
 
 reqBodySchemaOf :: forall a. ReqBody.IsoJson a => ReqBody.Body (IO a) -> OA.Schema
 reqBodySchemaOf _ = toSchema (Proxy @a)
@@ -154,9 +134,6 @@ extractResBodySchema (LMap _ c)    = extractResBodySchema c
 extractResBodySchema (Apply cf cx) = extractResBodySchema cf <|> extractResBodySchema cx
 extractResBodySchema (Pure _)      = Nothing
 
--- ---------------------------------------------------------------------------
--- ResAlt walker
-
 data ResInfo = ResInfo
     { resStatus     :: HTTP.Status
     , resBodySchema :: Maybe OA.Schema
@@ -179,9 +156,6 @@ walkResAltCodec (FMap _ c)    = walkResAltCodec c
 walkResAltCodec (LMap _ c)    = walkResAltCodec c
 walkResAltCodec (Apply cf cx) = walkResAltCodec cf ++ walkResAltCodec cx
 walkResAltCodec (Pure _)      = []
-
--- ---------------------------------------------------------------------------
--- Helpers
 
 hdrName :: HTTP.HeaderName -> Text
 hdrName = T.pack . BS8.unpack . CI.original
@@ -234,9 +208,6 @@ setMethod HTTP.POST   op pi_ = pi_ { _pathItemPost   = Just op }
 setMethod HTTP.PUT    op pi_ = pi_ { _pathItemPut    = Just op }
 setMethod HTTP.DELETE op pi_ = pi_ { _pathItemDelete = Just op }
 setMethod _           op pi_ = pi_ { _pathItemGet    = Just op }
-
--- ---------------------------------------------------------------------------
--- Main
 
 endpointToOpenApi :: Endpoint (Signature m p q h b r) -> OpenApi
 endpointToOpenApi (req :-> IsoCodec resAlt) =
