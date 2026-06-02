@@ -322,3 +322,78 @@ instance ToQueryData a => ToQueryData (Vector a) where
 
 instance FromQueryData a => FromQueryData (Vector a) where
     parseQueryParam t = fmap V.fromList (parseQueryParam t)
+
+-- ---------------------------------------------------------------------------
+-- Cookie data classes
+
+class ToCookieData a where
+    toCookieValue :: a -> ByteString
+
+class FromCookieData a where
+    parseCookieValue :: ByteString -> Either Text a
+
+type IsoCookieData a = (ToCookieData a, FromCookieData a, Typeable a)
+
+-- Helpers that delegate to header encoding (same wire format)
+parseCookieViaText :: FromQueryData a => ByteString -> Either Text a
+parseCookieViaText = parseHeaderViaText
+
+-- ---------------------------------------------------------------------------
+-- Cookie instances
+
+instance ToCookieData   Bool where toCookieValue   = toHeaderViaText
+instance FromCookieData Bool where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Char where toCookieValue   = encodeUtf8 . toUrlPiece
+instance FromCookieData Char where parseCookieValue bs = first (T.pack . show) (decodeUtf8' bs) >>= parseUrlPiece
+
+instance ToCookieData   Int where toCookieValue   = toHeaderViaText
+instance FromCookieData Int where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Int16 where toCookieValue   = toHeaderViaText
+instance FromCookieData Int16 where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Int32 where toCookieValue   = toHeaderViaText
+instance FromCookieData Int32 where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Int64 where toCookieValue   = toHeaderViaText
+instance FromCookieData Int64 where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Float where toCookieValue   = toHeaderViaText
+instance FromCookieData Float where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Double where toCookieValue   = toHeaderViaText
+instance FromCookieData Double where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Scientific where toCookieValue   = toHeaderViaText
+instance FromCookieData Scientific where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   Text where toCookieValue   = encodeUtf8
+instance FromCookieData Text where parseCookieValue = first (T.pack . show) . decodeUtf8'
+
+instance ToCookieData   ByteString where toCookieValue   = id
+instance FromCookieData ByteString where parseCookieValue = Right
+
+instance ToCookieData   Day where toCookieValue   = toHeaderViaText
+instance FromCookieData Day where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   LocalTime where toCookieValue   = toHeaderViaText
+instance FromCookieData LocalTime where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   UTCTime where toCookieValue   = toHeaderViaText
+instance FromCookieData UTCTime where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   TimeOfDay where toCookieValue   = toHeaderViaText
+instance FromCookieData TimeOfDay where parseCookieValue = parseCookieViaText
+
+instance ToCookieData   UUID where toCookieValue   = toHeaderViaText
+instance FromCookieData UUID where parseCookieValue = parseCookieViaText
+
+instance ToCookieData a => ToCookieData (Maybe a) where
+    toCookieValue Nothing  = ""
+    toCookieValue (Just x) = toCookieValue x
+
+instance FromCookieData a => FromCookieData (Maybe a) where
+    parseCookieValue bs
+        | BS.null bs = Right Nothing
+        | otherwise  = fmap Just (parseCookieValue bs)

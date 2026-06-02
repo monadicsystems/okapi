@@ -102,6 +102,8 @@ extractHeaderParams :: Codec Headers i o -> [Param]
 extractHeaderParams (Embed hdr) = case hdr of
     h@(ReqH.Header    key) -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
     h@(ReqH.HeaderOpt key) -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
+    h@(ReqH.Cookie    name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie True  (typeRepSchema (typeRep (proxyOf h)))]
+    h@(ReqH.CookieOpt name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie False (typeRepSchema (typeRep (innerProxyOf h)))]
     ReqH.Raw               -> []
 extractHeaderParams (FMap _ c)    = extractHeaderParams c
 extractHeaderParams (LMap _ c)    = extractHeaderParams c
@@ -115,6 +117,8 @@ extractResHeaders :: Codec ResH.Headers i o -> [(Text, Bool, OA.Schema)]
 extractResHeaders (Embed hdr) = case hdr of
     h@(ResH.Header    key) -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
     h@(ResH.HeaderOpt key) -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
+    ResH.SetCookie         -> []
+    ResH.SetCookieOpt      -> []
     ResH.Raw               -> []
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c

@@ -49,6 +49,7 @@ library
         aeson,
         bytestring,
         case-insensitive,
+        cookie,
         http-types,
         insert-ordered-containers,
         lens,
@@ -84,6 +85,7 @@ test-suite okapi-infer
     build-depends:
         base ^>=4.20.0.0,
         bytestring,
+        cookie,
         http-types,
         text,
         okapi

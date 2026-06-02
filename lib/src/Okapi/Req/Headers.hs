@@ -10,13 +10,16 @@ module Okapi.Req.Headers (
     raw,
     header,
     header',
+    cookie,
+    cookie',
 ) where
 
+import Data.ByteString (ByteString)
 import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data (IsoHeaderData)
+import Okapi.Data (IsoHeaderData, IsoCookieData)
 import Prelude hiding (print)
 
 type Headers :: Type -> Type
@@ -24,6 +27,8 @@ data Headers a where
     Raw       :: Headers HTTP.RequestHeaders
     Header    :: IsoHeaderData a => HTTP.HeaderName -> Headers a
     HeaderOpt :: IsoHeaderData a => HTTP.HeaderName -> Headers (Maybe a)
+    Cookie    :: IsoCookieData a => ByteString -> Headers a
+    CookieOpt :: IsoCookieData a => ByteString -> Headers (Maybe a)
 
 data ParseError = ParseError
 
@@ -48,3 +53,9 @@ header key = Embed (Header key)
 
 header' :: IsoHeaderData a => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
 header' key = Embed (HeaderOpt key)
+
+cookie :: IsoCookieData a => ByteString -> Codec Headers a a
+cookie name = Embed (Cookie name)
+
+cookie' :: IsoCookieData a => ByteString -> Codec Headers (Maybe a) (Maybe a)
+cookie' name = Embed (CookieOpt name)

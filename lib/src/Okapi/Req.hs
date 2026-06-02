@@ -9,7 +9,8 @@ import Data.OpenApi (ToSchema)
 import Data.Text qualified as Text
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
-import Okapi.Data (FromHeaderData, FromPathData, FromQueryData, ToHeaderData, ToPathData, ToQueryData)
+import Data.ByteString (ByteString)
+import Okapi.Data (FromCookieData, FromHeaderData, FromPathData, FromQueryData, ToCookieData, ToHeaderData, ToPathData, ToQueryData)
 import Okapi.Req.Body (Body)
 import Okapi.Req.Body qualified as Body
 import Okapi.Req.Headers (Headers)
@@ -169,3 +170,9 @@ header k = Headers.header k
 
 header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
 header' k = Headers.header' k
+
+cookie :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers a a
+cookie name = Headers.cookie name
+
+cookie' :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers (Maybe a) (Maybe a)
+cookie' name = Headers.cookie' name

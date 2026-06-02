@@ -86,6 +86,31 @@ getUserServer = fn \(reqData, _waiReq) -> do
         pure ""
 
 -- ---------------------------------------------------------------------------
+-- Cookie examples
+-- ---------------------------------------------------------------------------
+
+cookieReq
+    = Req.get
+    & Req.headers do
+        sess   <- fst =. Req.cookie @Text "session"
+        userId <- snd =. Req.cookie @Text "userId"
+        pure (sess, userId)
+
+cookieReqOptional
+    = Req.get
+    & Req.headers do
+        theme <- Req.cookie' @Text "theme"
+        pure theme
+
+cookieRes
+    = Res.ok
+    & Res.headers Res.setCookie
+
+cookieResOptional
+    = Res.ok
+    & Res.headers Res.setCookie'
+
+-- ---------------------------------------------------------------------------
 
 main :: IO ()
 main = putStrLn "okapi inference compiled"

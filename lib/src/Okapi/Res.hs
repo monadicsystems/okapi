@@ -8,6 +8,7 @@ import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Data (FromHeaderData, ToHeaderData)
+import Web.Cookie qualified as Cookie
 import Okapi.Res.Body (Body)
 import Okapi.Res.Body qualified as Body
 import Okapi.Res.Headers (Headers)
@@ -88,3 +89,9 @@ header k = ResHeaders.header k
 
 header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
 header' k = ResHeaders.header' k
+
+setCookie :: Codec Headers Cookie.SetCookie Cookie.SetCookie
+setCookie = ResHeaders.setCookie
+
+setCookie' :: Codec Headers (Maybe Cookie.SetCookie) (Maybe Cookie.SetCookie)
+setCookie' = ResHeaders.setCookie'
