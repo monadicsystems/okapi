@@ -22,6 +22,8 @@ module Okapi.Mode (
     Client (..),
     Server (..),
     fn,
+    type (~>),
+    serve,
     ParseError (..),
     parseRequest,
     printRequest,
@@ -82,6 +84,22 @@ fn ::
     ((Req Value m p q h b, Wai.Request) -> n (r Value)) ->
     Server n (Signature m p q h b r)
 fn = Fn
+
+type (~>) :: (Type -> Type) -> (Type -> Type) -> Type
+type f ~> g = forall a. f a -> g a
+
+serve ::
+    (n ~> IO) ->
+    Endpoint (Signature m p q h b r) ->
+    Server n (Signature m p q h b r) ->
+    Wai.Application
+serve runner endpoint (Fn handler) waiReq respond =
+    case parseRequest endpoint waiReq of
+        Left _    -> respond (Wai.responseLBS HTTP.status400 [] mempty)
+        Right req -> do
+            resVal <- runner (handler (req, waiReq))
+            waiRes <- printResponse endpoint resVal
+            respond waiRes
 
 data ParseError
     = MethodParseError

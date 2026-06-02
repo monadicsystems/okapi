@@ -28,6 +28,7 @@ library
     import:           warnings
     exposed-modules:
         Okapi
+        Okapi.Client
         Okapi.Codec
         Okapi.Data
         Okapi.Mode
@@ -50,6 +51,7 @@ library
         bytestring,
         case-insensitive,
         cookie,
+        http-client,
         http-types,
         insert-ordered-containers,
         lens,
@@ -108,14 +110,17 @@ test-suite okapi-openapi
 
 test-suite okapi-roundtrip
     import:           warnings
+    ghc-options:      -threaded
     type:             exitcode-stdio-1.0
     main-is:          RoundTrip.hs
     hs-source-dirs:   ../test
     build-depends:
         base ^>=4.20.0.0,
         bytestring,
+        http-client,
         http-types,
         text,
         wai,
+        warp,
         okapi
     default-language: GHC2024

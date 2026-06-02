@@ -14,11 +14,14 @@ import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Text (Text)
 import GHC.Generics (Generic)
+import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
+import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Internal qualified as WaiI
+import Okapi.Client (call)
 import Okapi.Codec ((=.), IsoCodec (..), Value (..), value)
-import Okapi.Mode (Endpoint (..), parseRequest, parseResponse, printRequest, printResponse)
+import Okapi.Mode (Endpoint (..), fn, serve, parseRequest, parseResponse, printRequest, printResponse)
 import Okapi.Req qualified as Req
 import Okapi.Req.Headers qualified as ReqH
 import Okapi.Req.Method qualified as Method
@@ -209,6 +212,28 @@ test_resRoundTrip = do
     assertRight "res: 404 parse" (parseResponse endpoint waiRes2) $ \_ ->
         putStrLn "PASS: res: 404 reconstruct"
 
+test_serverClientRoundTrip :: IO ()
+test_serverClientRoundTrip = do
+    mgr <- HC.newManager HC.defaultManagerSettings
+    Warp.testWithApplication (pure app) $ \port -> do
+        let reqVal = Req.value Method.GET "alice" (Just "active") [] (pure mempty)
+        result <- call mgr ("http://localhost:" ++ show port) endpoint reqVal
+        case result of
+            Left e -> do
+                putStrLn ("FAIL: server/client roundtrip: " ++ show e)
+                exitFailure
+            Right (OkRes resVal) -> do
+                assertEq "server/client: status" S200 resVal.status_.value
+                assertEq "server/client: headers" ("text/html", "/home" :: Text) resVal.headers_.value
+                body <- resVal.body_.value
+                assertEq "server/client: body" "hello" body
+            Right _ -> do
+                putStrLn "FAIL: server/client: unexpected response variant"
+                exitFailure
+  where
+    app = serve id endpoint (fn $ \_ ->
+        pure (OkRes (Res.value S200 ("text/html", "/home") (pure "hello"))))
+
 main :: IO ()
 main = do
     test_methodRoundTrip
@@ -218,4 +243,5 @@ main = do
     test_statusRoundTrip
     test_reqRoundTrip
     test_resRoundTrip
+    test_serverClientRoundTrip
     putStrLn "all round-trip tests passed"
