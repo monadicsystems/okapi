@@ -37,6 +37,7 @@ toHCRequest baseUrl waiReq = do
         , HC.queryString    = qs
         , HC.requestHeaders = Wai.requestHeaders waiReq
         , HC.requestBody    = HC.RequestBodyLBS  body
+        , HC.checkResponse  = \_ _ -> pure ()
         }
 
 fromHCResponse :: HC.Response LBS.ByteString -> Wai.Response

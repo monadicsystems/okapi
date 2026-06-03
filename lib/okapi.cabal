@@ -124,3 +124,18 @@ test-suite okapi-roundtrip
         warp,
         okapi
     default-language: GHC2024
+
+test-suite okapi-ex1
+    import:           warnings
+    ghc-options:      -threaded
+    type:             exitcode-stdio-1.0
+    main-is:          Ex1.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-client,
+        text,
+        warp,
+        okapi
+    default-language: GHC2024
