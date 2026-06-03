@@ -133,8 +133,11 @@ test-suite okapi-ex1
     hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
+        aeson,
+        aeson-pretty,
         bytestring,
         http-client,
+        openapi3,
         text,
         warp,
         okapi
