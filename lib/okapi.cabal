@@ -31,6 +31,7 @@ library
         Okapi.Client
         Okapi.Codec
         Okapi.Data
+        Okapi.Group
         Okapi.Mode
         Okapi.OpenApi
         Okapi.Pattern
@@ -138,6 +139,42 @@ test-suite okapi-ex1
         bytestring,
         http-client,
         openapi3,
+        text,
+        warp,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-ex3
+    import:           warnings
+    ghc-options:      -threaded
+    type:             exitcode-stdio-1.0
+    main-is:          Ex3.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        aeson,
+        bytestring,
+        http-client,
+        http-types,
+        mtl,
+        openapi3,
+        sqlite-simple,
+        text,
+        warp,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-ex2
+    import:           warnings
+    ghc-options:      -threaded
+    type:             exitcode-stdio-1.0
+    main-is:          Ex2.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-client,
+        http-types,
         text,
         warp,
         okapi

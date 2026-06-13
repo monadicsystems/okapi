@@ -13,6 +13,7 @@ module Okapi.Res.Headers (
     header',
     setCookie,
     setCookie',
+    withHeader,
 ) where
 
 import Data.ByteString (ByteString)
@@ -34,6 +35,7 @@ data Headers a where
     HeaderOpt    :: IsoHeaderData a => HTTP.HeaderName -> Headers (Maybe a)
     SetCookie    :: IsoCookieData a => ByteString -> Headers a
     SetCookieOpt :: IsoCookieData a => ByteString -> Headers (Maybe a)
+    Lit          :: HTTP.HeaderName -> ByteString -> Headers ()
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -73,6 +75,10 @@ parse = Codec.parser resHeadersAlg
                 in case parseCookieValue val of
                     Left _  -> (Right Nothing, rest)
                     Right x -> (Right (Just x), rest)
+    resHeadersAlg (Lit k v) hs =
+        case lookup k hs of
+            Just v' | v' == v -> (Right (), filter (\(k', _) -> k' /= k) hs)
+            _                  -> (Left ParseError, hs)
 
 isSetCookieFor :: ByteString -> (HTTP.HeaderName, ByteString) -> Bool
 isSetCookieFor name ("set-cookie", v) =
@@ -90,6 +96,7 @@ print = Codec.printer resHeadersPrinter
     resHeadersPrinter (SetCookie name) x        = [renderSC name x]
     resHeadersPrinter (SetCookieOpt _) Nothing  = []
     resHeadersPrinter (SetCookieOpt name) (Just x) = [renderSC name x]
+    resHeadersPrinter (Lit k v) ()               = [(k, v)]
 
 renderSC :: IsoCookieData a => ByteString -> a -> (HTTP.HeaderName, ByteString)
 renderSC name x =
@@ -113,3 +120,6 @@ setCookie name = Embed (SetCookie name)
 
 setCookie' :: IsoCookieData a => ByteString -> Codec Headers (Maybe a) (Maybe a)
 setCookie' name = Embed (SetCookieOpt name)
+
+withHeader :: HTTP.HeaderName -> ByteString -> Codec Headers h h -> Codec Headers h h
+withHeader k v c = Apply (LMap (const ()) (FMap (const id) (Embed (Lit k v)))) c

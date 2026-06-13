@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Okapi.Req where
 
 import Data.Aeson qualified as Aeson
@@ -133,7 +135,11 @@ json ::
   ( Req IsoCodec m p q h LBS.ByteString ->
     Req IsoCodec m p q h b
   )
-json = body Body.json
+json r =
+    let IsoCodec hCodec = headers_ r
+    in r { body_    = IsoCodec Body.json
+         , headers_ = IsoCodec (Headers.withHeader "content-type" "application/json" hCodec)
+         }
 
 lit :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
 lit x = Path.lit x

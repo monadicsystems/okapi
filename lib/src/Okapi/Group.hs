@@ -1,0 +1,136 @@
+{-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE BlockArguments #-}
+
+module Okapi.Group
+    ( GServable
+    , GClientable
+    , GOpenApiable
+    , app
+    , client
+    , openApi
+    ) where
+
+import Data.Kind (Type)
+import Data.OpenApi (OpenApi)
+import GHC.Generics
+    ( D1, C1, S1, K1 (..), M1 (..), Rec0
+    , Generic (..), Rep
+    , (:*:) (..)
+    )
+import Network.HTTP.Types qualified as HTTP
+import Network.Wai qualified as Wai
+import Okapi.Client (ClientSettings (..), call)
+import Okapi.Mode (Client (..), Endpoint, Server (..), Signature, tryServe, type (~>))
+import Okapi.OpenApi (endpointToOpenApi)
+
+
+-- ── GServable ────────────────────────────────────────────────────────────────
+
+class GServable (n :: Type -> Type) (epF :: Type -> Type) (svF :: Type -> Type) where
+    gServe :: (n ~> IO) -> epF () -> svF () -> Wai.Middleware
+
+instance GServable n epF svF => GServable n (D1 dm epF) (D1 dm' svF) where
+    gServe runner (M1 ep) (M1 sv) = gServe @n @epF @svF runner ep sv
+
+instance GServable n epF svF => GServable n (C1 cm epF) (C1 cm' svF) where
+    gServe runner (M1 ep) (M1 sv) = gServe @n @epF @svF runner ep sv
+
+instance (GServable n epL svL, GServable n epR svR)
+    => GServable n (epL :*: epR) (svL :*: svR) where
+    gServe runner (epL :*: epR) (svL :*: svR) =
+        gServe @n @epL @svL runner epL svL
+        . gServe @n @epR @svR runner epR svR
+
+instance GServable n
+    (S1 sm  (Rec0 (Endpoint (Signature m p q h b r))))
+    (S1 sm' (Rec0 (Server n (Signature m p q h b r)))) where
+    gServe runner (M1 (K1 ep)) (M1 (K1 sv)) = tryServe runner ep sv
+
+
+-- ── app ──────────────────────────────────────────────────────────────────────
+
+app ::
+    forall server n.
+    ( Generic (server Endpoint)
+    , Generic (server (Server n))
+    , GServable n (Rep (server Endpoint)) (Rep (server (Server n)))
+    ) =>
+    server Endpoint ->
+    (n ~> IO) ->
+    server (Server n) ->
+    Wai.Application
+app endpoints runner handlers =
+    gServe @n @(Rep (server Endpoint)) @(Rep (server (Server n)))
+        runner
+        (from endpoints)
+        (from handlers)
+    $ \_ respond -> respond (Wai.responseLBS HTTP.status404 [] mempty)
+
+
+-- ── GClientable ──────────────────────────────────────────────────────────────
+
+class GClientable (epF :: Type -> Type) (clF :: Type -> Type) where
+    gClient :: ClientSettings -> epF () -> clF ()
+
+instance GClientable epF clF => GClientable (D1 dm epF) (D1 dm' clF) where
+    gClient s (M1 ep) = M1 (gClient @epF @clF s ep)
+
+instance GClientable epF clF => GClientable (C1 cm epF) (C1 cm' clF) where
+    gClient s (M1 ep) = M1 (gClient @epF @clF s ep)
+
+instance (GClientable epL clL, GClientable epR clR)
+    => GClientable (epL :*: epR) (clL :*: clR) where
+    gClient s (epL :*: epR) =
+        gClient @epL @clL s epL :*: gClient @epR @clR s epR
+
+instance GClientable
+    (S1 sm  (Rec0 (Endpoint (Signature m p q h b r))))
+    (S1 sm' (Rec0 (Client (Signature m p q h b r)))) where
+    gClient (ClientSettings mgr url) (M1 (K1 ep)) =
+        M1 (K1 (Cb \reqVal -> call mgr url ep reqVal))
+
+
+-- ── client ───────────────────────────────────────────────────────────────────
+
+client ::
+    forall server.
+    ( Generic (server Endpoint)
+    , Generic (server Client)
+    , GClientable (Rep (server Endpoint)) (Rep (server Client))
+    ) =>
+    server Endpoint ->
+    ClientSettings ->
+    server Client
+client endpoints settings =
+    to (gClient @(Rep (server Endpoint)) @(Rep (server Client)) settings (from endpoints))
+
+
+-- ── GOpenApiable ─────────────────────────────────────────────────────────────
+
+class GOpenApiable (epF :: Type -> Type) where
+    gOpenApi :: epF () -> OpenApi
+
+instance GOpenApiable epF => GOpenApiable (D1 dm epF) where
+    gOpenApi (M1 ep) = gOpenApi @epF ep
+
+instance GOpenApiable epF => GOpenApiable (C1 cm epF) where
+    gOpenApi (M1 ep) = gOpenApi @epF ep
+
+instance (GOpenApiable epL, GOpenApiable epR) => GOpenApiable (epL :*: epR) where
+    gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
+
+instance GOpenApiable (S1 sm (Rec0 (Endpoint (Signature m p q h b r)))) where
+    gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
+
+
+-- ── openApi ──────────────────────────────────────────────────────────────────
+
+openApi ::
+    forall server.
+    ( Generic (server Endpoint)
+    , GOpenApiable (Rep (server Endpoint))
+    ) =>
+    server Endpoint ->
+    OpenApi
+openApi = gOpenApi @(Rep (server Endpoint)) . from

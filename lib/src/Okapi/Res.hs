@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Okapi.Res where
 
 import Data.Aeson qualified as Aeson
@@ -9,11 +11,11 @@ import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Data (FromCookieData, FromHeaderData, ToCookieData, ToHeaderData)
-import Okapi.Res.Body (Body)
+import Okapi.Res.Body (Body, NoContent (..))
 import Okapi.Res.Body qualified as Body
 import Okapi.Res.Headers (Headers)
 import Okapi.Res.Headers qualified as ResHeaders
-import Okapi.Res.Status (Status, S200, S404, S500)
+import Okapi.Res.Status (Status, S200, S201, S204, S404, S500)
 import Okapi.Res.Status qualified as Status
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
@@ -34,6 +36,20 @@ ok = Res
     { status_  = IsoCodec (Status.known Status.S200)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw
+    }
+
+created :: Res IsoCodec S201 HTTP.ResponseHeaders LBS.ByteString
+created = Res
+    { status_  = IsoCodec (Status.known Status.S201)
+    , headers_ = IsoCodec ResHeaders.raw
+    , body_    = IsoCodec Body.raw
+    }
+
+noContent :: Res IsoCodec S204 HTTP.ResponseHeaders NoContent
+noContent = Res
+    { status_  = IsoCodec (Status.known Status.S204)
+    , headers_ = IsoCodec ResHeaders.raw
+    , body_    = IsoCodec Body.noContent
     }
 
 notFound :: Res IsoCodec S404 HTTP.ResponseHeaders LBS.ByteString
@@ -79,7 +95,11 @@ json ::
   ( Res IsoCodec s h LBS.ByteString ->
     Res IsoCodec s h b
   )
-json = body Body.json
+json r =
+    let IsoCodec hCodec = headers_ r
+    in r { body_    = IsoCodec Body.json
+         , headers_ = IsoCodec (ResHeaders.withHeader "content-type" "application/json" hCodec)
+         }
 
 header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
 header k = ResHeaders.header k

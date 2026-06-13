@@ -17,13 +17,13 @@
 
 module Okapi.Mode (
     Signature,
-    ClientError,
     Endpoint (..),
     Client (..),
     Server (..),
     fn,
     type (~>),
     serve,
+    tryServe,
     ParseError (..),
     parseRequest,
     printRequest,
@@ -62,8 +62,6 @@ data
         (b :: Type)
         (r :: ((Type -> Type) -> Type -> Type) -> Type)
 
-data ClientError
-
 data Endpoint sig where
     (:->) ::
         Req IsoCodec m p q h b ->
@@ -72,7 +70,7 @@ data Endpoint sig where
 
 data Client sig where
     Cb ::
-        (Req Value m p q h b -> IO (Either ClientError (r Value))) ->
+        (Req Value m p q h b -> IO (Either ParseError (r Value))) ->
         Client (Signature m p q h b r)
 
 data Server n sig where
@@ -96,6 +94,19 @@ serve ::
 serve runner endpoint (Fn handler) waiReq respond =
     case parseRequest endpoint waiReq of
         Left _    -> respond (Wai.responseLBS HTTP.status400 [] mempty)
+        Right req -> do
+            resVal <- runner (handler (req, waiReq))
+            waiRes <- printResponse endpoint resVal
+            respond waiRes
+
+tryServe ::
+    (n ~> IO) ->
+    Endpoint (Signature m p q h b r) ->
+    Server n (Signature m p q h b r) ->
+    Wai.Middleware
+tryServe runner endpoint (Fn handler) next waiReq respond =
+    case parseRequest endpoint waiReq of
+        Left _    -> next waiReq respond
         Right req -> do
             resVal <- runner (handler (req, waiReq))
             waiRes <- printResponse endpoint resVal

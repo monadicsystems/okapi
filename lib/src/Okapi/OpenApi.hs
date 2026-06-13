@@ -11,8 +11,9 @@ import Data.CaseInsensitive qualified as CI
 import Data.HashMap.Strict.InsOrd qualified as IHM
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
-import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..), Referenced (..), Response, Responses (..), toSchema)
+import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..), Referenced (..), Response, Responses (..), declareSchemaRef, toSchema)
 import Data.OpenApi qualified as OA
+import Data.OpenApi.Declare (execDeclare)
 import Data.Proxy (Proxy (..))
 import Data.Typeable (TypeRep, typeRep)
 import Data.Text (Text)
@@ -93,6 +94,7 @@ extractHeaderParams (Embed hdr) = case hdr of
     h@(ReqH.Cookie    name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie True  (typeRepSchema (typeRep (proxyOf h)))]
     h@(ReqH.CookieOpt name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie False (typeRepSchema (typeRep (innerProxyOf h)))]
     ReqH.Raw                -> []
+    ReqH.Lit _ _            -> []
 extractHeaderParams (FMap _ c)    = extractHeaderParams c
 extractHeaderParams (LMap _ c)    = extractHeaderParams c
 extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParams cx
@@ -105,6 +107,7 @@ extractResHeaders (Embed hdr) = case hdr of
     h@(ResH.SetCookie    name) -> [(T.pack (BS8.unpack name), True,  typeRepSchema (typeRep (proxyOf h)))]
     h@(ResH.SetCookieOpt name) -> [(T.pack (BS8.unpack name), False, typeRepSchema (typeRep (innerProxyOf h)))]
     ResH.Raw                -> []
+    ResH.Lit _ _            -> []
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c
 extractResHeaders (Apply cf cx) = extractResHeaders cf ++ extractResHeaders cx
@@ -113,8 +116,14 @@ extractResHeaders (Pure _)      = []
 reqBodySchemaOf :: forall a. ReqBody.IsoJson a => ReqBody.Body (IO a) -> OA.Schema
 reqBodySchemaOf _ = toSchema (Proxy @a)
 
+reqBodyDefsOf :: forall a. ReqBody.IsoJson a => ReqBody.Body (IO a) -> OA.Definitions OA.Schema
+reqBodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
+
 resBodySchemaOf :: forall a. ResBody.IsoJson a => ResBody.Body (IO a) -> OA.Schema
 resBodySchemaOf _ = toSchema (Proxy @a)
+
+resBodyDefsOf :: forall a. ResBody.IsoJson a => ResBody.Body (IO a) -> OA.Definitions OA.Schema
+resBodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
 
 extractReqBodySchema :: Codec ReqBody.Body i o -> Maybe OA.Schema
 extractReqBodySchema (Embed body)   = case body of
@@ -125,6 +134,15 @@ extractReqBodySchema (LMap _ c)    = extractReqBodySchema c
 extractReqBodySchema (Apply cf cx) = extractReqBodySchema cf <|> extractReqBodySchema cx
 extractReqBodySchema (Pure _)      = Nothing
 
+extractReqBodyDefs :: Codec ReqBody.Body i o -> OA.Definitions OA.Schema
+extractReqBodyDefs (Embed body)   = case body of
+    ReqBody.Json -> reqBodyDefsOf body
+    _            -> mempty
+extractReqBodyDefs (FMap _ c)    = extractReqBodyDefs c
+extractReqBodyDefs (LMap _ c)    = extractReqBodyDefs c
+extractReqBodyDefs (Apply cf cx) = extractReqBodyDefs cf <> extractReqBodyDefs cx
+extractReqBodyDefs (Pure _)      = mempty
+
 extractResBodySchema :: Codec ResBody.Body i o -> Maybe OA.Schema
 extractResBodySchema (Embed body)   = case body of
     ResBody.Json -> Just (resBodySchemaOf body)
@@ -134,9 +152,19 @@ extractResBodySchema (LMap _ c)    = extractResBodySchema c
 extractResBodySchema (Apply cf cx) = extractResBodySchema cf <|> extractResBodySchema cx
 extractResBodySchema (Pure _)      = Nothing
 
+extractResBodyDefs :: Codec ResBody.Body i o -> OA.Definitions OA.Schema
+extractResBodyDefs (Embed body)   = case body of
+    ResBody.Json -> resBodyDefsOf body
+    _            -> mempty
+extractResBodyDefs (FMap _ c)    = extractResBodyDefs c
+extractResBodyDefs (LMap _ c)    = extractResBodyDefs c
+extractResBodyDefs (Apply cf cx) = extractResBodyDefs cf <> extractResBodyDefs cx
+extractResBodyDefs (Pure _)      = mempty
+
 data ResInfo = ResInfo
     { resStatus     :: HTTP.Status
     , resBodySchema :: Maybe OA.Schema
+    , resBodyDefs   :: OA.Definitions OA.Schema
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
@@ -145,7 +173,8 @@ extractResInfos (OneResAlt res) =
     [ ResInfo
         { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus (isoCodec (status_ res)))
         , resBodySchema = extractResBodySchema (isoCodec (ORes.body_ res))
-        , resHdrNames   = extractResHeaders (isoCodec (ORes.headers_ res))
+        , resBodyDefs   = extractResBodyDefs   (isoCodec (ORes.body_ res))
+        , resHdrNames   = extractResHeaders    (isoCodec (ORes.headers_ res))
         }
     ]
 extractResInfos (ChoiceResAlt l r) = extractResInfos l ++ extractResInfos r
@@ -220,6 +249,8 @@ endpointToOpenApi (req :-> IsoCodec resAlt) =
         reqBody  = if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
                    then extractReqBodySchema (isoCodec (body_ req))
                    else Nothing
+        allDefs  = extractReqBodyDefs (isoCodec (body_ req))
+               <> foldMap resBodyDefs resInfos
         op = mempty
             & OA.parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
             & OA.responses  .~ Responses Nothing
@@ -231,4 +262,5 @@ endpointToOpenApi (req :-> IsoCodec resAlt) =
     in mempty
         & OA.info . OA.title   .~ "API"
         & OA.info . OA.version .~ "0.1.0"
+        & OA.components . OA.schemas .~ allDefs
         & OA.paths .~ IHM.singleton (pathTemplate pieces) (setMethod stdMeth op mempty)

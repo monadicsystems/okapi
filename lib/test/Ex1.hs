@@ -71,12 +71,14 @@ userRequest
         Req.cookie @Text "session"
     & Req.json @UserReqBody
 
+foundUserHeaders = do
+    ct  <- fst =. Res.header @Text "content-type"
+    loc <- snd =. Res.header @Text "location"
+    pure (ct, loc)
+
 foundUser
     = Res.ok
-    & Res.headers do
-        ct  <- fst =. Res.header @Text "content-type"
-        loc <- snd =. Res.header @Text "location"
-        pure (ct, loc)
+    & Res.headers foundUserHeaders
     & Res.json @UserResBody
 
 noUser
@@ -101,28 +103,29 @@ userHandler = fn \(req, _) -> do
                 email  = reqBody.email
                 age    = reqBody.age
                 active = True
-            in FoundUser $ Res.value S200 ("application/json", "/users/alice") (pure UserResBody{..})
+            in 
+                FoundUser $ Res.value S200 ("application/json", "/users/alice") (pure UserResBody{..})
         else NoUser $ Res.value S404 "user not found" (pure "")
 
 userApp = serve id userEndpoint userHandler
 
 printSchema = LBS8.putStrLn (Pretty.encodePretty (endpointToOpenApi userEndpoint))
 
-aliceReq = Req.value Method.POST "alice" (Just "json") "tok"
-    (pure UserReqBody
+aliceReq = Req.value Method.POST "alice" (Just "json") "tok" $ pure
+    UserReqBody
         { name    = "Alice"
         , email   = "alice@example.com"
         , age     = 30
         , address = Address "123 Main St" "Wonderland" "12345"
-        })
+        }
 
-bobReq = Req.value Method.POST "bob" Nothing "tok"
-    (pure UserReqBody
+bobReq = Req.value Method.POST "bob" Nothing "tok" $ pure
+    UserReqBody
         { name    = "Bob"
         , email   = "bob@example.com"
         , age     = 25
         , address = Address "456 Elm St" "Nowhere" "67890"
-        })
+        }
 
 main = do
     mgr <- HC.newManager HC.defaultManagerSettings

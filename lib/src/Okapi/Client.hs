@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.Client (call) where
+module Okapi.Client (call, ClientSettings (..)) where
 
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
@@ -12,6 +12,11 @@ import Network.Wai qualified as Wai
 import Okapi.Codec (Value (..))
 import Okapi.Mode (Endpoint, ParseError, Signature, parseResponse, printRequest)
 import Okapi.Req (Req)
+
+data ClientSettings = ClientSettings
+    { manager :: HC.Manager
+    , baseUrl :: String
+    }
 
 call ::
     HC.Manager ->
