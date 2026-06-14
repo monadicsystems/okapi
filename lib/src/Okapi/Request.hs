@@ -1,23 +1,22 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Request where
 
-import Data.Aeson qualified as Aeson
-import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
-import Data.OpenApi (ToSchema)
 import Data.Text qualified as Text
 import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
+import Okapi.Body (Body, ForRequest, HasBody (..), IsoJson, NoContent, raw)
+import Okapi.Body qualified as Body
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Data (FromCookieData, FromHeaderData, FromPathData, FromQueryData, ToCookieData, ToHeaderData, ToPathData, ToQueryData)
-import Okapi.Request.Body (Body)
-import Okapi.Request.Body qualified as Body
-import Okapi.Request.Headers (Headers)
-import Okapi.Request.Headers qualified as Headers
+import Okapi.Headers (HasHeaders (..), Headers)
+import Okapi.Headers qualified as Headers
 import Okapi.Request.Method (KnownMethod (..), Method, known, GET, POST, DELETE)
 import Okapi.Request.Method qualified as Method
 import Okapi.Request.Path (Path)
@@ -25,16 +24,16 @@ import Okapi.Request.Path qualified as Path
 import Okapi.Request.Query (Query)
 import Okapi.Request.Query qualified as Query
 
-data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
-  { method_ :: f Method m
-  , path_   :: f Path p
-  , query_  :: f Query q
-  , headers_ :: f Headers h
-  , body_    :: f Body (IO b)
+data Request (f :: (Type -> Type) -> Type -> Type) m p q h b = Request
+  { method_  :: f Method m
+  , path_    :: f Path p
+  , query_   :: f Query q
+  , headers_ :: f (Headers ForRequest) h
+  , body_    :: f (Body ForRequest) (IO b)
   }
 
-value :: m -> p -> q -> h -> IO b -> Req Value m p q h b
-value m p q h b = Req
+request :: m -> p -> q -> h -> IO b -> Request Value m p q h b
+request m p q h b = Request
     { method_  = Value m
     , path_    = Value p
     , query_   = Value q
@@ -43,14 +42,14 @@ value m p q h b = Req
     }
 
 req ::
-  Req
+  Request
     IsoCodec
     HTTP.Method
     [Text.Text]
     HTTP.Query
-    HTTP.RequestHeaders
+    [HTTP.Header]
     LBS.ByteString
-req = Req
+req = Request
     { method_  = IsoCodec Method.raw
     , path_    = IsoCodec Path.raw
     , query_   = IsoCodec Query.raw
@@ -59,87 +58,62 @@ req = Req
     }
 
 mGet ::
-  Req
+  Request
     IsoCodec
     GET
     [Text.Text]
     HTTP.Query
-    HTTP.RequestHeaders
+    [HTTP.Header]
     LBS.ByteString
 mGet = req & method GET
 
 mPost ::
-  Req
+  Request
     IsoCodec
     POST
     [Text.Text]
     HTTP.Query
-    HTTP.RequestHeaders
+    [HTTP.Header]
     LBS.ByteString
 mPost = req & method POST
 
 mDelete ::
-  Req
+  Request
     IsoCodec
     DELETE
     [Text.Text]
     HTTP.Query
-    HTTP.RequestHeaders
+    [HTTP.Header]
     LBS.ByteString
 mDelete = req & method DELETE
 
 method ::
   KnownMethod m ->
-  Req IsoCodec HTTP.Method p q h b ->
-  Req IsoCodec (KnownMethod m) p q h b
+  Request IsoCodec HTTP.Method p q h b ->
+  Request IsoCodec (KnownMethod m) p q h b
 method km r = r { method_ = IsoCodec (known km) }
-
-stdMethod ::
-  Req IsoCodec HTTP.Method p q h b ->
-  Req IsoCodec HTTP.StdMethod p q h b
-stdMethod = undefined
 
 path ::
   Codec Path p p ->
-  ( Req IsoCodec m [Text.Text] q h b ->
-    Req IsoCodec m p q h b
+  ( Request IsoCodec m [Text.Text] q h b ->
+    Request IsoCodec m p q h b
   )
 path c r = r { path_ = IsoCodec c }
 
 query ::
   Codec Query q q ->
-  ( Req IsoCodec m p HTTP.Query h b ->
-    Req IsoCodec m p q h b
+  ( Request IsoCodec m p HTTP.Query h b ->
+    Request IsoCodec m p q h b
   )
 query c r = r { query_ = IsoCodec c }
 
-headers ::
-  Codec Headers h h ->
-  ( Req IsoCodec m p q HTTP.RequestHeaders b ->
-    Req IsoCodec m p q h b
-  )
-headers c r = r { headers_ = IsoCodec c }
+instance HasHeaders (Request IsoCodec m p q) where
+    type Ctx (Request IsoCodec m p q) = ForRequest
+    headers c r = r { headers_ = IsoCodec c }
 
-body ::
-  Codec Body (IO b) (IO b) ->
-  ( Req IsoCodec m p q h LBS.ByteString ->
-    Req IsoCodec m p q h b
-  )
-body c r = r { body_ = IsoCodec c }
-
-type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
-
-json ::
-  forall b m p q h.
-  (IsoJson b) =>
-  ( Req IsoCodec m p q h LBS.ByteString ->
-    Req IsoCodec m p q h b
-  )
-json r =
-    let IsoCodec hCodec = headers_ r
-    in r { body_    = IsoCodec Body.json
-         , headers_ = IsoCodec (Headers.withHeader "content-type" "application/json" hCodec)
-         }
+instance HasBody (Request IsoCodec m p q) where
+    type BodyCtx (Request IsoCodec m p q) = ForRequest
+    body c r = r { body_ = IsoCodec c }
 
 seg_ :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
 seg_ x = Path.seg_ x
@@ -161,15 +135,3 @@ flag k = Query.flag k
 
 flag' :: Text.Text -> Codec Query Bool Bool
 flag' k = Query.flag' k
-
-header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
-header k = Headers.header k
-
-header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
-header' k = Headers.header' k
-
-cookie :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers a a
-cookie name = Headers.cookie name
-
-cookie' :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers (Maybe a) (Maybe a)
-cookie' name = Headers.cookie' name

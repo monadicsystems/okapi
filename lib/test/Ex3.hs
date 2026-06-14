@@ -24,18 +24,7 @@ import GHC.Generics (Generic)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai.Handler.Warp qualified as Warp
-import Okapi.Client (ClientSettings (..))
-import Okapi.Codec (Value (..))
-import Okapi.Group (app, client)
-import Okapi.Mode (Client (..), Contract (..), Server (..), Signature, fn)
-import Okapi.Request qualified as Req
-import Okapi.Request.Method (DELETE, GET, POST)
-import Okapi.Request.Method qualified as Method
-import Okapi.Response (Res)
-import Okapi.Response qualified as Res
-import Okapi.Response.Body (NoContent (..))
-import Okapi.Response.Status (KnownStatus (..), S200, S201, S204, S404)
-import Okapi.Response.Alt (GenericResAlt (..), Only (..), only, resCase)
+import Okapi
 import System.Exit (exitFailure)
 
 -- ── Domain types ─────────────────────────────────────────────────────────────
@@ -85,53 +74,53 @@ deleteItemDB iid = do
 -- ── Response types ───────────────────────────────────────────────────────────
 
 data GetItemRes f
-    = ItemFound (Res f S200 HTTP.ResponseHeaders Item)
-    | ItemNotFound (Res f S404 HTTP.ResponseHeaders LBS.ByteString)
+    = ItemFound (Response f S200 HTTP.ResponseHeaders Item)
+    | ItemNotFound (Response f S404 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 data DeleteItemRes f
-    = ItemDeleted (Res f S204 HTTP.ResponseHeaders NoContent)
-    | DeleteNotFound (Res f S404 HTTP.ResponseHeaders LBS.ByteString)
+    = ItemDeleted (Response f S204 HTTP.ResponseHeaders NoContent)
+    | DeleteNotFound (Response f S404 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
 createItemReq =
-    Req.mPost
-        & Req.path do
-            Req.seg_ @Text "items"
-        & Req.json @NewItem
+    mPost
+        & path do
+            seg_ @Text "items"
+        & body (json @NewItem)
 
 createItemEndpoint =
     createItemReq
         :-> only
-            (Res.s201 & Res.json @Item)
+            (s201 & body (json @Item))
 
 getItemReq =
-    Req.mGet
-        & Req.path do
-            Req.seg_ @Text "items"
-            iid <- Req.seg @Int64 "id"
+    mGet
+        & path do
+            seg_ @Text "items"
+            iid <- seg @Int64 "id"
             pure iid
 
 getItemEndpoint =
     getItemReq
-        :-> resCase @GetItemRes
-            (Res.s200 & Res.json @Item)
-            Res.s404
+        :-> responsesOf @GetItemRes
+            (s200 & body (json @Item))
+            s404
 
 deleteItemReq =
-    Req.mDelete
-        & Req.path do
-            Req.seg_ @Text "items"
-            iid <- Req.seg @Int64 "id"
+    mDelete
+        & path do
+            seg_ @Text "items"
+            iid <- seg @Int64 "id"
             pure iid
 
 deleteItemEndpoint =
     deleteItemReq
-        :-> resCase @DeleteItemRes
-            Res.s204
-            Res.s404
+        :-> responsesOf @DeleteItemRes
+            (s204 & body noContent)
+            s404
 
 -- ── HKD API record ───────────────────────────────────────────────────────────
 
@@ -164,18 +153,18 @@ itemsHandlers =
         { createItem = fn \(req, _) -> do
             ni <- liftIO req.body_.value
             item <- createItemDB ni
-            pure (Only (Res.value S201 [] (pure item)))
+            pure (Only (response S201 [] (pure item)))
         , getItem = fn \(req, _) -> do
             mItem <- getItemDB req.path_.value
             pure $ case mItem of
-                Just item -> ItemFound (Res.value S200 [] (pure item))
-                Nothing -> ItemNotFound (Res.value S404 [] (pure "item not found"))
+                Just item -> ItemFound (response S200 [] (pure item))
+                Nothing -> ItemNotFound (response S404 [] (pure "item not found"))
         , deleteItem = fn \(req, _) -> do
             deleted <- deleteItemDB req.path_.value
             pure $
                 if deleted
-                    then ItemDeleted (Res.value S204 [] (pure NoContent))
-                    else DeleteNotFound (Res.value S404 [] (pure "item not found"))
+                    then ItemDeleted (response S204 [] (pure NoContent))
+                    else DeleteNotFound (response S404 [] (pure "item not found"))
         }
 
 -- ── Helpers ──────────────────────────────────────────────────────────────────
@@ -200,8 +189,7 @@ main = SQLite.withConnection ":memory:" \conn -> do
         let cs = ClientSettings{manager = mgr, baseUrl = "http://localhost:" ++ show port}
             ItemsApi (Cb goCreate) (Cb goGet) (Cb goDelete) = client itemsEndpoints cs
 
-        -- Create an item
-        r1 <- goCreate (Req.value Method.POST () [] [] (pure NewItem{itemName = "Widget"}))
+        r1 <- goCreate (request POST () [] [] (pure NewItem{itemName = "Widget"}))
         createdId <- case r1 of
             Right (Only r) -> do
                 item <- r.body_.value
@@ -210,8 +198,7 @@ main = SQLite.withConnection ":memory:" \conn -> do
                 pure item.itemId
             _ -> putStrLn "FAIL: POST /items" >> exitFailure
 
-        -- Retrieve the created item
-        r2 <- goGet (Req.value Method.GET createdId [] [] (pure ""))
+        r2 <- goGet (request GET createdId [] [] (pure ""))
         case r2 of
             Right (ItemFound r) -> do
                 item <- r.body_.value
@@ -219,22 +206,19 @@ main = SQLite.withConnection ":memory:" \conn -> do
                 check "GET /items/:id: name" (item.itemName == "Widget")
             _ -> check "GET /items/:id found" False
 
-        -- Query a non-existent item
-        r3 <- goGet (Req.value Method.GET 9999 [] [] (pure ""))
+        r3 <- goGet (request GET 9999 [] [] (pure ""))
         case r3 of
             Right (ItemNotFound r) ->
                 check "GET /items/9999: 404" (r.status_.value == S404)
             _ -> check "GET /items/9999 not found" False
 
-        -- Delete the item
-        r4 <- goDelete (Req.value Method.DELETE createdId [] [] (pure ""))
+        r4 <- goDelete (request DELETE createdId [] [] (pure ""))
         case r4 of
             Right (ItemDeleted r) ->
                 check "DELETE /items/:id: status" (r.status_.value == S204)
             _ -> check "DELETE /items/:id deleted" False
 
-        -- Confirm deletion
-        r5 <- goGet (Req.value Method.GET createdId [] [] (pure ""))
+        r5 <- goGet (request GET createdId [] [] (pure ""))
         case r5 of
             Right (ItemNotFound r) ->
                 check "GET /items/:id after delete: 404" (r.status_.value == S404)

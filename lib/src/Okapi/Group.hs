@@ -20,7 +20,7 @@ import GHC.Generics
     )
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Okapi.Client (ClientSettings (..), call)
+import Okapi.Client (ClientSettings (..), fetch)
 import Okapi.Mode (Client (..), Contract, Server (..), Signature, tryServe, type (~>))
 import Okapi.OpenApi (endpointToOpenApi)
 
@@ -88,7 +88,7 @@ instance GClientable
     (S1 sm  (Rec0 (Contract (Signature m p q h b r))))
     (S1 sm' (Rec0 (Client (Signature m p q h b r)))) where
     gClient (ClientSettings mgr url) (M1 (K1 ep)) =
-        M1 (K1 (Cb \reqVal -> call mgr url ep reqVal))
+        M1 (K1 (Cb \reqVal -> fetch mgr url ep reqVal))
 
 
 -- ── client ───────────────────────────────────────────────────────────────────

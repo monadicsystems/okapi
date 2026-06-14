@@ -1,114 +1,79 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Okapi.Response where
 
-import Data.Aeson qualified as Aeson
-import Data.ByteString (ByteString)
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
-import Data.OpenApi (ToSchema)
-import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
+import Okapi.Body (Body, ForResponse, HasBody (..), NoContent, raw)
+import Okapi.Body qualified as Body
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
-import Okapi.Data (FromCookieData, FromHeaderData, ToCookieData, ToHeaderData)
-import Okapi.Response.Body (Body, NoContent (..))
-import Okapi.Response.Body qualified as Body
-import Okapi.Response.Headers (Headers)
-import Okapi.Response.Headers qualified as ResHeaders
+import Okapi.Headers (HasHeaders (..), Headers)
+import Okapi.Headers qualified as Headers
 import Okapi.Response.Status (Status, S200, S201, S204, S404, S500)
 import Okapi.Response.Status qualified as Status
 
-data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
+data Response (f :: (Type -> Type) -> Type -> Type) s h b = Response
   { status_  :: f Status s
-  , headers_ :: f Headers h
-  , body_    :: f Body (IO b)
+  , headers_ :: f (Headers ForResponse) h
+  , body_    :: f (Body ForResponse) (IO b)
   }
 
-value :: s -> h -> IO b -> Res Value s h b
-value s h b = Res
+response :: s -> h -> IO b -> Response Value s h b
+response s h b = Response
     { status_  = Value s
     , headers_ = Value h
     , body_    = Value b
     }
 
-s200 :: Res IsoCodec S200 HTTP.ResponseHeaders LBS.ByteString
-s200 = Res
+s200 :: Response IsoCodec S200 [HTTP.Header] LBS.ByteString
+s200 = Response
     { status_  = IsoCodec (Status.known Status.S200)
-    , headers_ = IsoCodec ResHeaders.raw
+    , headers_ = IsoCodec Headers.raw
     , body_    = IsoCodec Body.raw
     }
 
-s201 :: Res IsoCodec S201 HTTP.ResponseHeaders LBS.ByteString
-s201 = Res
+s201 :: Response IsoCodec S201 [HTTP.Header] LBS.ByteString
+s201 = Response
     { status_  = IsoCodec (Status.known Status.S201)
-    , headers_ = IsoCodec ResHeaders.raw
+    , headers_ = IsoCodec Headers.raw
     , body_    = IsoCodec Body.raw
     }
 
-s204 :: Res IsoCodec S204 HTTP.ResponseHeaders NoContent
-s204 = Res
+s204 :: Response IsoCodec S204 [HTTP.Header] LBS.ByteString
+s204 = Response
     { status_  = IsoCodec (Status.known Status.S204)
-    , headers_ = IsoCodec ResHeaders.raw
-    , body_    = IsoCodec Body.noContent
+    , headers_ = IsoCodec Headers.raw
+    , body_    = IsoCodec Body.raw
     }
 
-s404 :: Res IsoCodec S404 HTTP.ResponseHeaders LBS.ByteString
-s404 = Res
+s404 :: Response IsoCodec S404 [HTTP.Header] LBS.ByteString
+s404 = Response
     { status_  = IsoCodec (Status.known Status.S404)
-    , headers_ = IsoCodec ResHeaders.raw
+    , headers_ = IsoCodec Headers.raw
     , body_    = IsoCodec Body.raw
     }
 
-s500 :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
-s500 = Res
+s500 :: Response IsoCodec S500 [HTTP.Header] LBS.ByteString
+s500 = Response
     { status_  = IsoCodec (Status.known Status.S500)
-    , headers_ = IsoCodec ResHeaders.raw
+    , headers_ = IsoCodec Headers.raw
     , body_    = IsoCodec Body.raw
     }
 
-headers ::
-  Codec Headers h h ->
-  ( Res IsoCodec s HTTP.ResponseHeaders b ->
-    Res IsoCodec s h b
-  )
-headers c r = r { headers_ = IsoCodec c }
-
-body ::
-  Codec Body (IO b) (IO b) ->
-  ( Res IsoCodec s h LBS.ByteString ->
-    Res IsoCodec s h b
-  )
-body c r = r { body_ = IsoCodec c }
-
-res :: Res IsoCodec HTTP.Status HTTP.ResponseHeaders LBS.ByteString
-res = Res
+res :: Response IsoCodec HTTP.Status [HTTP.Header] LBS.ByteString
+res = Response
     { status_  = IsoCodec Status.raw
-    , headers_ = IsoCodec ResHeaders.raw
+    , headers_ = IsoCodec Headers.raw
     , body_    = IsoCodec Body.raw
     }
 
-type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
+instance HasHeaders (Response IsoCodec s) where
+    type Ctx (Response IsoCodec s) = ForResponse
+    headers c r = r { headers_ = IsoCodec c }
 
-json ::
-  forall b s h.
-  IsoJson b =>
-  ( Res IsoCodec s h LBS.ByteString ->
-    Res IsoCodec s h b
-  )
-json r =
-    let IsoCodec hCodec = headers_ r
-    in r { body_    = IsoCodec Body.json
-         , headers_ = IsoCodec (ResHeaders.withHeader "content-type" "application/json" hCodec)
-         }
-
-header :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers a a
-header k = ResHeaders.header k
-
-header' :: (Typeable a, ToHeaderData a, FromHeaderData a) => HTTP.HeaderName -> Codec Headers (Maybe a) (Maybe a)
-header' k = ResHeaders.header' k
-
-setCookie :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers a a
-setCookie name = ResHeaders.setCookie name
-
-setCookie' :: (Typeable a, ToCookieData a, FromCookieData a) => ByteString -> Codec Headers (Maybe a) (Maybe a)
-setCookie' name = ResHeaders.setCookie' name
+instance HasBody (Response IsoCodec s) where
+    type BodyCtx (Response IsoCodec s) = ForResponse
+    body c r = r { body_ = IsoCodec c }

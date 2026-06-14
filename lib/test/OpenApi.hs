@@ -17,44 +17,37 @@ import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Codec ((=.))
-import Okapi.Mode (Contract (..))
-import Okapi.OpenApi (endpointToOpenApi)
-import Okapi.Request qualified as Req
-import Okapi.Response (Res)
-import Okapi.Response qualified as Res
-import Okapi.Response.Status (S200, S404, S500)
-import Okapi.Response.Alt (GenericResAlt (..), only)
+import Okapi
 
 type OkHeaders = (Text, Text)
 type RetryAfter = Int
 
 data GetUserRes f
-    = OkRes       (Res f S200 OkHeaders LBS.ByteString)
-    | NotFoundRes (Res f S404 RetryAfter LBS.ByteString)
-    | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
+    = OkRes       (Response f S200 OkHeaders LBS.ByteString)
+    | NotFoundRes (Response f S404 RetryAfter LBS.ByteString)
+    | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 okRes
-    = Res.s200
-    & Res.headers do
-        ct  <- fst =. Res.header "content-type"
-        loc <- snd =. Res.header "location"
+    = s200
+    & headers do
+        ct  <- fst =. header "content-type"
+        loc <- snd =. header "location"
         pure (ct, loc)
 
-notFoundRes = Res.s404 & Res.headers (Res.header @RetryAfter "retry-after")
+notFoundRes = s404 & headers (header @RetryAfter "retry-after")
 
-errRes = Res.s500
+errRes = s500
 
 getUserReq
-    = Req.mGet
-    & Req.path do
-        _ <- Req.seg_ @Text "users"
-        userId <- Req.seg @Text "userId"
+    = mGet
+    & path do
+        _ <- seg_ @Text "users"
+        userId <- seg @Text "userId"
         pure userId
-    & Req.query (Req.param' @Text "filter")
+    & query (param' @Text "filter")
 
-getUserEndpoint = getUserReq :-> resCase @GetUserRes
+getUserEndpoint = getUserReq :-> responsesOf @GetUserRes
     okRes
     notFoundRes
     errRes
@@ -64,11 +57,11 @@ data CreateUserBody = CreateUserBody
     , email    :: Text
     } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-createUserReq = Req.mPost
-    & Req.path (Req.seg_ @Text "users")
-    & Req.json @CreateUserBody
+createUserReq = mPost
+    & path (seg_ @Text "users")
+    & body (json @CreateUserBody)
 
-createUserEndpoint = createUserReq :-> only (Res.s200 & Res.json @CreateUserBody)
+createUserEndpoint = createUserReq :-> only (s200 & body (json @CreateUserBody))
 
 main :: IO ()
 main = do

@@ -21,16 +21,7 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Client qualified as HC
 import Network.Wai.Handler.Warp qualified as Warp
-import Okapi.Client (call)
-import Okapi.Codec (Value (..))
-import Okapi.Mode (Contract (..), fn, serve)
-import Okapi.OpenApi (endpointToOpenApi)
-import Okapi.Request qualified as Req
-import Okapi.Request.Method qualified as Method
-import Okapi.Response (Res)
-import Okapi.Response qualified as Res
-import Okapi.Response.Status (KnownStatus (..), S200, S404)
-import Okapi.Response.Alt (GenericResAlt (..), resCase)
+import Okapi
 import System.Exit (exitFailure)
 
 data Address = Address
@@ -55,33 +46,33 @@ data UserResBody = UserResBody
     } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
 data UserRes f
-    = FoundUser (Res f S200 Text UserResBody)
-    | NoUser (Res f S404 Text LBS.ByteString)
+    = FoundUser (Response f S200 Text UserResBody)
+    | NoUser (Response f S404 Text LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 userRequest
-    = Req.mPost
-    & Req.path do
-        Req.seg_ @Text "users"
-        uid <- Req.seg @Text "id"
+    = mPost
+    & path do
+        seg_ @Text "users"
+        uid <- seg @Text "id"
         pure uid
-    & Req.query do
-        Req.param' @Text "format"
-    & Req.headers do
-        Req.cookie @Text "session"
-    & Req.json @UserReqBody
+    & query do
+        param' @Text "format"
+    & headers do
+        cookie @Text "session"
+    & body (json @UserReqBody)
 
 foundUser
-    = Res.s200
-    & Res.headers (Res.header @Text "location")
-    & Res.json @UserResBody
+    = s200
+    & headers (header @Text "location")
+    & body (json @UserResBody)
 
 noUser
-    = Res.s404
-    & Res.headers do
-        Res.header @Text "x-error"
+    = s404
+    & headers do
+        header @Text "x-error"
 
-userResponses = resCase @UserRes
+userResponses = responsesOf @UserRes
     foundUser
     noUser
 
@@ -98,15 +89,15 @@ userHandler = fn \(req, _) -> do
                 email  = reqBody.email
                 age    = reqBody.age
                 active = True
-            in 
-                FoundUser $ Res.value S200 "/users/alice" (pure UserResBody{..})
-        else NoUser $ Res.value S404 "user not found" (pure "")
+            in
+                FoundUser $ response S200 "/users/alice" (pure UserResBody{..})
+        else NoUser $ response S404 "user not found" (pure "")
 
 userApp = serve id userEndpoint userHandler
 
 printSchema = LBS8.putStrLn (Pretty.encodePretty (endpointToOpenApi userEndpoint))
 
-aliceReq = Req.value Method.POST "alice" (Just "json") "tok" $ pure
+aliceReq = request POST "alice" (Just "json") "tok" $ pure
     UserReqBody
         { name    = "Alice"
         , email   = "alice@example.com"
@@ -114,7 +105,7 @@ aliceReq = Req.value Method.POST "alice" (Just "json") "tok" $ pure
         , address = Address "123 Main St" "Wonderland" "12345"
         }
 
-bobReq = Req.value Method.POST "bob" Nothing "tok" $ pure
+bobReq = request POST "bob" Nothing "tok" $ pure
     UserReqBody
         { name    = "Bob"
         , email   = "bob@example.com"
@@ -125,7 +116,7 @@ bobReq = Req.value Method.POST "bob" Nothing "tok" $ pure
 main = do
     mgr <- HC.newManager HC.defaultManagerSettings
     Warp.testWithApplication (pure userApp) \port -> do
-        let go = call mgr ("http://localhost:" ++ show port) userEndpoint
+        let go = fetch mgr ("http://localhost:" ++ show port) userEndpoint
 
         found <- go aliceReq
         case found of
@@ -145,10 +136,10 @@ main = do
         case miss of
             Left e              -> putStrLn ("FAIL: " ++ show e) >> exitFailure
             Right (NoUser r)    -> do
-                body <- r.body_.value
+                bod <- r.body_.value
                 check "NoUser: status"  (r.status_.value  == S404)
                 check "NoUser: headers" (r.headers_.value == "user not found")
-                check "NoUser: body"    (body             == "")
+                check "NoUser: body"    (bod              == "")
             Right (FoundUser _) -> putStrLn "FAIL: expected NoUser" >> exitFailure
 
 check name True  = putStrLn ("PASS: " ++ name)

@@ -19,19 +19,12 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Internal qualified as WaiI
-import Okapi.Client (call)
-import Okapi.Codec ((=.), IsoCodec (..), Value (..), value)
-import Okapi.Mode (Contract (..), fn, serve, parseRequest, parseResponse, printRequest, printResponse)
-import Okapi.Request qualified as Req
-import Okapi.Request.Headers qualified as ReqH
+import Okapi
+import Okapi.Headers qualified as ReqH
 import Okapi.Request.Method qualified as Method
 import Okapi.Request.Path qualified as Path
 import Okapi.Request.Query qualified as Query
-import Okapi.Response (Res)
-import Okapi.Response qualified as Res
-import Okapi.Response.Status (KnownStatus (..), S200, S404, S500)
 import Okapi.Response.Status qualified as Status
-import Okapi.Response.Alt (GenericResAlt (..), resCase)
 import System.Exit (exitFailure)
 
 assertEq :: (Show a, Eq a) => String -> a -> a -> IO ()
@@ -71,9 +64,9 @@ test_methodRoundTrip = do
 
 test_pathRoundTrip :: IO ()
 test_pathRoundTrip = do
-    let req = Req.mGet & Req.path do
-            _ <- Req.seg_ @Text "users"
-            userId <- Req.seg @Text "userId"
+    let req = mGet & path do
+            _ <- seg_ @Text "users"
+            userId <- seg @Text "userId"
             pure userId
     let pathCodec = isoCodec req.path_
     let printed = Path.print pathCodec "alice"
@@ -160,36 +153,36 @@ test_statusRoundTrip = do
     assertEq "status: parse S500" (Right S500) r500
 
 data GetUserRes f
-    = OkRes       (Res f S200 (Text, Text) LBS.ByteString)
-    | NotFoundRes (Res f S404 Int LBS.ByteString)
-    | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
+    = OkRes       (Response f S200 (Text, Text) LBS.ByteString)
+    | NotFoundRes (Response f S404 Int LBS.ByteString)
+    | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 endpoint =
-    ( Req.mGet
-      & Req.path do
-          _ <- Req.seg_ @Text "users"
-          uid <- Req.seg @Text "uid"
+    ( mGet
+      & path do
+          _ <- seg_ @Text "users"
+          uid <- seg @Text "uid"
           pure uid
-      & Req.query (Req.param' @Text "filter")
+      & query (param' @Text "filter")
     ) :->
-    resCase @GetUserRes
-        (Res.s200 & Res.headers do
-            ct  <- fst =. Res.header @Text "content-type"
-            loc <- snd =. Res.header @Text "location"
+    responsesOf @GetUserRes
+        (s200 & headers do
+            ct  <- fst =. header @Text "content-type"
+            loc <- snd =. header @Text "location"
             pure (ct, loc))
-        (Res.s404 & Res.headers (Res.header @Int "retry-after"))
-        Res.s500
+        (s404 & headers (header @Int "retry-after"))
+        s500
 
 test_reqRoundTrip :: IO ()
 test_reqRoundTrip = do
-    let rv = Req.value Method.GET "alice" (Just "active") [] (pure "request-body")
+    let rv = request GET "alice" (Just "active") [] (pure "request-body")
     waiReq <- printRequest endpoint rv
-    body   <- Wai.strictRequestBody waiReq
+    reqBody <- Wai.strictRequestBody waiReq
     assertEq "req: method" "GET"              (Wai.requestMethod waiReq)
     assertEq "req: path"   ["users", "alice"] (Wai.pathInfo      waiReq)
     assertEq "req: query"  [("filter", Just "active")] (Wai.queryString waiReq)
-    assertEq "req: body"   "request-body"     body
+    assertEq "req: body"   "request-body"     reqBody
     case parseRequest endpoint waiReq of
         Left e     -> do { putStrLn ("FAIL: req parse: " ++ show e); exitFailure }
         Right parsed -> do
@@ -198,14 +191,14 @@ test_reqRoundTrip = do
 
 test_resRoundTrip :: IO ()
 test_resRoundTrip = do
-    let okVal = OkRes (Res.value S200 ("text/html", "/home") (pure "response-body"))
+    let okVal = OkRes (response S200 ("text/html", "/home") (pure "response-body"))
     waiRes <- printResponse endpoint okVal
     assertEq "res: ok status"  HTTP.status200 (Wai.responseStatus  waiRes)
     assertEq "res: ok body"    "response-body" (waiResBody waiRes)
     assertRight "res: ok parse" (parseResponse endpoint waiRes) $ \_ ->
         putStrLn "PASS: res: ok reconstruct"
 
-    let nfVal = NotFoundRes (Res.value S404 (42 :: Int) (pure "not-found-body"))
+    let nfVal = NotFoundRes (response S404 (42 :: Int) (pure "not-found-body"))
     waiRes2 <- printResponse endpoint nfVal
     assertEq "res: 404 status"  HTTP.status404   (Wai.responseStatus waiRes2)
     assertEq "res: 404 body"    "not-found-body" (waiResBody waiRes2)
@@ -215,9 +208,9 @@ test_resRoundTrip = do
 test_serverClientRoundTrip :: IO ()
 test_serverClientRoundTrip = do
     mgr <- HC.newManager HC.defaultManagerSettings
-    Warp.testWithApplication (pure app) $ \port -> do
-        let reqVal = Req.value Method.GET "alice" (Just "active") [] (pure mempty)
-        result <- call mgr ("http://localhost:" ++ show port) endpoint reqVal
+    Warp.testWithApplication (pure testApp) $ \port -> do
+        let reqVal = request GET "alice" (Just "active") [] (pure mempty)
+        result <- fetch mgr ("http://localhost:" ++ show port) endpoint reqVal
         case result of
             Left e -> do
                 putStrLn ("FAIL: server/client roundtrip: " ++ show e)
@@ -225,14 +218,14 @@ test_serverClientRoundTrip = do
             Right (OkRes resVal) -> do
                 assertEq "server/client: status" S200 resVal.status_.value
                 assertEq "server/client: headers" ("text/html", "/home" :: Text) resVal.headers_.value
-                body <- resVal.body_.value
-                assertEq "server/client: body" "hello" body
+                resBody <- resVal.body_.value
+                assertEq "server/client: body" "hello" resBody
             Right _ -> do
                 putStrLn "FAIL: server/client: unexpected response variant"
                 exitFailure
   where
-    app = serve id endpoint (fn $ \_ ->
-        pure (OkRes (Res.value S200 ("text/html", "/home") (pure "hello"))))
+    testApp = serve id endpoint (fn $ \_ ->
+        pure (OkRes (response S200 ("text/html", "/home") (pure "hello"))))
 
 main :: IO ()
 main = do

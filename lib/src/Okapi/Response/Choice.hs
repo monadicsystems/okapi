@@ -9,37 +9,37 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Response.Alt where
+module Okapi.Response.Choice where
 
 import Data.Kind (Type)
 import Data.Proxy (Proxy (..))
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:+:) (..))
 import Okapi.Codec (Codec (..), IsoCodec (..), Value)
-import Okapi.Response (Res)
+import Okapi.Response (Response)
 
 
 -- ResAlt GADT
 
 data ResAlt a where
-    OneResAlt    :: Res IsoCodec s h b -> ResAlt (Res Value s h b)
+    OneResAlt    :: Response IsoCodec s h b -> ResAlt (Response Value s h b)
     ChoiceResAlt :: ResAlt a -> ResAlt b -> ResAlt (Either a b)
 
 
 -- only: single-response smart constructor
 
-newtype Only s h b (f :: (Type -> Type) -> Type -> Type) = Only {runOnly :: Res f s h b}
+newtype Only s h b (f :: (Type -> Type) -> Type -> Type) = Only {runOnly :: Response f s h b}
 
-only :: Res IsoCodec s h b -> IsoCodec ResAlt (Only s h b Value)
+only :: Response IsoCodec s h b -> IsoCodec ResAlt (Only s h b Value)
 only res = IsoCodec $ FMap Only $ LMap runOnly $ Embed (OneResAlt res)
 
 
 -- GResFunc: curried codec-constructor type for each generic rep node
 
 type family GResFunc (f :: Type -> Type) (r :: Type) :: Type where
-    GResFunc (D1 m f)                        r = GResFunc f r
-    GResFunc (C1 m f)                        r = GResFunc f r
-    GResFunc (S1 m (Rec0 (Res Value s h b))) r = Res IsoCodec s h b -> r
-    GResFunc (f :+: g)                       r = GResFunc f (GResFunc g r)
+    GResFunc (D1 m f)                             r = GResFunc f r
+    GResFunc (C1 m f)                             r = GResFunc f r
+    GResFunc (S1 m (Rec0 (Response Value s h b))) r = Response IsoCodec s h b -> r
+    GResFunc (f :+: g)                            r = GResFunc f (GResFunc g r)
 
 
 -- GResAlt: walks the generic Rep, building the codec tree
@@ -71,8 +71,8 @@ instance GResAlt f => GResAlt (C1 m f) where
     gTo _ x        = M1 (runGTo @f x)
     gFrom (M1 x)   = runGFrom @f x
 
-instance GResAlt (S1 m (Rec0 (Res Value s h b))) where
-    type GResOut (S1 m (Rec0 (Res Value s h b))) = Res Value s h b
+instance GResAlt (S1 m (Rec0 (Response Value s h b))) where
+    type GResOut (S1 m (Rec0 (Response Value s h b))) = Response Value s h b
     gResCase _ k codec = k (OneResAlt codec)
     gTo _ x            = M1 (K1 x)
     gFrom (M1 (K1 x))  = x
@@ -97,8 +97,8 @@ class
     ) =>
     GenericResAlt (r :: ((Type -> Type) -> Type -> Type) -> Type)
     where
-    resCase :: GResFunc (Rep (r Value)) (IsoCodec ResAlt (r Value))
-    resCase =
+    responsesOf :: GResFunc (Rep (r Value)) (IsoCodec ResAlt (r Value))
+    responsesOf =
         runGResCase @(Rep (r Value)) $ \ra ->
         IsoCodec $
         FMap ((to :: Rep (r Value) () -> r Value) . runGTo @(Rep (r Value))) $

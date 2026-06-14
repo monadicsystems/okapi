@@ -19,12 +19,12 @@ import Data.Typeable (TypeRep, typeRep)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Network.HTTP.Types qualified as HTTP
+import Okapi.Body (Body, IsoJson)
+import Okapi.Body qualified as Body
 import Okapi.Codec (Codec (..), IsoCodec (..))
+import Okapi.Headers (ForRequest, ForResponse, Headers (..))
 import Okapi.Mode (Contract (..), Signature)
 import Okapi.Request (body_, headers_, method_, path_, query_)
-import Okapi.Request.Body qualified as ReqBody
-import Okapi.Request.Headers (Headers)
-import Okapi.Request.Headers qualified as ReqH
 import Okapi.Request.Method qualified as Method
 import Okapi.Request.Path (Path)
 import Okapi.Request.Path qualified as Path
@@ -32,10 +32,8 @@ import Okapi.Request.Query (Query)
 import Okapi.Request.Query qualified as Query
 import Okapi.Response (status_)
 import Okapi.Response qualified as ORes
-import Okapi.Response.Body qualified as ResBody
-import Okapi.Response.Headers qualified as ResH
 import Okapi.Response.Status qualified as Status
-import Okapi.Response.Alt (ResAlt (..))
+import Okapi.Response.Choice (ResAlt (..))
 import Okapi.Data (ToPathData (..))
 
 data PathPiece = PLit Text | PParam Text OA.Schema
@@ -87,79 +85,55 @@ typeRepSchema tr
     | tr == typeRep (Proxy :: Proxy Bool)    = mempty & OA.type_ ?~ OA.OpenApiBoolean
     | otherwise                              = mempty & OA.type_ ?~ OA.OpenApiString
 
-extractHeaderParams :: Codec Headers i o -> [Param]
+extractHeaderParams :: Codec (Headers ForRequest) i o -> [Param]
 extractHeaderParams (Embed hdr) = case hdr of
-    h@(ReqH.Header    key)  -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
-    h@(ReqH.HeaderOpt key)  -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
-    h@(ReqH.Cookie    name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie True  (typeRepSchema (typeRep (proxyOf h)))]
-    h@(ReqH.CookieOpt name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie False (typeRepSchema (typeRep (innerProxyOf h)))]
-    ReqH.Raw                -> []
-    ReqH.Lit _ _            -> []
+    h@(Header   key)  -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
+    h@(Header'  key)  -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
+    h@(Cookie   name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie True  (typeRepSchema (typeRep (proxyOf h)))]
+    h@(Cookie'  name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie False (typeRepSchema (typeRep (innerProxyOf h)))]
+    Raw               -> []
+    Header_ _ _       -> []
 extractHeaderParams (FMap _ c)    = extractHeaderParams c
 extractHeaderParams (LMap _ c)    = extractHeaderParams c
 extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParams cx
 extractHeaderParams (Pure _)      = []
 
-extractResHeaders :: Codec ResH.Headers i o -> [(Text, Bool, OA.Schema)]
+extractResHeaders :: Codec (Headers ForResponse) i o -> [(Text, Bool, OA.Schema)]
 extractResHeaders (Embed hdr) = case hdr of
-    h@(ResH.Header    key)  -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
-    h@(ResH.HeaderOpt key)  -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
-    h@(ResH.SetCookie    name) -> [(T.pack (BS8.unpack name), True,  typeRepSchema (typeRep (proxyOf h)))]
-    h@(ResH.SetCookieOpt name) -> [(T.pack (BS8.unpack name), False, typeRepSchema (typeRep (innerProxyOf h)))]
-    ResH.Raw                -> []
-    ResH.Lit _ _            -> []
+    h@(Header     key)  -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
+    h@(Header'    key)  -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
+    h@(SetCookie  name) -> [(T.pack (BS8.unpack name), True,  typeRepSchema (typeRep (proxyOf h)))]
+    h@(SetCookie' name) -> [(T.pack (BS8.unpack name), False, typeRepSchema (typeRep (innerProxyOf h)))]
+    Raw                 -> []
+    Header_ _ _         -> []
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c
 extractResHeaders (Apply cf cx) = extractResHeaders cf ++ extractResHeaders cx
 extractResHeaders (Pure _)      = []
 
-reqBodySchemaOf :: forall a. ReqBody.IsoJson a => ReqBody.Body (IO a) -> OA.Schema
-reqBodySchemaOf _ = toSchema (Proxy @a)
+bodySchemaOf :: forall ctx a. IsoJson a => Body ctx (IO a) -> OA.Schema
+bodySchemaOf _ = toSchema (Proxy @a)
 
-reqBodyDefsOf :: forall a. ReqBody.IsoJson a => ReqBody.Body (IO a) -> OA.Definitions OA.Schema
-reqBodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
+bodyDefsOf :: forall ctx a. IsoJson a => Body ctx (IO a) -> OA.Definitions OA.Schema
+bodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
 
-resBodySchemaOf :: forall a. ResBody.IsoJson a => ResBody.Body (IO a) -> OA.Schema
-resBodySchemaOf _ = toSchema (Proxy @a)
+extractBodySchema :: Codec (Body ctx) i o -> Maybe OA.Schema
+extractBodySchema (Embed body)   = case body of
+    Body.Json -> Just (bodySchemaOf body)
+    _         -> Nothing
+extractBodySchema (FMap _ c)    = extractBodySchema c
+extractBodySchema (LMap _ c)    = extractBodySchema c
+extractBodySchema (Apply cf cx) = extractBodySchema cf <|> extractBodySchema cx
+extractBodySchema (Pure _)      = Nothing
 
-resBodyDefsOf :: forall a. ResBody.IsoJson a => ResBody.Body (IO a) -> OA.Definitions OA.Schema
-resBodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
-
-extractReqBodySchema :: Codec ReqBody.Body i o -> Maybe OA.Schema
-extractReqBodySchema (Embed body)   = case body of
-    ReqBody.Json -> Just (reqBodySchemaOf body)
-    _            -> Nothing
-extractReqBodySchema (FMap _ c)    = extractReqBodySchema c
-extractReqBodySchema (LMap _ c)    = extractReqBodySchema c
-extractReqBodySchema (Apply cf cx) = extractReqBodySchema cf <|> extractReqBodySchema cx
-extractReqBodySchema (Pure _)      = Nothing
-
-extractReqBodyDefs :: Codec ReqBody.Body i o -> OA.Definitions OA.Schema
-extractReqBodyDefs (Embed body)   = case body of
-    ReqBody.Json -> reqBodyDefsOf body
-    _            -> mempty
-extractReqBodyDefs (FMap _ c)    = extractReqBodyDefs c
-extractReqBodyDefs (LMap _ c)    = extractReqBodyDefs c
-extractReqBodyDefs (Apply cf cx) = extractReqBodyDefs cf <> extractReqBodyDefs cx
-extractReqBodyDefs (Pure _)      = mempty
-
-extractResBodySchema :: Codec ResBody.Body i o -> Maybe OA.Schema
-extractResBodySchema (Embed body)   = case body of
-    ResBody.Json -> Just (resBodySchemaOf body)
-    _            -> Nothing
-extractResBodySchema (FMap _ c)    = extractResBodySchema c
-extractResBodySchema (LMap _ c)    = extractResBodySchema c
-extractResBodySchema (Apply cf cx) = extractResBodySchema cf <|> extractResBodySchema cx
-extractResBodySchema (Pure _)      = Nothing
-
-extractResBodyDefs :: Codec ResBody.Body i o -> OA.Definitions OA.Schema
-extractResBodyDefs (Embed body)   = case body of
-    ResBody.Json -> resBodyDefsOf body
-    _            -> mempty
-extractResBodyDefs (FMap _ c)    = extractResBodyDefs c
-extractResBodyDefs (LMap _ c)    = extractResBodyDefs c
-extractResBodyDefs (Apply cf cx) = extractResBodyDefs cf <> extractResBodyDefs cx
-extractResBodyDefs (Pure _)      = mempty
+extractBodyDefs :: Codec (Body ctx) i o -> OA.Definitions OA.Schema
+extractBodyDefs (Embed body)   = case body of
+    Body.Json -> bodyDefsOf body
+    _         -> mempty
+extractBodyDefs (FMap _ c)    = extractBodyDefs c
+extractBodyDefs (LMap _ c)    = extractBodyDefs c
+extractBodyDefs (Apply cf cx) = extractBodyDefs cf <> extractBodyDefs cx
+extractBodyDefs (Pure _)      = mempty
 
 data ResInfo = ResInfo
     { resStatus     :: HTTP.Status
@@ -172,9 +146,9 @@ extractResInfos :: ResAlt a -> [ResInfo]
 extractResInfos (OneResAlt res) =
     [ ResInfo
         { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus (isoCodec (status_ res)))
-        , resBodySchema = extractResBodySchema (isoCodec (ORes.body_ res))
-        , resBodyDefs   = extractResBodyDefs   (isoCodec (ORes.body_ res))
-        , resHdrNames   = extractResHeaders    (isoCodec (ORes.headers_ res))
+        , resBodySchema = extractBodySchema (isoCodec (ORes.body_ res))
+        , resBodyDefs   = extractBodyDefs   (isoCodec (ORes.body_ res))
+        , resHdrNames   = extractResHeaders (isoCodec (ORes.headers_ res))
         }
     ]
 extractResInfos (ChoiceResAlt l r) = extractResInfos l ++ extractResInfos r
@@ -247,9 +221,9 @@ endpointToOpenApi (req :-> IsoCodec resAlt) =
         hParams  = extractHeaderParams (isoCodec (headers_ req))
         resInfos = walkResAltCodec resAlt
         reqBody  = if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
-                   then extractReqBodySchema (isoCodec (body_ req))
+                   then extractBodySchema (isoCodec (body_ req))
                    else Nothing
-        allDefs  = extractReqBodyDefs (isoCodec (body_ req))
+        allDefs  = extractBodyDefs (isoCodec (body_ req))
                <> foldMap resBodyDefs resInfos
         op = mempty
             & OA.parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
