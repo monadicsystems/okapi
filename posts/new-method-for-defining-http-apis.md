@@ -272,6 +272,8 @@ The two perspectives of an endpoint are derived from a single source of truth.
 
 ## Terms Over Types
 
-You may have noticed that the examples shown have no type annotations. This is because they aren't necessary at all. GHC can perfectly infer the types of your contracts from the terms used and type applications. If the user wants to know the type of an `okapi` expression, they can use `GHCi` and the `:t <expr>` command.
+You may have noticed that the examples shown have no type annotations. GHC can perfectly infer the types of your contracts from the terms used and type applications. If the user wants to know the type of an `okapi` expression, they can use `GHCi` and the `:t <expr>` command.
 
 ## Conclusion
+
+

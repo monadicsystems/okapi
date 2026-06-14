@@ -15,17 +15,17 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec ((=.), value)
-import Okapi.Mode (Endpoint (..), fn)
-import Okapi.Req qualified as Req
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Status (S200, S404, S500)
-import Okapi.ResAlt (GenericResAlt (..), resCase)
+import Okapi.Mode (Contract (..), fn)
+import Okapi.Request qualified as Req
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Status (S200, S404, S500)
+import Okapi.Response.Alt (GenericResAlt (..), resCase)
 
 getUserReq
-    = Req.get
+    = Req.mGet
     & Req.path do
-        _      <- Req.lit @Text "users"
+        _      <- Req.seg_ @Text "users"
         userId <- Req.seg @Int "userId"
         pure userId
     & Req.query do
@@ -36,7 +36,7 @@ getUserReq
 type OkHeaders = (Text, Text)
 
 okWithHeaders
-    = Res.ok
+    = Res.s200
     & Res.headers do
         ct  <- fst =. Res.header "content-type"
         loc <- snd =. Res.header "location"
@@ -45,10 +45,10 @@ okWithHeaders
 type RetryAfter = Int
 
 notFoundWithRetry
-    = Res.notFound
+    = Res.s404
     & Res.headers (Res.header @RetryAfter "retry-after")
 
-serverErrorPlain = Res.serverError
+serverErrorPlain = Res.s500
 
 data GetUserRes f
     = OkRes       (Res f S200 OkHeaders LBS.ByteString)
@@ -70,22 +70,22 @@ getUserServer = fn \(reqData, _waiReq) -> do
         pure ""
 
 cookieReq
-    = Req.get
+    = Req.mGet
     & Req.headers do
         sess   <- fst =. Req.cookie @Text "session"
         userId <- snd =. Req.cookie @Text "userId"
         pure (sess, userId)
 
 cookieReqOptional
-    = Req.get
+    = Req.mGet
     & Req.headers (Req.cookie' @Text "theme")
 
 cookieRes
-    = Res.ok
+    = Res.s200
     & Res.headers (Res.setCookie @Text "session")
 
 cookieResOptional
-    = Res.ok
+    = Res.s200
     & Res.headers (Res.setCookie' @Text "theme")
 
 main :: IO ()

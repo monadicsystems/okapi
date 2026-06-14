@@ -9,13 +9,13 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.ResAlt where
+module Okapi.Response.Alt where
 
 import Data.Kind (Type)
 import Data.Proxy (Proxy (..))
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:+:) (..))
 import Okapi.Codec (Codec (..), IsoCodec (..), Value)
-import Okapi.Res (Res)
+import Okapi.Response (Res)
 
 
 -- ResAlt GADT

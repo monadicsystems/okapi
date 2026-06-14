@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.Res where
+module Okapi.Response where
 
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
@@ -11,12 +11,12 @@ import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Data (FromCookieData, FromHeaderData, ToCookieData, ToHeaderData)
-import Okapi.Res.Body (Body, NoContent (..))
-import Okapi.Res.Body qualified as Body
-import Okapi.Res.Headers (Headers)
-import Okapi.Res.Headers qualified as ResHeaders
-import Okapi.Res.Status (Status, S200, S201, S204, S404, S500)
-import Okapi.Res.Status qualified as Status
+import Okapi.Response.Body (Body, NoContent (..))
+import Okapi.Response.Body qualified as Body
+import Okapi.Response.Headers (Headers)
+import Okapi.Response.Headers qualified as ResHeaders
+import Okapi.Response.Status (Status, S200, S201, S204, S404, S500)
+import Okapi.Response.Status qualified as Status
 
 data Res (f :: (Type -> Type) -> Type -> Type) s h b = Res
   { status_  :: f Status s
@@ -31,36 +31,36 @@ value s h b = Res
     , body_    = Value b
     }
 
-ok :: Res IsoCodec S200 HTTP.ResponseHeaders LBS.ByteString
-ok = Res
+s200 :: Res IsoCodec S200 HTTP.ResponseHeaders LBS.ByteString
+s200 = Res
     { status_  = IsoCodec (Status.known Status.S200)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw
     }
 
-created :: Res IsoCodec S201 HTTP.ResponseHeaders LBS.ByteString
-created = Res
+s201 :: Res IsoCodec S201 HTTP.ResponseHeaders LBS.ByteString
+s201 = Res
     { status_  = IsoCodec (Status.known Status.S201)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw
     }
 
-noContent :: Res IsoCodec S204 HTTP.ResponseHeaders NoContent
-noContent = Res
+s204 :: Res IsoCodec S204 HTTP.ResponseHeaders NoContent
+s204 = Res
     { status_  = IsoCodec (Status.known Status.S204)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.noContent
     }
 
-notFound :: Res IsoCodec S404 HTTP.ResponseHeaders LBS.ByteString
-notFound = Res
+s404 :: Res IsoCodec S404 HTTP.ResponseHeaders LBS.ByteString
+s404 = Res
     { status_  = IsoCodec (Status.known Status.S404)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw
     }
 
-serverError :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
-serverError = Res
+s500 :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
+s500 = Res
     { status_  = IsoCodec (Status.known Status.S500)
     , headers_ = IsoCodec ResHeaders.raw
     , body_    = IsoCodec Body.raw

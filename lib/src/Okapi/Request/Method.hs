@@ -4,7 +4,7 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Req.Method (
+module Okapi.Request.Method (
     KnownMethod (..),
     Method,
     ParseError (..),

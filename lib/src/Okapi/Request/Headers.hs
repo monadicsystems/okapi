@@ -3,7 +3,7 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Req.Headers (
+module Okapi.Request.Headers (
     Headers (..),
     ParseError (..),
     parse,
@@ -85,7 +85,7 @@ parse = Codec.parser headersAlg
     headersAlg (Lit k v) hs =
         case lookup k hs of
             Just v' | v' == v -> (Right (), filter (\(k', _) -> k' /= k) hs)
-            _                  -> (Left ParseError, hs)
+            _                 -> (Left ParseError, hs)
 
 print :: Codec Headers i o -> i -> HTTP.RequestHeaders
 print = Codec.printer headersPrinter

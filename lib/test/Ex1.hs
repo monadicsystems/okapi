@@ -22,15 +22,15 @@ import GHC.Generics (Generic)
 import Network.HTTP.Client qualified as HC
 import Network.Wai.Handler.Warp qualified as Warp
 import Okapi.Client (call)
-import Okapi.Codec ((=.), Value (..))
-import Okapi.Mode (Endpoint (..), fn, serve)
+import Okapi.Codec (Value (..))
+import Okapi.Mode (Contract (..), fn, serve)
 import Okapi.OpenApi (endpointToOpenApi)
-import Okapi.Req qualified as Req
-import Okapi.Req.Method qualified as Method
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Status (KnownStatus (..), S200, S404)
-import Okapi.ResAlt (GenericResAlt (..), resCase)
+import Okapi.Request qualified as Req
+import Okapi.Request.Method qualified as Method
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Status (KnownStatus (..), S200, S404)
+import Okapi.Response.Alt (GenericResAlt (..), resCase)
 import System.Exit (exitFailure)
 
 data Address = Address
@@ -55,14 +55,14 @@ data UserResBody = UserResBody
     } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
 data UserRes f
-    = FoundUser (Res f S200 (Text, Text) UserResBody)
+    = FoundUser (Res f S200 Text UserResBody)
     | NoUser (Res f S404 Text LBS.ByteString)
     deriving (Generic, GenericResAlt)
 
 userRequest
-    = Req.post
+    = Req.mPost
     & Req.path do
-        Req.lit @Text "users"
+        Req.seg_ @Text "users"
         uid <- Req.seg @Text "id"
         pure uid
     & Req.query do
@@ -71,18 +71,13 @@ userRequest
         Req.cookie @Text "session"
     & Req.json @UserReqBody
 
-foundUserHeaders = do
-    ct  <- fst =. Res.header @Text "content-type"
-    loc <- snd =. Res.header @Text "location"
-    pure (ct, loc)
-
 foundUser
-    = Res.ok
-    & Res.headers foundUserHeaders
+    = Res.s200
+    & Res.headers (Res.header @Text "location")
     & Res.json @UserResBody
 
 noUser
-    = Res.notFound
+    = Res.s404
     & Res.headers do
         Res.header @Text "x-error"
 
@@ -104,7 +99,7 @@ userHandler = fn \(req, _) -> do
                 age    = reqBody.age
                 active = True
             in 
-                FoundUser $ Res.value S200 ("application/json", "/users/alice") (pure UserResBody{..})
+                FoundUser $ Res.value S200 "/users/alice" (pure UserResBody{..})
         else NoUser $ Res.value S404 "user not found" (pure "")
 
 userApp = serve id userEndpoint userHandler
@@ -138,7 +133,7 @@ main = do
             Right (FoundUser r) -> do
                 resBody <- r.body_.value
                 check "FoundUser: status"  (r.status_.value  == S200)
-                check "FoundUser: headers" (r.headers_.value == ("application/json", "/users/alice"))
+                check "FoundUser: headers" (r.headers_.value == "/users/alice")
                 check "FoundUser: userId"  (resBody.userId   == "alice")
                 check "FoundUser: name"    (resBody.name     == "Alice")
                 check "FoundUser: email"   (resBody.email    == "alice@example.com")

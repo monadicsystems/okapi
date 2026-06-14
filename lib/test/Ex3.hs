@@ -27,15 +27,15 @@ import Network.Wai.Handler.Warp qualified as Warp
 import Okapi.Client (ClientSettings (..))
 import Okapi.Codec (Value (..))
 import Okapi.Group (app, client)
-import Okapi.Mode (Client (..), Endpoint (..), Server (..), Signature, fn)
-import Okapi.Req qualified as Req
-import Okapi.Req.Method (DELETE, GET, POST)
-import Okapi.Req.Method qualified as Method
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Body (NoContent (..))
-import Okapi.Res.Status (KnownStatus (..), S200, S201, S204, S404)
-import Okapi.ResAlt (GenericResAlt (..), Only (..), only, resCase)
+import Okapi.Mode (Client (..), Contract (..), Server (..), Signature, fn)
+import Okapi.Request qualified as Req
+import Okapi.Request.Method (DELETE, GET, POST)
+import Okapi.Request.Method qualified as Method
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Body (NoContent (..))
+import Okapi.Response.Status (KnownStatus (..), S200, S201, S204, S404)
+import Okapi.Response.Alt (GenericResAlt (..), Only (..), only, resCase)
 import System.Exit (exitFailure)
 
 -- ── Domain types ─────────────────────────────────────────────────────────────
@@ -97,41 +97,41 @@ data DeleteItemRes f
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
 createItemReq =
-    Req.post
+    Req.mPost
         & Req.path do
-            Req.lit @Text "items"
+            Req.seg_ @Text "items"
         & Req.json @NewItem
 
 createItemEndpoint =
     createItemReq
         :-> only
-            (Res.created & Res.json @Item)
+            (Res.s201 & Res.json @Item)
 
 getItemReq =
-    Req.get
+    Req.mGet
         & Req.path do
-            Req.lit @Text "items"
+            Req.seg_ @Text "items"
             iid <- Req.seg @Int64 "id"
             pure iid
 
 getItemEndpoint =
     getItemReq
         :-> resCase @GetItemRes
-            (Res.ok & Res.json @Item)
-            Res.notFound
+            (Res.s200 & Res.json @Item)
+            Res.s404
 
 deleteItemReq =
-    Req.delete
+    Req.mDelete
         & Req.path do
-            Req.lit @Text "items"
+            Req.seg_ @Text "items"
             iid <- Req.seg @Int64 "id"
             pure iid
 
 deleteItemEndpoint =
     deleteItemReq
         :-> resCase @DeleteItemRes
-            Res.noContent
-            Res.notFound
+            Res.s204
+            Res.s404
 
 -- ── HKD API record ───────────────────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ data ItemsApi f = ItemsApi
 
 -- ── Endpoints record ─────────────────────────────────────────────────────────
 
-itemsEndpoints :: ItemsApi Endpoint
+itemsEndpoints :: ItemsApi Contract
 itemsEndpoints =
     ItemsApi
         { createItem = createItemEndpoint

@@ -21,17 +21,17 @@ import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Internal qualified as WaiI
 import Okapi.Client (call)
 import Okapi.Codec ((=.), IsoCodec (..), Value (..), value)
-import Okapi.Mode (Endpoint (..), fn, serve, parseRequest, parseResponse, printRequest, printResponse)
-import Okapi.Req qualified as Req
-import Okapi.Req.Headers qualified as ReqH
-import Okapi.Req.Method qualified as Method
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query qualified as Query
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Status (KnownStatus (..), S200, S404, S500)
-import Okapi.Res.Status qualified as Status
-import Okapi.ResAlt (GenericResAlt (..), resCase)
+import Okapi.Mode (Contract (..), fn, serve, parseRequest, parseResponse, printRequest, printResponse)
+import Okapi.Request qualified as Req
+import Okapi.Request.Headers qualified as ReqH
+import Okapi.Request.Method qualified as Method
+import Okapi.Request.Path qualified as Path
+import Okapi.Request.Query qualified as Query
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Status (KnownStatus (..), S200, S404, S500)
+import Okapi.Response.Status qualified as Status
+import Okapi.Response.Alt (GenericResAlt (..), resCase)
 import System.Exit (exitFailure)
 
 assertEq :: (Show a, Eq a) => String -> a -> a -> IO ()
@@ -71,8 +71,8 @@ test_methodRoundTrip = do
 
 test_pathRoundTrip :: IO ()
 test_pathRoundTrip = do
-    let req = Req.get & Req.path do
-            _ <- Req.lit @Text "users"
+    let req = Req.mGet & Req.path do
+            _ <- Req.seg_ @Text "users"
             userId <- Req.seg @Text "userId"
             pure userId
     let pathCodec = isoCodec req.path_
@@ -166,20 +166,20 @@ data GetUserRes f
     deriving (Generic, GenericResAlt)
 
 endpoint =
-    ( Req.get
+    ( Req.mGet
       & Req.path do
-          _ <- Req.lit @Text "users"
+          _ <- Req.seg_ @Text "users"
           uid <- Req.seg @Text "uid"
           pure uid
       & Req.query (Req.param' @Text "filter")
     ) :->
     resCase @GetUserRes
-        (Res.ok & Res.headers do
+        (Res.s200 & Res.headers do
             ct  <- fst =. Res.header @Text "content-type"
             loc <- snd =. Res.header @Text "location"
             pure (ct, loc))
-        (Res.notFound & Res.headers (Res.header @Int "retry-after"))
-        Res.serverError
+        (Res.s404 & Res.headers (Res.header @Int "retry-after"))
+        Res.s500
 
 test_reqRoundTrip :: IO ()
 test_reqRoundTrip = do

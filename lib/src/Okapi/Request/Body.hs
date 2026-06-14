@@ -2,16 +2,14 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Res.Body (
+module Okapi.Request.Body (
     Body (..),
-    NoContent (..),
     IsoJson,
     ParseError (..),
     parse,
     printM,
     raw,
     json,
-    noContent,
 ) where
 
 import Data.Aeson qualified as Aeson
@@ -23,13 +21,10 @@ import Okapi.Codec qualified as Codec
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 
-data NoContent = NoContent deriving (Eq, Show)
-
 type Body :: Type -> Type
 data Body a where
-    Raw   :: Body (IO LBS.ByteString)
-    Json  :: IsoJson a => Body (IO a)
-    Empty :: Body (IO NoContent)
+    Raw  :: Body (IO LBS.ByteString)
+    Json :: IsoJson a => Body (IO a)
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -40,29 +35,24 @@ parse :: Codec Body i o -> LBS.ByteString -> (Either ParseError o, LBS.ByteStrin
 parse = Codec.parser bodyAlg
   where
     bodyAlg :: forall a. Body a -> LBS.ByteString -> (Either ParseError a, LBS.ByteString)
-    bodyAlg Raw   bs = (Right (pure bs), LBS.empty)
-    bodyAlg Json  bs = case Aeson.eitherDecode bs of
+    bodyAlg Raw  bs = (Right (pure bs), LBS.empty)
+    bodyAlg Json bs = case Aeson.eitherDecode bs of
         Left _  -> (Left ParseError, bs)
         Right x -> (Right (pure x), LBS.empty)
-    bodyAlg Empty _  = (Right (pure NoContent), LBS.empty)
 
 printM :: Codec Body i o -> i -> IO LBS.ByteString
 printM = go
   where
     go :: forall i' o'. Codec Body i' o' -> i' -> IO LBS.ByteString
-    go (Pure _)       _ = pure mempty
-    go (FMap _ c)     i = go c i
-    go (LMap f c)     i = go c (f i)
-    go (Apply cf cx)  i = liftA2 (<>) (go cf i) (go cx i)
-    go (Embed Raw)    ioLbs = ioLbs
-    go (Embed Json)   ioA   = Aeson.encode <$> ioA
-    go (Embed Empty)  _     = pure mempty
+    go (Pure _)      _ = pure mempty
+    go (FMap _ c)    i = go c i
+    go (LMap f c)    i = go c (f i)
+    go (Apply cf cx) i = liftA2 (<>) (go cf i) (go cx i)
+    go (Embed Raw)   ioLbs = ioLbs
+    go (Embed Json)  ioA   = Aeson.encode <$> ioA
 
 raw :: Codec Body (IO LBS.ByteString) (IO LBS.ByteString)
 raw = Embed Raw
 
 json :: IsoJson a => Codec Body (IO a) (IO a)
 json = Embed Json
-
-noContent :: Codec Body (IO NoContent) (IO NoContent)
-noContent = Embed Empty

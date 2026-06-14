@@ -3,7 +3,7 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Res.Headers (
+module Okapi.Response.Headers (
     Headers (..),
     ParseError (..),
     parse,

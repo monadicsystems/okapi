@@ -20,22 +20,22 @@ import Data.Text (Text)
 import Data.Text qualified as T
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), IsoCodec (..))
-import Okapi.Mode (Endpoint (..), Signature)
-import Okapi.Req (body_, headers_, method_, path_, query_)
-import Okapi.Req.Body qualified as ReqBody
-import Okapi.Req.Headers (Headers)
-import Okapi.Req.Headers qualified as ReqH
-import Okapi.Req.Method qualified as Method
-import Okapi.Req.Path (Path)
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query (Query)
-import Okapi.Req.Query qualified as Query
-import Okapi.Res (status_)
-import Okapi.Res qualified as ORes
-import Okapi.Res.Body qualified as ResBody
-import Okapi.Res.Headers qualified as ResH
-import Okapi.Res.Status qualified as Status
-import Okapi.ResAlt (ResAlt (..))
+import Okapi.Mode (Contract (..), Signature)
+import Okapi.Request (body_, headers_, method_, path_, query_)
+import Okapi.Request.Body qualified as ReqBody
+import Okapi.Request.Headers (Headers)
+import Okapi.Request.Headers qualified as ReqH
+import Okapi.Request.Method qualified as Method
+import Okapi.Request.Path (Path)
+import Okapi.Request.Path qualified as Path
+import Okapi.Request.Query (Query)
+import Okapi.Request.Query qualified as Query
+import Okapi.Response (status_)
+import Okapi.Response qualified as ORes
+import Okapi.Response.Body qualified as ResBody
+import Okapi.Response.Headers qualified as ResH
+import Okapi.Response.Status qualified as Status
+import Okapi.Response.Alt (ResAlt (..))
 import Okapi.Data (ToPathData (..))
 
 data PathPiece = PLit Text | PParam Text OA.Schema
@@ -238,7 +238,7 @@ setMethod HTTP.PUT    op pi_ = pi_ { _pathItemPut    = Just op }
 setMethod HTTP.DELETE op pi_ = pi_ { _pathItemDelete = Just op }
 setMethod _           op pi_ = pi_ { _pathItemGet    = Just op }
 
-endpointToOpenApi :: Endpoint (Signature m p q h b r) -> OpenApi
+endpointToOpenApi :: Contract (Signature m p q h b r) -> OpenApi
 endpointToOpenApi (req :-> IsoCodec resAlt) =
     let
         stdMeth  = fromMaybe HTTP.GET (Method.extractMethod (isoCodec (method_ req)))

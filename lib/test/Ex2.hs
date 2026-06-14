@@ -19,14 +19,14 @@ import Network.Wai.Handler.Warp qualified as Warp
 import Okapi.Client (ClientSettings (..))
 import Okapi.Codec (Value (..))
 import Okapi.Group (app, client, openApi)
-import Okapi.Mode (Client (..), Endpoint (..), Server (..), Signature, fn)
-import Okapi.Req qualified as Req
-import Okapi.Req.Method (GET)
-import Okapi.Req.Method qualified as Method
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Status (KnownStatus (..), S200, S404)
-import Okapi.ResAlt (GenericResAlt (..), Only (..), only, resCase)
+import Okapi.Mode (Client (..), Contract (..), Server (..), Signature, fn)
+import Okapi.Request qualified as Req
+import Okapi.Request.Method (GET)
+import Okapi.Request.Method qualified as Method
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Status (KnownStatus (..), S200, S404)
+import Okapi.Response.Alt (GenericResAlt (..), Only (..), only, resCase)
 import System.Exit (exitFailure)
 
 -- ── Response types ───────────────────────────────────────────────────────────
@@ -39,23 +39,23 @@ data UserRes f
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
 getUserReq
-    = Req.get
+    = Req.mGet
     & Req.path do
-        Req.lit @Text "users"
+        Req.seg_ @Text "users"
         uid <- Req.seg @Text "id"
         pure uid
 
 getUserEndpoint
     = getUserReq :-> resCase @UserRes
-        (Res.ok    & Res.headers (Res.header @Text "x-user-id"))
-        (Res.notFound & Res.headers (Res.header @Text "x-error"))
+        (Res.s200    & Res.headers (Res.header @Text "x-user-id"))
+        (Res.s404 & Res.headers (Res.header @Text "x-error"))
 
 healthReq
-    = Req.get
+    = Req.mGet
     & Req.path do
-        Req.lit @Text "health"
+        Req.seg_ @Text "health"
 
-healthEndpoint = healthReq :-> only Res.ok
+healthEndpoint = healthReq :-> only Res.s200
 
 -- ── HKD record ───────────────────────────────────────────────────────────────
 
@@ -80,9 +80,9 @@ data MyApi f = MyApi
     , healthEp :: f SigHealth
     } deriving (Generic)
 
--- ── Endpoint values ──────────────────────────────────────────────────────────
+-- ── Contract values ──────────────────────────────────────────────────────────
 
-myEndpoints :: MyApi Endpoint
+myEndpoints :: MyApi Contract
 myEndpoints = MyApi
     { userEp   = getUserEndpoint
     , healthEp = healthEndpoint

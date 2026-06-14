@@ -18,13 +18,13 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec ((=.))
-import Okapi.Mode (Endpoint (..))
+import Okapi.Mode (Contract (..))
 import Okapi.OpenApi (endpointToOpenApi)
-import Okapi.Req qualified as Req
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Status (S200, S404, S500)
-import Okapi.ResAlt (GenericResAlt (..), only)
+import Okapi.Request qualified as Req
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Status (S200, S404, S500)
+import Okapi.Response.Alt (GenericResAlt (..), only)
 
 type OkHeaders = (Text, Text)
 type RetryAfter = Int
@@ -36,20 +36,20 @@ data GetUserRes f
     deriving (Generic, GenericResAlt)
 
 okRes
-    = Res.ok
+    = Res.s200
     & Res.headers do
         ct  <- fst =. Res.header "content-type"
         loc <- snd =. Res.header "location"
         pure (ct, loc)
 
-notFoundRes = Res.notFound & Res.headers (Res.header @RetryAfter "retry-after")
+notFoundRes = Res.s404 & Res.headers (Res.header @RetryAfter "retry-after")
 
-errRes = Res.serverError
+errRes = Res.s500
 
 getUserReq
-    = Req.get
+    = Req.mGet
     & Req.path do
-        _ <- Req.lit @Text "users"
+        _ <- Req.seg_ @Text "users"
         userId <- Req.seg @Text "userId"
         pure userId
     & Req.query (Req.param' @Text "filter")
@@ -64,11 +64,11 @@ data CreateUserBody = CreateUserBody
     , email    :: Text
     } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-createUserReq = Req.post
-    & Req.path (Req.lit @Text "users")
+createUserReq = Req.mPost
+    & Req.path (Req.seg_ @Text "users")
     & Req.json @CreateUserBody
 
-createUserEndpoint = createUserReq :-> only (Res.ok & Res.json @CreateUserBody)
+createUserEndpoint = createUserReq :-> only (Res.s200 & Res.json @CreateUserBody)
 
 main :: IO ()
 main = do

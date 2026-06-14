@@ -21,7 +21,7 @@ import GHC.Generics
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Client (ClientSettings (..), call)
-import Okapi.Mode (Client (..), Endpoint, Server (..), Signature, tryServe, type (~>))
+import Okapi.Mode (Client (..), Contract, Server (..), Signature, tryServe, type (~>))
 import Okapi.OpenApi (endpointToOpenApi)
 
 
@@ -43,7 +43,7 @@ instance (GServable n epL svL, GServable n epR svR)
         . gServe @n @epR @svR runner epR svR
 
 instance GServable n
-    (S1 sm  (Rec0 (Endpoint (Signature m p q h b r))))
+    (S1 sm  (Rec0 (Contract (Signature m p q h b r))))
     (S1 sm' (Rec0 (Server n (Signature m p q h b r)))) where
     gServe runner (M1 (K1 ep)) (M1 (K1 sv)) = tryServe runner ep sv
 
@@ -52,16 +52,16 @@ instance GServable n
 
 app ::
     forall server n.
-    ( Generic (server Endpoint)
+    ( Generic (server Contract)
     , Generic (server (Server n))
-    , GServable n (Rep (server Endpoint)) (Rep (server (Server n)))
+    , GServable n (Rep (server Contract)) (Rep (server (Server n)))
     ) =>
-    server Endpoint ->
+    server Contract ->
     (n ~> IO) ->
     server (Server n) ->
     Wai.Application
 app endpoints runner handlers =
-    gServe @n @(Rep (server Endpoint)) @(Rep (server (Server n)))
+    gServe @n @(Rep (server Contract)) @(Rep (server (Server n)))
         runner
         (from endpoints)
         (from handlers)
@@ -85,7 +85,7 @@ instance (GClientable epL clL, GClientable epR clR)
         gClient @epL @clL s epL :*: gClient @epR @clR s epR
 
 instance GClientable
-    (S1 sm  (Rec0 (Endpoint (Signature m p q h b r))))
+    (S1 sm  (Rec0 (Contract (Signature m p q h b r))))
     (S1 sm' (Rec0 (Client (Signature m p q h b r)))) where
     gClient (ClientSettings mgr url) (M1 (K1 ep)) =
         M1 (K1 (Cb \reqVal -> call mgr url ep reqVal))
@@ -95,15 +95,15 @@ instance GClientable
 
 client ::
     forall server.
-    ( Generic (server Endpoint)
+    ( Generic (server Contract)
     , Generic (server Client)
-    , GClientable (Rep (server Endpoint)) (Rep (server Client))
+    , GClientable (Rep (server Contract)) (Rep (server Client))
     ) =>
-    server Endpoint ->
+    server Contract ->
     ClientSettings ->
     server Client
 client endpoints settings =
-    to (gClient @(Rep (server Endpoint)) @(Rep (server Client)) settings (from endpoints))
+    to (gClient @(Rep (server Contract)) @(Rep (server Client)) settings (from endpoints))
 
 
 -- ── GOpenApiable ─────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ instance GOpenApiable epF => GOpenApiable (C1 cm epF) where
 instance (GOpenApiable epL, GOpenApiable epR) => GOpenApiable (epL :*: epR) where
     gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
 
-instance GOpenApiable (S1 sm (Rec0 (Endpoint (Signature m p q h b r)))) where
+instance GOpenApiable (S1 sm (Rec0 (Contract (Signature m p q h b r)))) where
     gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
 
 
@@ -128,9 +128,9 @@ instance GOpenApiable (S1 sm (Rec0 (Endpoint (Signature m p q h b r)))) where
 
 openApi ::
     forall server.
-    ( Generic (server Endpoint)
-    , GOpenApiable (Rep (server Endpoint))
+    ( Generic (server Contract)
+    , GOpenApiable (Rep (server Contract))
     ) =>
-    server Endpoint ->
+    server Contract ->
     OpenApi
-openApi = gOpenApi @(Rep (server Endpoint)) . from
+openApi = gOpenApi @(Rep (server Contract)) . from

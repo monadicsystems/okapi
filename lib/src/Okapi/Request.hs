@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.Req where
+module Okapi.Request where
 
 import Data.Aeson qualified as Aeson
 import Data.ByteString (ByteString)
@@ -14,16 +14,16 @@ import Data.Typeable (Typeable)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec, IsoCodec (..), Value (..))
 import Okapi.Data (FromCookieData, FromHeaderData, FromPathData, FromQueryData, ToCookieData, ToHeaderData, ToPathData, ToQueryData)
-import Okapi.Req.Body (Body)
-import Okapi.Req.Body qualified as Body
-import Okapi.Req.Headers (Headers)
-import Okapi.Req.Headers qualified as Headers
-import Okapi.Req.Method (KnownMethod (..), Method, known, GET, POST, DELETE)
-import Okapi.Req.Method qualified as Method
-import Okapi.Req.Path (Path)
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query (Query)
-import Okapi.Req.Query qualified as Query
+import Okapi.Request.Body (Body)
+import Okapi.Request.Body qualified as Body
+import Okapi.Request.Headers (Headers)
+import Okapi.Request.Headers qualified as Headers
+import Okapi.Request.Method (KnownMethod (..), Method, known, GET, POST, DELETE)
+import Okapi.Request.Method qualified as Method
+import Okapi.Request.Path (Path)
+import Okapi.Request.Path qualified as Path
+import Okapi.Request.Query (Query)
+import Okapi.Request.Query qualified as Query
 
 data Req (f :: (Type -> Type) -> Type -> Type) m p q h b = Req
   { method_ :: f Method m
@@ -58,7 +58,7 @@ req = Req
     , body_    = IsoCodec Body.raw
     }
 
-get ::
+mGet ::
   Req
     IsoCodec
     GET
@@ -66,9 +66,9 @@ get ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-get = req & method GET
+mGet = req & method GET
 
-post ::
+mPost ::
   Req
     IsoCodec
     POST
@@ -76,9 +76,9 @@ post ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-post = req & method POST
+mPost = req & method POST
 
-delete ::
+mDelete ::
   Req
     IsoCodec
     DELETE
@@ -86,7 +86,7 @@ delete ::
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-delete = req & method DELETE
+mDelete = req & method DELETE
 
 method ::
   KnownMethod m ->
@@ -141,8 +141,8 @@ json r =
          , headers_ = IsoCodec (Headers.withHeader "content-type" "application/json" hCodec)
          }
 
-lit :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
-lit x = Path.lit x
+seg_ :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
+seg_ x = Path.seg_ x
 
 seg :: (Typeable a, ToPathData a, FromPathData a) => Text.Text -> Codec Path a a
 seg n = Path.seg n

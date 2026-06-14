@@ -10,8 +10,8 @@ import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Codec (Value (..))
-import Okapi.Mode (Endpoint, ParseError, Signature, parseResponse, printRequest)
-import Okapi.Req (Req)
+import Okapi.Mode (Contract, ParseError, Signature, parseResponse, printRequest)
+import Okapi.Request (Req)
 
 data ClientSettings = ClientSettings
     { manager :: HC.Manager
@@ -21,7 +21,7 @@ data ClientSettings = ClientSettings
 call ::
     HC.Manager ->
     String ->
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     Req Value m p q h b ->
     IO (Either ParseError (r Value))
 call mgr baseUrl endpoint reqVal = do

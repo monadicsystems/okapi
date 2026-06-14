@@ -2,7 +2,7 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Req.Query (
+module Okapi.Request.Query (
     Query (..),
     ParseError (..),
     parse,

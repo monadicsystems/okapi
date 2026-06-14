@@ -35,17 +35,17 @@ library
         Okapi.Mode
         Okapi.OpenApi
         Okapi.Pattern
-        Okapi.Req
-        Okapi.Req.Body
-        Okapi.Req.Headers
-        Okapi.Req.Method
-        Okapi.Req.Path
-        Okapi.Req.Query
-        Okapi.Res
-        Okapi.Res.Body
-        Okapi.Res.Headers
-        Okapi.Res.Status
-        Okapi.ResAlt
+        Okapi.Request
+        Okapi.Request.Body
+        Okapi.Request.Headers
+        Okapi.Request.Method
+        Okapi.Request.Path
+        Okapi.Request.Query
+        Okapi.Response
+        Okapi.Response.Alt
+        Okapi.Response.Body
+        Okapi.Response.Headers
+        Okapi.Response.Status
     build-depends:
         base ^>=4.20.0.0,
         aeson,

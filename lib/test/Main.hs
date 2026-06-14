@@ -12,14 +12,14 @@ import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (IsoCodec (..), Value, (=.))
-import Okapi.Mode (Endpoint (..), Server, Signature, fn)
-import Okapi.Req (Req)
-import Okapi.Req qualified as Req
-import Okapi.Req.Method (GET)
-import Okapi.Res (Res)
-import Okapi.Res qualified as Res
-import Okapi.Res.Status (S200, S404, S500)
-import Okapi.ResAlt (GenericResAlt (..), ResAlt, resCase)
+import Okapi.Mode (Contract (..), Server, Signature, fn)
+import Okapi.Request (Req)
+import Okapi.Request qualified as Req
+import Okapi.Request.Method (GET)
+import Okapi.Response (Res)
+import Okapi.Response qualified as Res
+import Okapi.Response.Status (S200, S404, S500)
+import Okapi.Response.Alt (GenericResAlt (..), ResAlt, resCase)
 
 getUserReq
     :: Req
@@ -30,9 +30,9 @@ getUserReq
         HTTP.RequestHeaders
         LBS.ByteString
 getUserReq
-    = Req.get
+    = Req.mGet
     & Req.path do
-        _ <- Req.lit @Text "users"
+        _ <- Req.seg_ @Text "users"
         userId <- Req.seg @Text "userId"
         pure userId
     & Req.query (Req.param' "filter")
@@ -42,7 +42,7 @@ type OkHeaders = (Text, Text)
 okWithHeaders
     :: Res IsoCodec S200 OkHeaders LBS.ByteString
 okWithHeaders
-    = Res.ok
+    = Res.s200
     & Res.headers do
         ct  <- fst =. Res.header "content-type"
         loc <- snd =. Res.header "location"
@@ -53,12 +53,12 @@ type RetryAfter = Int
 notFoundWithRetry
     :: Res IsoCodec S404 RetryAfter LBS.ByteString
 notFoundWithRetry
-    = Res.notFound
+    = Res.s404
     & Res.headers (Res.header "retry-after")
 
 serverErrorPlain
     :: Res IsoCodec S500 HTTP.ResponseHeaders LBS.ByteString
-serverErrorPlain = Res.serverError
+serverErrorPlain = Res.s500
 
 data GetUserRes f
     = OkRes       (Res f S200 OkHeaders LBS.ByteString)
@@ -76,7 +76,7 @@ getUserResCodec =
         serverErrorPlain
 
 getUserEndpoint
-    :: Endpoint
+    :: Contract
         ( Signature
             GET
             Text

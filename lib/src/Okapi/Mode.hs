@@ -17,7 +17,7 @@
 
 module Okapi.Mode (
     Signature,
-    Endpoint (..),
+    Contract (..),
     Client (..),
     Server (..),
     fn,
@@ -40,18 +40,18 @@ import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
 import Okapi.Codec (Codec (..), IsoCodec (..), Value (..))
-import Okapi.Req (Req)
-import Okapi.Req qualified as OkReq
-import Okapi.Req.Body qualified as ReqBody
-import Okapi.Req.Headers qualified as ReqHeaders
-import Okapi.Req.Method qualified as Method
-import Okapi.Req.Path qualified as Path
-import Okapi.Req.Query qualified as Query
-import Okapi.Res qualified as OkRes
-import Okapi.Res.Body qualified as ResBody
-import Okapi.Res.Headers qualified as ResHeaders
-import Okapi.Res.Status qualified as Status
-import Okapi.ResAlt (ResAlt (..))
+import Okapi.Request (Req)
+import Okapi.Request qualified as OkReq
+import Okapi.Request.Body qualified as ReqBody
+import Okapi.Request.Headers qualified as ReqHeaders
+import Okapi.Request.Method qualified as Method
+import Okapi.Request.Path qualified as Path
+import Okapi.Request.Query qualified as Query
+import Okapi.Response qualified as OkRes
+import Okapi.Response.Body qualified as ResBody
+import Okapi.Response.Headers qualified as ResHeaders
+import Okapi.Response.Status qualified as Status
+import Okapi.Response.Alt (ResAlt (..))
 
 data
     Signature
@@ -62,11 +62,11 @@ data
         (b :: Type)
         (r :: ((Type -> Type) -> Type -> Type) -> Type)
 
-data Endpoint sig where
+data Contract sig where
     (:->) ::
         Req IsoCodec m p q h b ->
         IsoCodec ResAlt (r Value) ->
-        Endpoint (Signature m p q h b r)
+        Contract (Signature m p q h b r)
 
 data Client sig where
     Cb ::
@@ -88,7 +88,7 @@ type f ~> g = forall a. f a -> g a
 
 serve ::
     (n ~> IO) ->
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     Server n (Signature m p q h b r) ->
     Wai.Application
 serve runner endpoint (Fn handler) waiReq respond =
@@ -101,7 +101,7 @@ serve runner endpoint (Fn handler) waiReq respond =
 
 tryServe ::
     (n ~> IO) ->
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     Server n (Signature m p q h b r) ->
     Wai.Middleware
 tryServe runner endpoint (Fn handler) next waiReq respond =
@@ -122,7 +122,7 @@ data ParseError
     deriving (Eq, Show)
 
 parseRequest ::
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     Wai.Request ->
     Either ParseError (Req Value m p q h b)
 parseRequest (req :-> _) waiReq =
@@ -157,7 +157,7 @@ makeReqBodyIO c waiReq =
             (Right b, _) -> b
 
 printRequest ::
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     Req Value m p q h b ->
     IO Wai.Request
 printRequest (req :-> _) rv = do
@@ -177,7 +177,7 @@ printRequest (req :-> _) rv = do
     pure (Wai.setRequestBodyChunks streamBody baseReq)
 
 parseResponse ::
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     Wai.Response ->
     Either ParseError (r Value)
 parseResponse (_ :-> IsoCodec resCodec) waiRes =
@@ -191,7 +191,7 @@ extractWaiResBody (WaiI.ResponseBuilder _ _ b) = Builder.toLazyByteString b
 extractWaiResBody _                            = LBS.empty
 
 printResponse ::
-    Endpoint (Signature m p q h b r) ->
+    Contract (Signature m p q h b r) ->
     r Value ->
     IO Wai.Response
 printResponse (_ :-> IsoCodec resCodec) rv = do

@@ -2,10 +2,10 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Req.Path (
+module Okapi.Request.Path (
     Path (..),
     ParseError (..),
-    lit,
+    seg_,
     seg,
     segs,
     raw,
@@ -69,8 +69,8 @@ print = Codec.printer pathPrinter
     pathPrinter Segs        nel = map toUrlPiece (NEL.toList nel)
     pathPrinter Raw         ts  = ts
 
-lit :: IsoPathData a => a -> Codec Path b ()
-lit x = Codec.LMap (const ()) (Embed (Lit x))
+seg_ :: IsoPathData a => a -> Codec Path b ()
+seg_ x = Codec.LMap (const ()) (Embed (Lit x))
 
 seg :: IsoPathData a => Text -> Codec Path a a
 seg name = Embed (Seg name)
