@@ -147,35 +147,35 @@ renderSC name x =
     in ("set-cookie", LBS.toStrict (Builder.toLazyByteString (Cookie.renderSetCookie sc)))
 
 raw :: Codec (Headers ctx) HTTP.RequestHeaders HTTP.RequestHeaders
-raw = Embed Raw
+raw = Lift Raw
 
 -- | Required request or response header by name; parsing fails if absent.
 header :: IsoHeaderData a => HTTP.HeaderName -> Codec (Headers ctx) a a
-header key = Embed (Header key)
+header key = Lift (Header key)
 
 -- | Optional header by name; yields 'Nothing' when the header is absent.
 header' :: IsoHeaderData a => HTTP.HeaderName -> Codec (Headers ctx) (Maybe a) (Maybe a)
-header' key = Embed (Header' key)
+header' key = Lift (Header' key)
 
 -- | Assert a fixed header key/value pair; invisible to the surrounding codec's decoded type.
 header_ :: HTTP.HeaderName -> ByteString -> Codec (Headers ctx) h h -> Codec (Headers ctx) h h
-header_ k v c = Apply (LMap (const ()) (FMap (const id) (Embed (Header_ k v)))) c
+header_ k v c = Apply (LMap (const ()) (FMap (const id) (Lift (Header_ k v)))) c
 
 -- | Required request cookie by name; parsing fails if the cookie is absent.
 cookie :: IsoCookieData a => ByteString -> Codec (Headers ForRequest) a a
-cookie name = Embed (Cookie name)
+cookie name = Lift (Cookie name)
 
 -- | Optional request cookie; yields 'Nothing' when the cookie is absent.
 cookie' :: IsoCookieData a => ByteString -> Codec (Headers ForRequest) (Maybe a) (Maybe a)
-cookie' name = Embed (Cookie' name)
+cookie' name = Lift (Cookie' name)
 
 -- | Required @Set-Cookie@ response header by name.
 setCookie :: IsoCookieData a => ByteString -> Codec (Headers ForResponse) a a
-setCookie name = Embed (SetCookie name)
+setCookie name = Lift (SetCookie name)
 
 -- | Optional @Set-Cookie@ response header; yields 'Nothing' when absent.
 setCookie' :: IsoCookieData a => ByteString -> Codec (Headers ForResponse) (Maybe a) (Maybe a)
-setCookie' name = Embed (SetCookie' name)
+setCookie' name = Lift (SetCookie' name)
 
 class HasHeaders (contract :: Type -> Type -> Type) where
     type Ctx contract :: Type

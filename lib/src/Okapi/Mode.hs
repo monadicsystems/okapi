@@ -24,10 +24,11 @@ module Okapi.Mode (
     type (~>),
     serve,
     tryServe,
-    ParseError (..),
     parseRequest,
+    parseRequestResult,
     printRequest,
     parseResponse,
+    parseResponseResult,
     printResponse,
 ) where
 
@@ -41,13 +42,14 @@ import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
 import Okapi.Body (Body, ForRequest)
 import Okapi.Body qualified as Body
-import Okapi.Codec (Codec (..), IsoCodec (..), Value (..))
+import Okapi.Codec (Codec (..), IsoCodec (..), ParseError (..), Result (..), Value (..))
 import Okapi.Headers qualified as Headers
 import Okapi.Request (Request)
 import Okapi.Request qualified as OkReq
 import Okapi.Request.Method qualified as Method
 import Okapi.Request.Path qualified as Path
 import Okapi.Request.Query qualified as Query
+import Okapi.Response (Response)
 import Okapi.Response qualified as OkRes
 import Okapi.Response.Status qualified as Status
 import Okapi.Responses (Responses (..))
@@ -71,7 +73,7 @@ data Contract sig where
 
 data Client sig where
     Cb ::
-        (Request Value m p q h b -> IO (Either ParseError (r Value))) ->
+        (Request Value m p q h b -> IO (Maybe (r Value))) ->
         Client (Signature m p q h b r)
 
 data Server n sig where
@@ -116,45 +118,63 @@ tryServe runner endpoint (Fn handler) next waiReq respond =
             waiRes <- printResponse endpoint resVal
             respond waiRes
 
--- | Indicates which part of a request or response failed to parse.
-data ParseError
-    = MethodParseError
-    | PathParseError
-    | QueryParseError
-    | HeadersParseError
-    | StatusParseError
-    | BodyParseError
-    deriving (Eq, Show)
-
+-- | Parse all request fields; @Left@ carries per-field 'ParseError' info, @Right@ carries parsed values.
 parseRequest ::
     Contract (Signature m p q h b r) ->
     Wai.Request ->
-    Either ParseError (Request Value m p q h b)
+    Either (Request ParseError m p q h b) (Request Value m p q h b)
 parseRequest (req :-> _) waiReq =
     let meth   = Wai.requestMethod  waiReq
         path   = Wai.pathInfo       waiReq
         query  = Wai.queryString    waiReq
         hdrs   = Wai.requestHeaders waiReq
         bodyIO = makeReqBodyIO req.body.isoCodec waiReq
-        (mr, _) = Method.parse  req.method.isoCodec  meth
-        (pr, _) = Path.parse    req.path.isoCodec    path
-        (qr, _) = Query.parse   req.query.isoCodec   query
-        (hr, _) = Headers.parse req.headers.isoCodec hdrs
+        (mr, _) = Method.parse   req.method.isoCodec  meth
+        pr       = Path.parseExact req.path.isoCodec    path
+        (qr, _) = Query.parse    req.query.isoCodec   query
+        (hr, _) = Headers.parse  req.headers.isoCodec hdrs
+        errReq = OkReq.Request
+            { method  = ParseError (either Just         (const Nothing) mr)
+            , path    = ParseError (either (Just . fst) (const Nothing) pr)
+            , query   = ParseError (either Just         (const Nothing) qr)
+            , headers = ParseError (either Just         (const Nothing) hr)
+            , body    = ParseError Nothing
+            }
     in case (mr, pr, qr, hr) of
         (Right m, Right p, Right q, Right h) -> Right $ OkReq.request m p q h bodyIO
-        (Left _, _, _, _) -> Left MethodParseError
-        (_, Left _, _, _) -> Left PathParseError
-        (_, _, Left _, _) -> Left QueryParseError
-        _                 -> Left HeadersParseError
+        _                                    -> Left errReq
+
+-- | Parse all request fields; always returns per-field 'Either' via 'Result'.
+parseRequestResult ::
+    Contract (Signature m p q h b r) ->
+    Wai.Request ->
+    Request Result m p q h b
+parseRequestResult (req :-> _) waiReq =
+    let meth   = Wai.requestMethod  waiReq
+        path   = Wai.pathInfo       waiReq
+        query  = Wai.queryString    waiReq
+        hdrs   = Wai.requestHeaders waiReq
+        bodyIO = makeReqBodyIO req.body.isoCodec waiReq
+        (mr, _) = Method.parse   req.method.isoCodec  meth
+        pr       = Path.parseExact req.path.isoCodec    path
+        (qr, _) = Query.parse    req.query.isoCodec   query
+        (hr, _) = Headers.parse  req.headers.isoCodec hdrs
+    in OkReq.Request
+        { method  = Result mr
+        , path    = Result (either (Left . fst) Right pr)
+        , query   = Result qr
+        , headers = Result hr
+        , body    = Result (Right bodyIO)
+        }
 
 makeReqBodyIO :: Codec (Body ForRequest) (IO b) (IO b) -> Wai.Request -> IO b
-makeReqBodyIO (Embed Body.Raw)       waiReq = Wai.strictRequestBody waiReq
-makeReqBodyIO (Embed Body.Json)      waiReq =
+makeReqBodyIO (Lift Body.Raw)       waiReq = Wai.strictRequestBody waiReq
+makeReqBodyIO (Lift Body.Json)      waiReq =
     Wai.strictRequestBody waiReq >>= \bs ->
-        case Body.parse (Embed Body.Json) bs of
+        case Body.parse (Lift Body.Json) bs of
             (Left _,  _) -> fail "JSON body parse error"
             (Right b, _) -> b
-makeReqBodyIO (Embed Body.NoContent) _ = pure ()
+makeReqBodyIO (Lift Body.NoContent) _ = pure ()
 makeReqBodyIO (Pure x) _ = x
 makeReqBodyIO c waiReq =
     Wai.strictRequestBody waiReq >>= \bs ->
@@ -185,12 +205,30 @@ printRequest (req :-> _) rv = do
 parseResponse ::
     Contract (Signature m p q h b r) ->
     Wai.Response ->
-    Either ParseError (r Value)
+    Maybe (r Value)
 parseResponse (_ :-> IsoCodec resCodec) waiRes =
     let status = Wai.responseStatus  waiRes
         hdrs   = Wai.responseHeaders waiRes
         body   = extractWaiResBody   waiRes
     in fst (parseResponseCodec resCodec (status, hdrs, body))
+
+-- | Parse a single response codec into per-field 'Result' values.
+parseResponseResult ::
+    Response IsoCodec s h b ->
+    Wai.Response ->
+    Response Result s h b
+parseResponseResult res waiRes =
+    let status = Wai.responseStatus  waiRes
+        hdrs   = Wai.responseHeaders waiRes
+        body   = extractWaiResBody   waiRes
+        (sr, _) = Status.parse  res.status.isoCodec  status
+        (hr, _) = Headers.parse res.headers.isoCodec hdrs
+        (br, _) = Body.parse    res.body.isoCodec    body
+    in OkRes.Response
+        { status  = Result sr
+        , headers = Result hr
+        , body    = Result br
+        }
 
 extractWaiResBody :: Wai.Response -> LBS.ByteString
 extractWaiResBody (WaiI.ResponseBuilder _ _ b) = Builder.toLazyByteString b
@@ -206,39 +244,37 @@ printResponse (_ :-> IsoCodec resCodec) rv = do
 
 type ResState = (HTTP.Status, [HTTP.Header], LBS.ByteString)
 
-parseResponseCodec :: Codec Responses i o -> ResState -> (Either ParseError o, ResState)
+parseResponseCodec :: Codec Responses i o -> ResState -> (Maybe o, ResState)
 parseResponseCodec = go
   where
-    go :: forall i' o'. Codec Responses i' o' -> ResState -> (Either ParseError o', ResState)
-    go (Pure x)      s = (Right x, s)
+    go :: forall i' o'. Codec Responses i' o' -> ResState -> (Maybe o', ResState)
+    go (Pure x)      s = (Just x, s)
     go (FMap f c)    s = case go c s of
-        (Left e,  s') -> (Left e,  s')
-        (Right x, s') -> (Right (f x), s')
+        (Nothing, s') -> (Nothing, s')
+        (Just x,  s') -> (Just (f x), s')
     go (LMap _ c)    s = go c s
     go (Apply cf cx) s = case go cf s of
-        (Left e, s1)  -> (Left e, s1)
-        (Right f, s1) -> case go cx s1 of
-            (Left e, s2)  -> (Left e, s2)
-            (Right x, s2) -> (Right (f x), s2)
-    go (Embed ra)    s = parseResponseAlt ra s
+        (Nothing, s1) -> (Nothing, s1)
+        (Just f,  s1) -> case go cx s1 of
+            (Nothing, s2) -> (Nothing, s2)
+            (Just x,  s2) -> (Just (f x), s2)
+    go (Lift ra)    s = parseResponseAlt ra s
 
-parseResponseAlt :: Responses a -> ResState -> (Either ParseError a, ResState)
+parseResponseAlt :: Responses a -> ResState -> (Maybe a, ResState)
 parseResponseAlt (Only res) (status, hdrs, bodyLbs) =
     let (sr, _)     = Status.parse     res.status.isoCodec   status
         (hr, hdrs') = Headers.parse    res.headers.isoCodec  hdrs
         (br, _)     = Body.parse       res.body.isoCodec     bodyLbs
     in case (sr, hr, br) of
         (Right s, Right h, Right b) ->
-            (Right (OkRes.response s h b), (status, hdrs', LBS.empty))
-        (Left _, _, _) -> (Left StatusParseError,  (status, hdrs, bodyLbs))
-        (_, Left _, _) -> (Left HeadersParseError, (status, hdrs, bodyLbs))
-        _              -> (Left BodyParseError,    (status, hdrs, bodyLbs))
+            (Just (OkRes.response s h b), (status, hdrs', LBS.empty))
+        _ -> (Nothing, (status, hdrs, bodyLbs))
 parseResponseAlt (Choice l r) inp =
     case parseResponseAlt l inp of
-        (Right a, inp') -> (Right (Left a),  inp')
-        (Left _,  _)    -> case parseResponseAlt r inp of
-            (Right b, inp') -> (Right (Right b), inp')
-            (Left e,  inp') -> (Left e, inp')
+        (Just a, inp')  -> (Just (Left a),  inp')
+        (Nothing, _)    -> case parseResponseAlt r inp of
+            (Just b,  inp') -> (Just (Right b), inp')
+            (Nothing, inp') -> (Nothing, inp')
 
 printResponseCodec :: Codec Responses i o -> i -> IO ResState
 printResponseCodec = go
@@ -248,7 +284,7 @@ printResponseCodec = go
     go (FMap _ c)    x = go c x
     go (LMap f c)    x = go c (f x)
     go (Apply cf _)  x = go cf x
-    go (Embed ra)    x = printResponseAlt ra x
+    go (Lift ra)    x = printResponseAlt ra x
 
 printResponseAlt :: Responses a -> a -> IO ResState
 printResponseAlt (Only res) rv = do

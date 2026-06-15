@@ -68,11 +68,11 @@ print = Codec.printer methodPrinter
 
 -- | Accept and produce any HTTP method without type-level constraint.
 raw :: Codec Method HTTP.Method HTTP.Method
-raw = Embed Raw
+raw = Lift Raw
 
 -- | Match and produce a specific HTTP method known at compile time.
 method :: KnownMethod m -> Codec Method (KnownMethod m) (KnownMethod m)
-method km = Embed (Method km)
+method km = Lift (Method km)
 
 knownMethodToStd :: KnownMethod m -> HTTP.StdMethod
 knownMethodToStd GET    = HTTP.GET
@@ -81,8 +81,8 @@ knownMethodToStd PUT    = HTTP.PUT
 knownMethodToStd DELETE = HTTP.DELETE
 
 extractMethod :: Codec Method i o -> Maybe HTTP.StdMethod
-extractMethod (Embed (Method km))  = Just (knownMethodToStd km)
-extractMethod (Embed _)           = Nothing
+extractMethod (Lift (Method km))  = Just (knownMethodToStd km)
+extractMethod (Lift _)           = Nothing
 extractMethod (FMap _ c)          = extractMethod c
 extractMethod (LMap _ c)          = extractMethod c
 extractMethod (Apply cf cx)       = extractMethod cf <|> extractMethod cx

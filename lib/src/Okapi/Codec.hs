@@ -9,6 +9,8 @@ module Okapi.Codec (
     Codec (..),
     IsoCodec (..),
     Value (..),
+    ParseError (..),
+    Result (..),
     StateOf,
     ParseErrorOf,
     Parser,
@@ -29,11 +31,15 @@ data Codec t i o where
     LMap :: (i -> i') -> Codec t i' o -> Codec t i o
     Pure :: o -> Codec t i o
     Apply :: Codec t i (o -> o') -> Codec t i o -> Codec t i o'
-    Embed :: t a -> Codec t a a
+    Lift :: t a -> Codec t a a
 
 newtype IsoCodec (t :: Type -> Type) a = IsoCodec {isoCodec :: Codec t a a}
 
 newtype Value (t :: Type -> Type) a = Value {value :: a}
+
+newtype ParseError (t :: Type -> Type) a = ParseError { parseError :: Maybe (ParseErrorOf t) }
+
+newtype Result (t :: Type -> Type) a = Result { result :: Either (ParseErrorOf t) a }
 
 instance Functor (Codec t i) where
     fmap = FMap
@@ -62,7 +68,7 @@ cost = \case
     LMap _ c -> cost c
     Pure _ -> 0
     Apply c c' -> cost c + cost c'
-    Embed _ -> 1
+    Lift _ -> 1
 
 parser ::
     forall t i o.
@@ -82,7 +88,7 @@ parser alg = go
         (Right f, s1) -> case go cx s1 of
             (Left e, s2) -> (Left e, s2)
             (Right x, s2) -> (Right (f x), s2)
-    go (Embed t) s = alg t s
+    go (Lift t) s = alg t s
 
 printer ::
     forall t i o.
@@ -97,4 +103,4 @@ printer alg = go
     go (FMap _ c) i = go c i
     go (LMap f c) i = go c (f i)
     go (Apply cf cx) i = go cf i <> go cx i
-    go (Embed t) i = alg t i
+    go (Lift t) i = alg t i

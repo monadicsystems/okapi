@@ -92,4 +92,4 @@ class
         IsoCodec $
         FMap ((to :: Rep (r Value) () -> r Value) . runGResponseTo @(Rep (r Value))) $
         LMap (runGResponseFrom @(Rep (r Value)) . (from :: r Value -> Rep (r Value) ())) $
-        Embed ra
+        Lift ra

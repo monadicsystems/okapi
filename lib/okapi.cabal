@@ -177,3 +177,16 @@ test-suite okapi-ex2
         warp,
         okapi
     default-language: GHC2024
+
+test-suite okapi-subdsl
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          SubDsl.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-types,
+        text,
+        okapi
+    default-language: GHC2024

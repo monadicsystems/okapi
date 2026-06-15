@@ -78,20 +78,20 @@ print = Codec.printer queryPrinter
     queryPrinter (Flag' _) False       = []
 
 raw :: Codec Query HTTP.Query HTTP.Query
-raw = Embed Raw
+raw = Lift Raw
 
 -- | Required query parameter; parsing fails if the key is absent.
 param :: IsoQueryData a => Text -> Codec Query a a
-param key = Embed (Param key)
+param key = Lift (Param key)
 
 -- | Optional query parameter; yields 'Nothing' when the key is absent.
 param' :: IsoQueryData a => Text -> Codec Query (Maybe a) (Maybe a)
-param' key = Embed (Param' key)
+param' key = Lift (Param' key)
 
 -- | Required flag parameter (bare key, no value); parsing fails if absent.
 flag :: Text -> Codec Query () ()
-flag key = Embed (Flag key)
+flag key = Lift (Flag key)
 
 -- | Optional flag parameter; yields 'True' if the key is present, 'False' otherwise.
 flag' :: Text -> Codec Query Bool Bool
-flag' key = Embed (Flag' key)
+flag' key = Lift (Flag' key)

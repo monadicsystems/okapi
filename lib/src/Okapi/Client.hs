@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Okapi.Client (fetch, ClientSettings (..)) where
+module Okapi.Client (ClientError (..), ClientSettings (..), fetch) where
 
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
@@ -10,7 +10,7 @@ import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Codec (Value (..))
-import Okapi.Mode (Contract, ParseError, Signature, parseResponse, printRequest)
+import Okapi.Mode (Contract, Signature, parseResponse, printRequest)
 import Okapi.Request (Request)
 
 data ClientSettings = ClientSettings
@@ -18,17 +18,19 @@ data ClientSettings = ClientSettings
     , baseUrl :: String
     }
 
+data ClientError = ClientError deriving (Eq, Show)
+
 fetch ::
     HC.Manager ->
     String ->
     Contract (Signature m p q h b r) ->
     Request Value m p q h b ->
-    IO (Either ParseError (r Value))
+    IO (Either ClientError (r Value))
 fetch mgr baseUrl endpoint reqVal = do
     waiReq <- printRequest endpoint reqVal
     hcReq  <- toHCRequest baseUrl waiReq
     hcRes  <- HC.httpLbs hcReq mgr
-    pure (parseResponse endpoint (fromHCResponse hcRes))
+    pure $ maybe (Left ClientError) Right (parseResponse endpoint (fromHCResponse hcRes))
 
 toHCRequest :: String -> Wai.Request -> IO HC.Request
 toHCRequest baseUrl waiReq = do

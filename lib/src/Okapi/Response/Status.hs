@@ -104,8 +104,8 @@ print :: Codec Status i o -> i -> HTTP.Status
 print = go
   where
     go :: forall i' o'. Codec Status i' o' -> i' -> HTTP.Status
-    go (Embed (Status ks)) _ = knownStatusToHTTP ks
-    go (Embed Raw)         s = s
+    go (Lift (Status ks)) _ = knownStatusToHTTP ks
+    go (Lift Raw)         s = s
     go (FMap _ c)          i = go c i
     go (LMap f c)          i = go c (f i)
     go (Apply cf _)        i = go cf i
@@ -113,11 +113,11 @@ print = go
 
 -- | Accept and produce any HTTP status without type-level constraint.
 raw :: Codec Status HTTP.Status HTTP.Status
-raw = Embed Raw
+raw = Lift Raw
 
 -- | Match and produce a specific HTTP status code known at compile time.
 status :: KnownStatus s -> Codec Status (KnownStatus s) (KnownStatus s)
-status ks = Embed (Status ks)
+status ks = Lift (Status ks)
 
 knownStatusToHTTP :: KnownStatus s -> HTTP.Status
 knownStatusToHTTP S200 = HTTP.status200
@@ -127,8 +127,8 @@ knownStatusToHTTP S404 = HTTP.status404
 knownStatusToHTTP S500 = HTTP.status500
 
 extractStatus :: Codec Status i o -> Maybe HTTP.Status
-extractStatus (Embed (Status ks)) = Just (knownStatusToHTTP ks)
-extractStatus (Embed Raw)         = Nothing
+extractStatus (Lift (Status ks)) = Just (knownStatusToHTTP ks)
+extractStatus (Lift Raw)         = Nothing
 extractStatus (FMap _ c)          = extractStatus c
 extractStatus (LMap _ c)          = extractStatus c
 extractStatus (Apply cf cx)       = extractStatus cf <|> extractStatus cx

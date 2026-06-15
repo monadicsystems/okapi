@@ -9,17 +9,20 @@ module Okapi
     ( -- * Core
       Contract (..)
     , Signature
-    , ParseError
     , fn
     , serve
     , Server (..)
     , Client (..)
+      -- * HKD modes
+    , ParseError (..)
+    , Result (..)
       -- * App + client derivation
     , app
     , client
     , openApi
       -- * HTTP client
     , fetch
+    , ClientError (..)
     , ClientSettings (..)
       -- * OpenAPI
     , endpointToOpenApi
@@ -84,8 +87,10 @@ module Okapi
     , (=.)
       -- * Testing utilities
     , parseRequest
+    , parseRequestResult
     , printRequest
     , parseResponse
+    , parseResponseResult
     , printResponse
       -- * Data typeclasses (implement for custom path/query/header types)
     , IsoPathData
@@ -95,8 +100,8 @@ module Okapi
     ) where
 
 import Okapi.Body (HasBody (..), IsoJson, json, noContent)
-import Okapi.Client (ClientSettings (..), fetch)
-import Okapi.Codec (IsoCodec (..), Value (..), (=.))
+import Okapi.Client (ClientError (..), ClientSettings (..), fetch)
+import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..), (=.))
 import Okapi.Data (IsoHeaderData, IsoCookieData, IsoPathData, IsoQueryData)
 import Okapi.Group (app, client, openApi)
 import Okapi.Headers
@@ -105,9 +110,10 @@ import Okapi.Headers
     , cookie, cookie', header, header', header_, setCookie, setCookie'
     )
 import Okapi.Mode
-    ( Client (..), Contract (..), ParseError, Server (..), Signature
+    ( Client (..), Contract (..), Server (..), Signature
     , fn, serve
-    , parseRequest, printRequest, parseResponse, printResponse
+    , parseRequest, parseRequestResult, printRequest
+    , parseResponse, parseResponseResult, printResponse
     )
 import Okapi.OpenApi (endpointToOpenApi)
 import Okapi.Request (Request (..), mDelete, mGet, mPost, path, query, request, seg, seg_)

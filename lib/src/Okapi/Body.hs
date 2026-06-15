@@ -57,21 +57,21 @@ printM = go
     go (FMap _ c)       i = go c i
     go (LMap f c)       i = go c (f i)
     go (Apply cf cx)    i = liftA2 (<>) (go cf i) (go cx i)
-    go (Embed Raw)      ioLbs = ioLbs
-    go (Embed Json)     ioA   = Aeson.encode <$> ioA
-    go (Embed NoContent) _    = pure mempty
+    go (Lift Raw)      ioLbs = ioLbs
+    go (Lift Json)     ioA   = Aeson.encode <$> ioA
+    go (Lift NoContent) _    = pure mempty
 
 -- | Raw bytes body; no encoding or decoding applied.
 raw :: Codec (Body ctx) (IO LBS.ByteString) (IO LBS.ByteString)
-raw = Embed Raw
+raw = Lift Raw
 
 -- | JSON-encoded body; requires 'Aeson.FromJSON', 'Aeson.ToJSON', and 'ToSchema' instances.
 json :: IsoJson a => Codec (Body ctx) (IO a) (IO a)
-json = Embed Json
+json = Lift Json
 
 -- | Empty body (no content); produces and expects zero bytes.
 noContent :: Codec (Body ctx) (IO ()) (IO ())
-noContent = Embed NoContent
+noContent = Lift NoContent
 
 class HasBody (contract :: Type -> Type -> Type) where
     type BodyCtx contract :: Type

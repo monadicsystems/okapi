@@ -184,7 +184,7 @@ test_reqRoundTrip = do
     assertEq "req: query"  [("filter", Just "active")] (Wai.queryString waiReq)
     assertEq "req: body"   "request-body"     reqBody
     case parseRequest endpoint waiReq of
-        Left e     -> do { putStrLn ("FAIL: req parse: " ++ show e); exitFailure }
+        Left _     -> do { putStrLn "FAIL: req parse"; exitFailure }
         Right parsed -> do
             putStrLn "PASS: req parse"
             assertEq "req: path value" ("alice" :: Text) (value parsed.path)
@@ -195,15 +195,17 @@ test_resRoundTrip = do
     waiRes <- printResponse endpoint okVal
     assertEq "res: ok status"  HTTP.status200 (Wai.responseStatus  waiRes)
     assertEq "res: ok body"    "response-body" (waiResBody waiRes)
-    assertRight "res: ok parse" (parseResponse endpoint waiRes) $ \_ ->
-        putStrLn "PASS: res: ok reconstruct"
+    case parseResponse endpoint waiRes of
+        Nothing -> do { putStrLn "FAIL: res: ok parse"; exitFailure }
+        Just _  -> putStrLn "PASS: res: ok reconstruct"
 
     let nfVal = NotFoundRes (response S404 (42 :: Int) (pure "not-found-body"))
     waiRes2 <- printResponse endpoint nfVal
     assertEq "res: 404 status"  HTTP.status404   (Wai.responseStatus waiRes2)
     assertEq "res: 404 body"    "not-found-body" (waiResBody waiRes2)
-    assertRight "res: 404 parse" (parseResponse endpoint waiRes2) $ \_ ->
-        putStrLn "PASS: res: 404 reconstruct"
+    case parseResponse endpoint waiRes2 of
+        Nothing -> do { putStrLn "FAIL: res: 404 parse"; exitFailure }
+        Just _  -> putStrLn "PASS: res: 404 reconstruct"
 
 test_serverClientRoundTrip :: IO ()
 test_serverClientRoundTrip = do

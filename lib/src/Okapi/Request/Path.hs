@@ -71,15 +71,15 @@ print = Codec.printer pathPrinter
 
 -- | Match a literal path segment; contributes nothing to the decoded value.
 seg_ :: IsoPathData a => a -> Codec Path b ()
-seg_ x = Codec.LMap (const ()) (Embed (Seg_ x))
+seg_ x = Codec.LMap (const ()) (Lift (Seg_ x))
 
 -- | Match and capture a single typed path segment, identified by a name for documentation.
 seg :: IsoPathData a => Text -> Codec Path a a
-seg name = Embed (Seg name)
+seg name = Lift (Seg name)
 
 -- | Match and capture all remaining path segments as a non-empty list.
 segs :: IsoPathData a => Codec Path (NonEmpty a) (NonEmpty a)
-segs = Embed Segs
+segs = Lift Segs
 
 raw :: Codec Path [Text] [Text]
-raw = Embed Raw
+raw = Lift Raw

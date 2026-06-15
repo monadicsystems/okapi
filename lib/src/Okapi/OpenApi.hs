@@ -41,10 +41,10 @@ import Okapi.Data (ToPathData (..))
 data PathPiece = PLit Text | PParam Text OA.Schema
 
 walkPath :: Codec Path i o -> [PathPiece] -> [PathPiece]
-walkPath (Embed (Path.Seg_ x))    ps = ps ++ [PLit (toUrlPiece x)]
-walkPath (Embed h@(Path.Seg n))   ps = ps ++ [PParam n (typeRepSchema (typeRep (proxyOf h)))]
-walkPath (Embed Path.Segs)        ps = ps ++ [PParam "segs" (mempty & OA.type_ ?~ OA.OpenApiString)]
-walkPath (Embed Path.Raw)         ps = ps
+walkPath (Lift (Path.Seg_ x))    ps = ps ++ [PLit (toUrlPiece x)]
+walkPath (Lift h@(Path.Seg n))   ps = ps ++ [PParam n (typeRepSchema (typeRep (proxyOf h)))]
+walkPath (Lift Path.Segs)        ps = ps ++ [PParam "segs" (mempty & OA.type_ ?~ OA.OpenApiString)]
+walkPath (Lift Path.Raw)         ps = ps
 walkPath (FMap _ c)               ps = walkPath c ps
 walkPath (LMap _ c)               ps = walkPath c ps
 walkPath (Apply cf cx)            ps = walkPath cx (walkPath cf ps)
@@ -63,11 +63,11 @@ pathOAParams pieces =
     ]
 
 extractQueryParams :: Codec Query i o -> [Param]
-extractQueryParams (Embed (Query.Param key))    = [mkParam key ParamQuery True]
-extractQueryParams (Embed (Query.Param' key)) = [mkParam key ParamQuery False]
-extractQueryParams (Embed (Query.Flag key))   = [mkParam key ParamQuery True]
-extractQueryParams (Embed (Query.Flag' key))  = [mkParam key ParamQuery False]
-extractQueryParams (Embed Query.Raw)             = []
+extractQueryParams (Lift (Query.Param key))    = [mkParam key ParamQuery True]
+extractQueryParams (Lift (Query.Param' key)) = [mkParam key ParamQuery False]
+extractQueryParams (Lift (Query.Flag key))   = [mkParam key ParamQuery True]
+extractQueryParams (Lift (Query.Flag' key))  = [mkParam key ParamQuery False]
+extractQueryParams (Lift Query.Raw)             = []
 extractQueryParams (FMap _ c)                    = extractQueryParams c
 extractQueryParams (LMap _ c)                    = extractQueryParams c
 extractQueryParams (Apply cf cx)                 = extractQueryParams cf ++ extractQueryParams cx
@@ -88,7 +88,7 @@ typeRepSchema tr
     | otherwise                              = mempty & OA.type_ ?~ OA.OpenApiString
 
 extractHeaderParams :: Codec (Headers ForRequest) i o -> [Param]
-extractHeaderParams (Embed hdr) = case hdr of
+extractHeaderParams (Lift hdr) = case hdr of
     h@(Header   key)  -> [mkParamWithSchema (hdrName key) ParamHeader True  (typeRepSchema (typeRep (proxyOf h)))]
     h@(Header'  key)  -> [mkParamWithSchema (hdrName key) ParamHeader False (typeRepSchema (typeRep (innerProxyOf h)))]
     h@(Cookie   name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie True  (typeRepSchema (typeRep (proxyOf h)))]
@@ -101,7 +101,7 @@ extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParam
 extractHeaderParams (Pure _)      = []
 
 extractResHeaders :: Codec (Headers ForResponse) i o -> [(Text, Bool, OA.Schema)]
-extractResHeaders (Embed hdr) = case hdr of
+extractResHeaders (Lift hdr) = case hdr of
     h@(Header     key)  -> [(hdrName key, True,  typeRepSchema (typeRep (proxyOf h)))]
     h@(Header'    key)  -> [(hdrName key, False, typeRepSchema (typeRep (innerProxyOf h)))]
     h@(SetCookie  name) -> [(T.pack (BS8.unpack name), True,  typeRepSchema (typeRep (proxyOf h)))]
@@ -120,7 +120,7 @@ bodyDefsOf :: forall ctx a. IsoJson a => Body ctx (IO a) -> OA.Definitions OA.Sc
 bodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
 
 extractBodySchema :: Codec (Body ctx) i o -> Maybe OA.Schema
-extractBodySchema (Embed body)   = case body of
+extractBodySchema (Lift body)   = case body of
     Body.Json -> Just (bodySchemaOf body)
     _         -> Nothing
 extractBodySchema (FMap _ c)    = extractBodySchema c
@@ -129,7 +129,7 @@ extractBodySchema (Apply cf cx) = extractBodySchema cf <|> extractBodySchema cx
 extractBodySchema (Pure _)      = Nothing
 
 extractBodyDefs :: Codec (Body ctx) i o -> OA.Definitions OA.Schema
-extractBodyDefs (Embed body)   = case body of
+extractBodyDefs (Lift body)   = case body of
     Body.Json -> bodyDefsOf body
     _         -> mempty
 extractBodyDefs (FMap _ c)    = extractBodyDefs c
@@ -156,7 +156,7 @@ extractResInfos (Only res) =
 extractResInfos (Choice l r) = extractResInfos l ++ extractResInfos r
 
 walkResAltCodec :: Codec Responses i o -> [ResInfo]
-walkResAltCodec (Embed ra)    = extractResInfos ra
+walkResAltCodec (Lift ra)    = extractResInfos ra
 walkResAltCodec (FMap _ c)    = walkResAltCodec c
 walkResAltCodec (LMap _ c)    = walkResAltCodec c
 walkResAltCodec (Apply cf cx) = walkResAltCodec cf ++ walkResAltCodec cx
