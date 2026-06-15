@@ -58,7 +58,7 @@ data GetUserRes f
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic)
 
-instance GenericResAlt GetUserRes
+instance ResponseEnum GetUserRes
 
 getUserResCodec =
     responsesOf @GetUserRes

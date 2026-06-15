@@ -1,5 +1,10 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
+{-| Okapi — a type-safe, bidirectional HTTP framework for Haskell.
+
+Define endpoints as 'Contract' values (request codec @:->@ response codec), then derive
+WAI applications, HTTP clients, and OpenAPI documents from the same source of truth.
+-}
 module Okapi
     ( -- * Core
       Contract (..)
@@ -19,7 +24,7 @@ module Okapi
       -- * OpenAPI
     , endpointToOpenApi
       -- * Requests
-    , Request(method_, path_, query_, headers_, body_)
+    , Request (..)
     , request
     , mGet
     , mPost
@@ -56,10 +61,9 @@ module Okapi
     , HasBody (..)
     , json
     , noContent
-    , NoContent (..)
     , IsoJson
       -- * Responses
-    , Response(status_, headers_, body_)
+    , Response (..)
     , response
     , s200
     , s201
@@ -73,9 +77,7 @@ module Okapi
     , S404
     , S500
       -- * Response alternatives
-    , GenericResAlt (..)
-    , Only (..)
-    , only
+    , ResponseEnum (..)
       -- * Codec utilities
     , IsoCodec (..)
     , Value (..)
@@ -92,7 +94,7 @@ module Okapi
     , IsoCookieData
     ) where
 
-import Okapi.Body (HasBody (..), IsoJson, NoContent (..), json, noContent)
+import Okapi.Body (HasBody (..), IsoJson, json, noContent)
 import Okapi.Client (ClientSettings (..), fetch)
 import Okapi.Codec (IsoCodec (..), Value (..), (=.))
 import Okapi.Data (IsoHeaderData, IsoCookieData, IsoPathData, IsoQueryData)
@@ -108,10 +110,10 @@ import Okapi.Mode
     , parseRequest, printRequest, parseResponse, printResponse
     )
 import Okapi.OpenApi (endpointToOpenApi)
-import Okapi.Request (Request, body_, headers_, method_, mDelete, mGet, mPost, path, path_, query, query_, request, seg, seg_)
+import Okapi.Request (Request (..), mDelete, mGet, mPost, path, query, request, seg, seg_)
 import Okapi.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
 import Okapi.Request.Path (segs)
 import Okapi.Request.Query (flag, flag', param, param')
-import Okapi.Response (Response, body_, headers_, response, s200, s201, s204, s404, s500, status_)
-import Okapi.Response.Choice (GenericResAlt (..), Only (..), only)
+import Okapi.Response (Response (..), response, s200, s201, s204, s404, s500)
+import Okapi.Responses (ResponseEnum (..))
 import Okapi.Response.Status (KnownStatus (..), S200, S201, S204, S404, S500)

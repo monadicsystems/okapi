@@ -12,7 +12,7 @@ module Okapi.Response.Status (
     parse,
     print,
     raw,
-    known,
+    status,
     knownStatusToHTTP,
     extractStatus,
     S200,
@@ -111,11 +111,13 @@ print = go
     go (Apply cf _)        i = go cf i
     go (Pure _)            _ = HTTP.status200
 
+-- | Accept and produce any HTTP status without type-level constraint.
 raw :: Codec Status HTTP.Status HTTP.Status
 raw = Embed Raw
 
-known :: KnownStatus s -> Codec Status (KnownStatus s) (KnownStatus s)
-known ks = Embed (Status ks)
+-- | Match and produce a specific HTTP status code known at compile time.
+status :: KnownStatus s -> Codec Status (KnownStatus s) (KnownStatus s)
+status ks = Embed (Status ks)
 
 knownStatusToHTTP :: KnownStatus s -> HTTP.Status
 knownStatusToHTTP S200 = HTTP.status200

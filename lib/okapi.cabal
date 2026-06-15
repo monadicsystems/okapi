@@ -42,7 +42,7 @@ library
         Okapi.Request.Path
         Okapi.Request.Query
         Okapi.Response
-        Okapi.Response.Choice
+        Okapi.Responses
         Okapi.Response.Status
     build-depends:
         base ^>=4.20.0.0,

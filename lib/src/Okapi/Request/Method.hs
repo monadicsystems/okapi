@@ -11,7 +11,7 @@ module Okapi.Request.Method (
     parse,
     print,
     raw,
-    known,
+    method,
     knownMethodToStd,
     extractMethod,
     GET,
@@ -66,11 +66,13 @@ print = Codec.printer methodPrinter
     methodPrinter Raw         m  = m
     methodPrinter (Method km) _  = HTTP.renderStdMethod (knownMethodToStd km)
 
+-- | Accept and produce any HTTP method without type-level constraint.
 raw :: Codec Method HTTP.Method HTTP.Method
 raw = Embed Raw
 
-known :: KnownMethod m -> Codec Method (KnownMethod m) (KnownMethod m)
-known km = Embed (Method km)
+-- | Match and produce a specific HTTP method known at compile time.
+method :: KnownMethod m -> Codec Method (KnownMethod m) (KnownMethod m)
+method km = Embed (Method km)
 
 knownMethodToStd :: KnownMethod m -> HTTP.StdMethod
 knownMethodToStd GET    = HTTP.GET
@@ -79,7 +81,7 @@ knownMethodToStd PUT    = HTTP.PUT
 knownMethodToStd DELETE = HTTP.DELETE
 
 extractMethod :: Codec Method i o -> Maybe HTTP.StdMethod
-extractMethod (Embed (Method km)) = Just (knownMethodToStd km)
+extractMethod (Embed (Method km))  = Just (knownMethodToStd km)
 extractMethod (Embed _)           = Nothing
 extractMethod (FMap _ c)          = extractMethod c
 extractMethod (LMap _ c)          = extractMethod c

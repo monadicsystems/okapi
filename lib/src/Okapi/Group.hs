@@ -50,6 +50,7 @@ instance GServable n
 
 -- ── app ──────────────────────────────────────────────────────────────────────
 
+-- | Derive a WAI application from a record of contracts and a matching record of handlers.
 app ::
     forall server n.
     ( Generic (server Contract)
@@ -93,6 +94,7 @@ instance GClientable
 
 -- ── client ───────────────────────────────────────────────────────────────────
 
+-- | Derive a record of HTTP client functions from a record of contracts.
 client ::
     forall server.
     ( Generic (server Contract)
@@ -126,6 +128,7 @@ instance GOpenApiable (S1 sm (Rec0 (Contract (Signature m p q h b r)))) where
 
 -- ── openApi ──────────────────────────────────────────────────────────────────
 
+-- | Derive an OpenAPI 3.0 document from a record of contracts.
 openApi ::
     forall server.
     ( Generic (server Contract)

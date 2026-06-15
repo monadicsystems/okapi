@@ -48,7 +48,7 @@ data UserResBody = UserResBody
 data UserRes f
     = FoundUser (Response f S200 Text UserResBody)
     | NoUser (Response f S404 Text LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
 
 userRequest
     = mPost
@@ -79,12 +79,12 @@ userResponses = responsesOf @UserRes
 userEndpoint = userRequest :-> userResponses
 
 userHandler = fn \(req, _) -> do
-    reqBody <- req.body_.value
+    reqBody <- req.body.value
     pure
-        if req.path_.value == ("alice" :: Text)
+        if req.path.value == ("alice" :: Text)
         then
             let
-                userId = req.path_.value
+                userId = req.path.value
                 name   = reqBody.name
                 email  = reqBody.email
                 age    = reqBody.age
@@ -122,9 +122,9 @@ main = do
         case found of
             Left e              -> putStrLn ("FAIL: " ++ show e) >> exitFailure
             Right (FoundUser r) -> do
-                resBody <- r.body_.value
-                check "FoundUser: status"  (r.status_.value  == S200)
-                check "FoundUser: headers" (r.headers_.value == "/users/alice")
+                resBody <- r.body.value
+                check "FoundUser: status"  (r.status.value  == S200)
+                check "FoundUser: headers" (r.headers.value == "/users/alice")
                 check "FoundUser: userId"  (resBody.userId   == "alice")
                 check "FoundUser: name"    (resBody.name     == "Alice")
                 check "FoundUser: email"   (resBody.email    == "alice@example.com")
@@ -136,9 +136,9 @@ main = do
         case miss of
             Left e              -> putStrLn ("FAIL: " ++ show e) >> exitFailure
             Right (NoUser r)    -> do
-                bod <- r.body_.value
-                check "NoUser: status"  (r.status_.value  == S404)
-                check "NoUser: headers" (r.headers_.value == "user not found")
+                bod <- r.body.value
+                check "NoUser: status"  (r.status.value  == S404)
+                check "NoUser: headers" (r.headers.value == "user not found")
                 check "NoUser: body"    (bod              == "")
             Right (FoundUser _) -> putStrLn "FAIL: expected NoUser" >> exitFailure
 

@@ -39,7 +39,7 @@ import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
-import Okapi.Body (Body, ForRequest, ForResponse)
+import Okapi.Body (Body, ForRequest)
 import Okapi.Body qualified as Body
 import Okapi.Codec (Codec (..), IsoCodec (..), Value (..))
 import Okapi.Headers qualified as Headers
@@ -50,8 +50,9 @@ import Okapi.Request.Path qualified as Path
 import Okapi.Request.Query qualified as Query
 import Okapi.Response qualified as OkRes
 import Okapi.Response.Status qualified as Status
-import Okapi.Response.Choice (ResAlt (..))
+import Okapi.Responses (Responses (..))
 
+-- | Type-level tag encoding the method, path, query, header, body, and response shape of one endpoint.
 data
     Signature
         (m :: Type)
@@ -61,10 +62,11 @@ data
         (b :: Type)
         (r :: ((Type -> Type) -> Type -> Type) -> Type)
 
+-- | An endpoint contract: a request codec paired with a response codec via @:->@.
 data Contract sig where
     (:->) ::
         Request IsoCodec m p q h b ->
-        IsoCodec ResAlt (r Value) ->
+        IsoCodec Responses (r Value) ->
         Contract (Signature m p q h b r)
 
 data Client sig where
@@ -77,6 +79,7 @@ data Server n sig where
         ((Request Value m p q h b, Wai.Request) -> n (r Value)) ->
         Server n (Signature m p q h b r)
 
+-- | Lift a handler function into a 'Server'.
 fn ::
     ((Request Value m p q h b, Wai.Request) -> n (r Value)) ->
     Server n (Signature m p q h b r)
@@ -85,6 +88,7 @@ fn = Fn
 type (~>) :: (Type -> Type) -> (Type -> Type) -> Type
 type f ~> g = forall a. f a -> g a
 
+-- | Build a WAI 'Wai.Application' from a single contract and its handler; returns 400 on parse failure.
 serve ::
     (n ~> IO) ->
     Contract (Signature m p q h b r) ->
@@ -98,6 +102,7 @@ serve runner endpoint (Fn handler) waiReq respond =
             waiRes <- printResponse endpoint resVal
             respond waiRes
 
+-- | Attempt to handle a request; passes through to the next middleware on contract mismatch.
 tryServe ::
     (n ~> IO) ->
     Contract (Signature m p q h b r) ->
@@ -111,6 +116,7 @@ tryServe runner endpoint (Fn handler) next waiReq respond =
             waiRes <- printResponse endpoint resVal
             respond waiRes
 
+-- | Indicates which part of a request or response failed to parse.
 data ParseError
     = MethodParseError
     | PathParseError
@@ -129,11 +135,11 @@ parseRequest (req :-> _) waiReq =
         path   = Wai.pathInfo       waiReq
         query  = Wai.queryString    waiReq
         hdrs   = Wai.requestHeaders waiReq
-        bodyIO = makeReqBodyIO req.body_.isoCodec waiReq
-        (mr, _) = Method.parse  req.method_.isoCodec  meth
-        (pr, _) = Path.parse    req.path_.isoCodec    path
-        (qr, _) = Query.parse   req.query_.isoCodec   query
-        (hr, _) = Headers.parse req.headers_.isoCodec hdrs
+        bodyIO = makeReqBodyIO req.body.isoCodec waiReq
+        (mr, _) = Method.parse  req.method.isoCodec  meth
+        (pr, _) = Path.parse    req.path.isoCodec    path
+        (qr, _) = Query.parse   req.query.isoCodec   query
+        (hr, _) = Headers.parse req.headers.isoCodec hdrs
     in case (mr, pr, qr, hr) of
         (Right m, Right p, Right q, Right h) -> Right $ OkReq.request m p q h bodyIO
         (Left _, _, _, _) -> Left MethodParseError
@@ -142,13 +148,13 @@ parseRequest (req :-> _) waiReq =
         _                 -> Left HeadersParseError
 
 makeReqBodyIO :: Codec (Body ForRequest) (IO b) (IO b) -> Wai.Request -> IO b
-makeReqBodyIO (Embed Body.Raw)  waiReq = Wai.strictRequestBody waiReq
-makeReqBodyIO (Embed Body.Json) waiReq =
+makeReqBodyIO (Embed Body.Raw)       waiReq = Wai.strictRequestBody waiReq
+makeReqBodyIO (Embed Body.Json)      waiReq =
     Wai.strictRequestBody waiReq >>= \bs ->
         case Body.parse (Embed Body.Json) bs of
             (Left _,  _) -> fail "JSON body parse error"
             (Right b, _) -> b
-makeReqBodyIO (Embed Body.Empty) _ = pure Body.NoContent
+makeReqBodyIO (Embed Body.NoContent) _ = pure ()
 makeReqBodyIO (Pure x) _ = x
 makeReqBodyIO c waiReq =
     Wai.strictRequestBody waiReq >>= \bs ->
@@ -161,7 +167,7 @@ printRequest ::
     Request Value m p q h b ->
     IO Wai.Request
 printRequest (req :-> _) rv = do
-    bodyBytes <- Body.printM req.body_.isoCodec rv.body_.value
+    bodyBytes <- Body.printM req.body.isoCodec rv.body.value
     bodyRef   <- newIORef (LBS.toChunks bodyBytes)
     let streamBody = do
             chunks <- readIORef bodyRef
@@ -169,10 +175,10 @@ printRequest (req :-> _) rv = do
                 []     -> pure BS.empty
                 (c:cs) -> writeIORef bodyRef cs >> pure c
     let baseReq = Wai.defaultRequest
-            { Wai.requestMethod  = Method.print  req.method_.isoCodec   rv.method_.value
-            , Wai.pathInfo       = Path.print    req.path_.isoCodec     rv.path_.value
-            , Wai.queryString    = Query.print   req.query_.isoCodec    rv.query_.value
-            , Wai.requestHeaders = Headers.print req.headers_.isoCodec  rv.headers_.value
+            { Wai.requestMethod  = Method.print  req.method.isoCodec   rv.method.value
+            , Wai.pathInfo       = Path.print    req.path.isoCodec     rv.path.value
+            , Wai.queryString    = Query.print   req.query.isoCodec    rv.query.value
+            , Wai.requestHeaders = Headers.print req.headers.isoCodec  rv.headers.value
             }
     pure (Wai.setRequestBodyChunks streamBody baseReq)
 
@@ -184,7 +190,7 @@ parseResponse (_ :-> IsoCodec resCodec) waiRes =
     let status = Wai.responseStatus  waiRes
         hdrs   = Wai.responseHeaders waiRes
         body   = extractWaiResBody   waiRes
-    in fst (parseResCodec resCodec (status, hdrs, body))
+    in fst (parseResponseCodec resCodec (status, hdrs, body))
 
 extractWaiResBody :: Wai.Response -> LBS.ByteString
 extractWaiResBody (WaiI.ResponseBuilder _ _ b) = Builder.toLazyByteString b
@@ -195,15 +201,15 @@ printResponse ::
     r Value ->
     IO Wai.Response
 printResponse (_ :-> IsoCodec resCodec) rv = do
-    (status, hdrs, bodyBytes) <- printResCodec resCodec rv
+    (status, hdrs, bodyBytes) <- printResponseCodec resCodec rv
     pure (Wai.responseLBS status hdrs bodyBytes)
 
 type ResState = (HTTP.Status, [HTTP.Header], LBS.ByteString)
 
-parseResCodec :: Codec ResAlt i o -> ResState -> (Either ParseError o, ResState)
-parseResCodec = go
+parseResponseCodec :: Codec Responses i o -> ResState -> (Either ParseError o, ResState)
+parseResponseCodec = go
   where
-    go :: forall i' o'. Codec ResAlt i' o' -> ResState -> (Either ParseError o', ResState)
+    go :: forall i' o'. Codec Responses i' o' -> ResState -> (Either ParseError o', ResState)
     go (Pure x)      s = (Right x, s)
     go (FMap f c)    s = case go c s of
         (Left e,  s') -> (Left e,  s')
@@ -214,43 +220,43 @@ parseResCodec = go
         (Right f, s1) -> case go cx s1 of
             (Left e, s2)  -> (Left e, s2)
             (Right x, s2) -> (Right (f x), s2)
-    go (Embed ra)    s = resAltParseAlg ra s
+    go (Embed ra)    s = parseResponseAlt ra s
 
-resAltParseAlg :: ResAlt a -> ResState -> (Either ParseError a, ResState)
-resAltParseAlg (OneResAlt res) (status, hdrs, bodyLbs) =
-    let (sr, _)     = Status.parse     res.status_.isoCodec   status
-        (hr, hdrs') = Headers.parse    res.headers_.isoCodec  hdrs
-        (br, _)     = Body.parse       res.body_.isoCodec     bodyLbs
+parseResponseAlt :: Responses a -> ResState -> (Either ParseError a, ResState)
+parseResponseAlt (Only res) (status, hdrs, bodyLbs) =
+    let (sr, _)     = Status.parse     res.status.isoCodec   status
+        (hr, hdrs') = Headers.parse    res.headers.isoCodec  hdrs
+        (br, _)     = Body.parse       res.body.isoCodec     bodyLbs
     in case (sr, hr, br) of
         (Right s, Right h, Right b) ->
             (Right (OkRes.response s h b), (status, hdrs', LBS.empty))
         (Left _, _, _) -> (Left StatusParseError,  (status, hdrs, bodyLbs))
         (_, Left _, _) -> (Left HeadersParseError, (status, hdrs, bodyLbs))
         _              -> (Left BodyParseError,    (status, hdrs, bodyLbs))
-resAltParseAlg (ChoiceResAlt l r) inp =
-    case resAltParseAlg l inp of
+parseResponseAlt (Choice l r) inp =
+    case parseResponseAlt l inp of
         (Right a, inp') -> (Right (Left a),  inp')
-        (Left _,  _)    -> case resAltParseAlg r inp of
+        (Left _,  _)    -> case parseResponseAlt r inp of
             (Right b, inp') -> (Right (Right b), inp')
             (Left e,  inp') -> (Left e, inp')
 
-printResCodec :: Codec ResAlt i o -> i -> IO ResState
-printResCodec = go
+printResponseCodec :: Codec Responses i o -> i -> IO ResState
+printResponseCodec = go
   where
-    go :: forall i' o'. Codec ResAlt i' o' -> i' -> IO ResState
+    go :: forall i' o'. Codec Responses i' o' -> i' -> IO ResState
     go (Pure _)      _ = pure (HTTP.status200, [], LBS.empty)
     go (FMap _ c)    x = go c x
     go (LMap f c)    x = go c (f x)
     go (Apply cf _)  x = go cf x
-    go (Embed ra)    x = resAltPrintAlg ra x
+    go (Embed ra)    x = printResponseAlt ra x
 
-resAltPrintAlg :: ResAlt a -> a -> IO ResState
-resAltPrintAlg (OneResAlt res) rv = do
-    bodyBytes <- Body.printM res.body_.isoCodec rv.body_.value
+printResponseAlt :: Responses a -> a -> IO ResState
+printResponseAlt (Only res) rv = do
+    bodyBytes <- Body.printM res.body.isoCodec rv.body.value
     pure
-        ( Status.print     res.status_.isoCodec   rv.status_.value
-        , Headers.print    res.headers_.isoCodec  rv.headers_.value
+        ( Status.print     res.status.isoCodec   rv.status.value
+        , Headers.print    res.headers.isoCodec  rv.headers.value
         , bodyBytes
         )
-resAltPrintAlg (ChoiceResAlt l _) (Left  a) = resAltPrintAlg l a
-resAltPrintAlg (ChoiceResAlt _ r) (Right b) = resAltPrintAlg r b
+printResponseAlt (Choice l _) (Left  a) = printResponseAlt l a
+printResponseAlt (Choice _ r) (Right b) = printResponseAlt r b

@@ -48,7 +48,7 @@ data GetUserRes f
     = OkRes       (Response f S200 OkHeaders LBS.ByteString)
     | NotFoundRes (Response f S404 RetryAfter LBS.ByteString)
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
 
 getUserResCodec = responsesOf @GetUserRes
     okWithHeaders
@@ -58,7 +58,7 @@ getUserResCodec = responsesOf @GetUserRes
 getUserEndpoint = getUserReq :-> getUserResCodec
 
 getUserServer = fn \(reqData, _waiReq) -> do
-    print (snd $ value reqData.query_ :: Maybe Int)
+    print (snd $ value reqData.query :: Maybe Int)
     pure $ OkRes $ response 200 ("blah", "foo") do
         putStrLn "Returning..."
         pure ""

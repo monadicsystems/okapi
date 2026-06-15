@@ -28,9 +28,9 @@ type Query :: Type -> Type
 data Query a where
     Raw      :: Query HTTP.Query
     Param    :: IsoQueryData a => Text -> Query a
-    ParamOpt :: IsoQueryData a => Text -> Query (Maybe a)
+    Param' :: IsoQueryData a => Text -> Query (Maybe a)
     Flag     :: Text -> Query ()
-    FlagOpt  :: Text -> Query Bool
+    Flag'  :: Text -> Query Bool
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -49,7 +49,7 @@ parse = Codec.parser queryAlg
             ((_, Just v) : _, rest)   -> case parseQueryParam (decodeUtf8Lenient v) of
                 Left _  -> (Left ParseError, q)
                 Right x -> (Right x, rest)
-    queryAlg (ParamOpt key) q =
+    queryAlg (Param' key) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)                   -> (Right Nothing, q)
             ((_, Nothing) : _, rest)  -> (Right Nothing, rest)
@@ -60,7 +60,7 @@ parse = Codec.parser queryAlg
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)       -> (Left ParseError, q)
             (_ : _, rest) -> (Right (), rest)
-    queryAlg (FlagOpt key) q =
+    queryAlg (Flag' key) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)       -> (Right False, q)
             (_ : _, rest) -> (Right True, rest)
@@ -71,23 +71,27 @@ print = Codec.printer queryPrinter
     queryPrinter :: forall a. Query a -> a -> HTTP.Query
     queryPrinter Raw q                   = q
     queryPrinter (Param key) x           = [(encodeUtf8 key, Just (encodeUtf8 (toQueryParam x)))]
-    queryPrinter (ParamOpt _) Nothing    = []
-    queryPrinter (ParamOpt key) (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (toQueryParam x)))]
+    queryPrinter (Param' _) Nothing    = []
+    queryPrinter (Param' key) (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (toQueryParam x)))]
     queryPrinter (Flag key) ()           = [(encodeUtf8 key, Nothing)]
-    queryPrinter (FlagOpt key) True      = [(encodeUtf8 key, Nothing)]
-    queryPrinter (FlagOpt _) False       = []
+    queryPrinter (Flag' key) True      = [(encodeUtf8 key, Nothing)]
+    queryPrinter (Flag' _) False       = []
 
 raw :: Codec Query HTTP.Query HTTP.Query
 raw = Embed Raw
 
+-- | Required query parameter; parsing fails if the key is absent.
 param :: IsoQueryData a => Text -> Codec Query a a
 param key = Embed (Param key)
 
+-- | Optional query parameter; yields 'Nothing' when the key is absent.
 param' :: IsoQueryData a => Text -> Codec Query (Maybe a) (Maybe a)
-param' key = Embed (ParamOpt key)
+param' key = Embed (Param' key)
 
+-- | Required flag parameter (bare key, no value); parsing fails if absent.
 flag :: Text -> Codec Query () ()
 flag key = Embed (Flag key)
 
+-- | Optional flag parameter; yields 'True' if the key is present, 'False' otherwise.
 flag' :: Text -> Codec Query Bool Bool
-flag' key = Embed (FlagOpt key)
+flag' key = Embed (Flag' key)

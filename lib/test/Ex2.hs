@@ -24,7 +24,10 @@ import System.Exit (exitFailure)
 data UserRes f
     = FoundUser (Response f S200 Text LBS.ByteString)
     | NotFound  (Response f S404 Text LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
+
+data HealthRes f = HealthRes (Response f S200 HTTP.ResponseHeaders LBS.ByteString)
+    deriving (Generic, ResponseEnum)
 
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -45,7 +48,7 @@ healthReq
     & path do
         seg_ @Text "health"
 
-healthEndpoint = healthReq :-> only s200
+healthEndpoint = healthReq :-> responsesOf @HealthRes s200
 
 -- ── HKD record ───────────────────────────────────────────────────────────────
 
@@ -63,7 +66,7 @@ type SigHealth = Signature
     HTTP.Query
     HTTP.RequestHeaders
     LBS.ByteString
-    (Only S200 HTTP.ResponseHeaders LBS.ByteString)
+    HealthRes
 
 data MyApi f = MyApi
     { userEp   :: f SigUser
@@ -83,11 +86,11 @@ myEndpoints = MyApi
 myHandlers :: MyApi (Server IO)
 myHandlers = MyApi
     { userEp = fn \(req, _) ->
-        pure if req.path_.value == ("alice" :: Text)
+        pure if req.path.value == ("alice" :: Text)
             then FoundUser (response S200 "alice" (pure "found alice"))
             else NotFound  (response S404 "not found" (pure ""))
     , healthEp = fn \_ ->
-        pure (Only (response S200 [] (pure "healthy")))
+        pure (HealthRes (response S200 [] (pure "healthy")))
     }
 
 -- ── Grouped application ───────────────────────────────────────────────────────
@@ -114,22 +117,22 @@ main = do
         r1 <- goUser (request GET "alice" [] [] (pure ""))
         case r1 of
             Right (FoundUser r) -> do
-                bodyVal <- r.body_.value
-                check "GET /users/alice: status"  (r.status_.value == S200)
+                bodyVal <- r.body.value
+                check "GET /users/alice: status"  (r.status.value == S200)
                 check "GET /users/alice: body"    (bodyVal == ("found alice" :: LBS.ByteString))
             _ -> check "GET /users/alice" False
 
         r2 <- goUser (request GET "bob" [] [] (pure ""))
         case r2 of
             Right (NotFound r) ->
-                check "GET /users/bob: status" (r.status_.value == S404)
+                check "GET /users/bob: status" (r.status.value == S404)
             _ -> check "GET /users/bob" False
 
         r3 <- goHealth (request GET () [] [] (pure ""))
         case r3 of
-            Right (Only r) -> do
-                bodyVal <- r.body_.value
-                check "GET /health: status" (r.status_.value == S200)
+            Right (HealthRes r) -> do
+                bodyVal <- r.body.value
+                check "GET /health: status" (r.status.value == S200)
                 check "GET /health: body"   (bodyVal == ("healthy" :: LBS.ByteString))
             _ -> check "GET /health" False
 

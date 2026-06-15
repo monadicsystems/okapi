@@ -73,15 +73,18 @@ deleteItemDB iid = do
 
 -- ── Response types ───────────────────────────────────────────────────────────
 
+data CreatedItemRes f = CreatedItemRes (Response f S201 HTTP.ResponseHeaders Item)
+    deriving (Generic, ResponseEnum)
+
 data GetItemRes f
     = ItemFound (Response f S200 HTTP.ResponseHeaders Item)
     | ItemNotFound (Response f S404 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
 
 data DeleteItemRes f
-    = ItemDeleted (Response f S204 HTTP.ResponseHeaders NoContent)
+    = ItemDeleted (Response f S204 HTTP.ResponseHeaders ())
     | DeleteNotFound (Response f S404 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
 
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -93,7 +96,7 @@ createItemReq =
 
 createItemEndpoint =
     createItemReq
-        :-> only
+        :-> responsesOf @CreatedItemRes
             (s201 & body (json @Item))
 
 getItemReq =
@@ -124,7 +127,7 @@ deleteItemEndpoint =
 
 -- ── HKD API record ───────────────────────────────────────────────────────────
 
-type SigCreate = Signature POST () HTTP.Query HTTP.RequestHeaders NewItem (Only S201 HTTP.ResponseHeaders Item)
+type SigCreate = Signature POST () HTTP.Query HTTP.RequestHeaders NewItem CreatedItemRes
 type SigGet = Signature GET Int64 HTTP.Query HTTP.RequestHeaders LBS.ByteString GetItemRes
 type SigDelete = Signature DELETE Int64 HTTP.Query HTTP.RequestHeaders LBS.ByteString DeleteItemRes
 
@@ -151,19 +154,19 @@ itemsHandlers :: (MonadReader Config m, MonadIO m) => ItemsApi (Server m)
 itemsHandlers =
     ItemsApi
         { createItem = fn \(req, _) -> do
-            ni <- liftIO req.body_.value
+            ni <- liftIO req.body.value
             item <- createItemDB ni
-            pure (Only (response S201 [] (pure item)))
+            pure (CreatedItemRes (response S201 [] (pure item)))
         , getItem = fn \(req, _) -> do
-            mItem <- getItemDB req.path_.value
+            mItem <- getItemDB req.path.value
             pure $ case mItem of
                 Just item -> ItemFound (response S200 [] (pure item))
                 Nothing -> ItemNotFound (response S404 [] (pure "item not found"))
         , deleteItem = fn \(req, _) -> do
-            deleted <- deleteItemDB req.path_.value
+            deleted <- deleteItemDB req.path.value
             pure $
                 if deleted
-                    then ItemDeleted (response S204 [] (pure NoContent))
+                    then ItemDeleted (response S204 [] (pure ()))
                     else DeleteNotFound (response S404 [] (pure "item not found"))
         }
 
@@ -191,9 +194,9 @@ main = SQLite.withConnection ":memory:" \conn -> do
 
         r1 <- goCreate (request POST () [] [] (pure NewItem{itemName = "Widget"}))
         createdId <- case r1 of
-            Right (Only r) -> do
-                item <- r.body_.value
-                check "POST /items: status" (r.status_.value == S201)
+            Right (CreatedItemRes r) -> do
+                item <- r.body.value
+                check "POST /items: status" (r.status.value == S201)
                 check "POST /items: name" (item.itemName == "Widget")
                 pure item.itemId
             _ -> putStrLn "FAIL: POST /items" >> exitFailure
@@ -201,27 +204,27 @@ main = SQLite.withConnection ":memory:" \conn -> do
         r2 <- goGet (request GET createdId [] [] (pure ""))
         case r2 of
             Right (ItemFound r) -> do
-                item <- r.body_.value
-                check "GET /items/:id: status" (r.status_.value == S200)
+                item <- r.body.value
+                check "GET /items/:id: status" (r.status.value == S200)
                 check "GET /items/:id: name" (item.itemName == "Widget")
             _ -> check "GET /items/:id found" False
 
         r3 <- goGet (request GET 9999 [] [] (pure ""))
         case r3 of
             Right (ItemNotFound r) ->
-                check "GET /items/9999: 404" (r.status_.value == S404)
+                check "GET /items/9999: 404" (r.status.value == S404)
             _ -> check "GET /items/9999 not found" False
 
         r4 <- goDelete (request DELETE createdId [] [] (pure ""))
         case r4 of
             Right (ItemDeleted r) ->
-                check "DELETE /items/:id: status" (r.status_.value == S204)
+                check "DELETE /items/:id: status" (r.status.value == S204)
             _ -> check "DELETE /items/:id deleted" False
 
         r5 <- goGet (request GET createdId [] [] (pure ""))
         case r5 of
             Right (ItemNotFound r) ->
-                check "GET /items/:id after delete: 404" (r.status_.value == S404)
+                check "GET /items/:id after delete: 404" (r.status.value == S404)
             _ -> check "GET after delete" False
 
     putStrLn "all ex3 tests passed"

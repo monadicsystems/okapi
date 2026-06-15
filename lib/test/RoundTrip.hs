@@ -50,13 +50,13 @@ waiResBody _                            = LBS.empty
 
 test_methodRoundTrip :: IO ()
 test_methodRoundTrip = do
-    let codec = Method.known Method.GET
+    let codec = Method.method Method.GET
     let printed = Method.print codec Method.GET
     assertEq "method: print GET" "GET" printed
     let (parsed, _) = Method.parse codec printed
     assertEq "method: parse GET" (Right Method.GET) parsed
 
-    let codec2 = Method.known Method.DELETE
+    let codec2 = Method.method Method.DELETE
     let printed2 = Method.print codec2 Method.DELETE
     assertEq "method: print DELETE" "DELETE" printed2
     let (parsed2, _) = Method.parse codec2 printed2
@@ -68,7 +68,7 @@ test_pathRoundTrip = do
             _ <- seg_ @Text "users"
             userId <- seg @Text "userId"
             pure userId
-    let pathCodec = isoCodec req.path_
+    let pathCodec = isoCodec req.path
     let printed = Path.print pathCodec "alice"
     assertEq "path: print [users,alice]" ["users", "alice"] printed
     let (parsed, _) = Path.parse pathCodec printed
@@ -134,19 +134,19 @@ test_headersRoundTrip = do
 
 test_statusRoundTrip :: IO ()
 test_statusRoundTrip = do
-    let c200 = Status.known S200
+    let c200 = Status.status S200
     let p200 = Status.print c200 S200
     assertEq "status: print S200" HTTP.status200 p200
     let (r200, _) = Status.parse c200 p200
     assertEq "status: parse S200" (Right S200) r200
 
-    let c404 = Status.known S404
+    let c404 = Status.status S404
     let p404 = Status.print c404 S404
     assertEq "status: print S404" HTTP.status404 p404
     let (r404, _) = Status.parse c404 p404
     assertEq "status: parse S404" (Right S404) r404
 
-    let c500 = Status.known S500
+    let c500 = Status.status S500
     let p500 = Status.print c500 S500
     assertEq "status: print S500" HTTP.status500 p500
     let (r500, _) = Status.parse c500 p500
@@ -156,7 +156,7 @@ data GetUserRes f
     = OkRes       (Response f S200 (Text, Text) LBS.ByteString)
     | NotFoundRes (Response f S404 Int LBS.ByteString)
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
 
 endpoint =
     ( mGet
@@ -187,7 +187,7 @@ test_reqRoundTrip = do
         Left e     -> do { putStrLn ("FAIL: req parse: " ++ show e); exitFailure }
         Right parsed -> do
             putStrLn "PASS: req parse"
-            assertEq "req: path value" ("alice" :: Text) (value parsed.path_)
+            assertEq "req: path value" ("alice" :: Text) (value parsed.path)
 
 test_resRoundTrip :: IO ()
 test_resRoundTrip = do
@@ -216,9 +216,9 @@ test_serverClientRoundTrip = do
                 putStrLn ("FAIL: server/client roundtrip: " ++ show e)
                 exitFailure
             Right (OkRes resVal) -> do
-                assertEq "server/client: status" S200 resVal.status_.value
-                assertEq "server/client: headers" ("text/html", "/home" :: Text) resVal.headers_.value
-                resBody <- resVal.body_.value
+                assertEq "server/client: status" S200 resVal.status.value
+                assertEq "server/client: headers" ("text/html", "/home" :: Text) resVal.headers.value
+                resBody <- resVal.body.value
                 assertEq "server/client: body" "hello" resBody
             Right _ -> do
                 putStrLn "FAIL: server/client: unexpected response variant"

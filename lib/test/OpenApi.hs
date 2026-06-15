@@ -26,7 +26,10 @@ data GetUserRes f
     = OkRes       (Response f S200 OkHeaders LBS.ByteString)
     | NotFoundRes (Response f S404 RetryAfter LBS.ByteString)
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, GenericResAlt)
+    deriving (Generic, ResponseEnum)
+
+data CreateUserRes f = CreateUserRes (Response f S200 HTTP.ResponseHeaders CreateUserBody)
+    deriving (Generic, ResponseEnum)
 
 okRes
     = s200
@@ -61,7 +64,7 @@ createUserReq = mPost
     & path (seg_ @Text "users")
     & body (json @CreateUserBody)
 
-createUserEndpoint = createUserReq :-> only (s200 & body (json @CreateUserBody))
+createUserEndpoint = createUserReq :-> responsesOf @CreateUserRes (s200 & body (json @CreateUserBody))
 
 main :: IO ()
 main = do

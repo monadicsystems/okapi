@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -11,7 +12,7 @@ import Data.CaseInsensitive qualified as CI
 import Data.HashMap.Strict.InsOrd qualified as IHM
 import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
-import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..), Referenced (..), Response, Responses (..), declareSchemaRef, toSchema)
+import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..), Referenced (..), Response, declareSchemaRef, toSchema)
 import Data.OpenApi qualified as OA
 import Data.OpenApi.Declare (execDeclare)
 import Data.Proxy (Proxy (..))
@@ -24,22 +25,23 @@ import Okapi.Body qualified as Body
 import Okapi.Codec (Codec (..), IsoCodec (..))
 import Okapi.Headers (ForRequest, ForResponse, Headers (..))
 import Okapi.Mode (Contract (..), Signature)
-import Okapi.Request (body_, headers_, method_, path_, query_)
+import Okapi.Request (Request (..))
+
 import Okapi.Request.Method qualified as Method
 import Okapi.Request.Path (Path)
 import Okapi.Request.Path qualified as Path
 import Okapi.Request.Query (Query)
 import Okapi.Request.Query qualified as Query
-import Okapi.Response (status_)
+
 import Okapi.Response qualified as ORes
 import Okapi.Response.Status qualified as Status
-import Okapi.Response.Choice (ResAlt (..))
+import Okapi.Responses (Responses (..))
 import Okapi.Data (ToPathData (..))
 
 data PathPiece = PLit Text | PParam Text OA.Schema
 
 walkPath :: Codec Path i o -> [PathPiece] -> [PathPiece]
-walkPath (Embed (Path.Lit x))     ps = ps ++ [PLit (toUrlPiece x)]
+walkPath (Embed (Path.Seg_ x))    ps = ps ++ [PLit (toUrlPiece x)]
 walkPath (Embed h@(Path.Seg n))   ps = ps ++ [PParam n (typeRepSchema (typeRep (proxyOf h)))]
 walkPath (Embed Path.Segs)        ps = ps ++ [PParam "segs" (mempty & OA.type_ ?~ OA.OpenApiString)]
 walkPath (Embed Path.Raw)         ps = ps
@@ -62,9 +64,9 @@ pathOAParams pieces =
 
 extractQueryParams :: Codec Query i o -> [Param]
 extractQueryParams (Embed (Query.Param key))    = [mkParam key ParamQuery True]
-extractQueryParams (Embed (Query.ParamOpt key)) = [mkParam key ParamQuery False]
-extractQueryParams (Embed (Query.Flag key))     = [mkParam key ParamQuery True]
-extractQueryParams (Embed (Query.FlagOpt key))  = [mkParam key ParamQuery False]
+extractQueryParams (Embed (Query.Param' key)) = [mkParam key ParamQuery False]
+extractQueryParams (Embed (Query.Flag key))   = [mkParam key ParamQuery True]
+extractQueryParams (Embed (Query.Flag' key))  = [mkParam key ParamQuery False]
 extractQueryParams (Embed Query.Raw)             = []
 extractQueryParams (FMap _ c)                    = extractQueryParams c
 extractQueryParams (LMap _ c)                    = extractQueryParams c
@@ -142,18 +144,18 @@ data ResInfo = ResInfo
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
-extractResInfos :: ResAlt a -> [ResInfo]
-extractResInfos (OneResAlt res) =
+extractResInfos :: Responses a -> [ResInfo]
+extractResInfos (Only res) =
     [ ResInfo
-        { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus (isoCodec (status_ res)))
-        , resBodySchema = extractBodySchema (isoCodec (ORes.body_ res))
-        , resBodyDefs   = extractBodyDefs   (isoCodec (ORes.body_ res))
-        , resHdrNames   = extractResHeaders (isoCodec (ORes.headers_ res))
+        { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus res.status.isoCodec)
+        , resBodySchema = extractBodySchema res.body.isoCodec
+        , resBodyDefs   = extractBodyDefs   res.body.isoCodec
+        , resHdrNames   = extractResHeaders res.headers.isoCodec
         }
     ]
-extractResInfos (ChoiceResAlt l r) = extractResInfos l ++ extractResInfos r
+extractResInfos (Choice l r) = extractResInfos l ++ extractResInfos r
 
-walkResAltCodec :: Codec ResAlt i o -> [ResInfo]
+walkResAltCodec :: Codec Responses i o -> [ResInfo]
 walkResAltCodec (Embed ra)    = extractResInfos ra
 walkResAltCodec (FMap _ c)    = walkResAltCodec c
 walkResAltCodec (LMap _ c)    = walkResAltCodec c
@@ -213,21 +215,28 @@ setMethod HTTP.DELETE op pi_ = pi_ { _pathItemDelete = Just op }
 setMethod _           op pi_ = pi_ { _pathItemGet    = Just op }
 
 endpointToOpenApi :: Contract (Signature m p q h b r) -> OpenApi
-endpointToOpenApi (req :-> IsoCodec resAlt) =
+endpointToOpenApi (Request
+        { method  = IsoCodec methodCodec
+        , path    = IsoCodec pathCodec
+        , query   = IsoCodec queryCodec
+        , headers = IsoCodec headersCodec
+        , body    = IsoCodec bodyCodec
+        }
+    :-> IsoCodec resAlt) =
     let
-        stdMeth  = fromMaybe HTTP.GET (Method.extractMethod (isoCodec (method_ req)))
-        pieces   = walkPath (isoCodec (path_ req)) []
-        qParams  = extractQueryParams (isoCodec (query_ req))
-        hParams  = extractHeaderParams (isoCodec (headers_ req))
+        stdMeth  = fromMaybe HTTP.GET (Method.extractMethod methodCodec)
+        pieces   = walkPath pathCodec []
+        qParams  = extractQueryParams queryCodec
+        hParams  = extractHeaderParams headersCodec
         resInfos = walkResAltCodec resAlt
         reqBody  = if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
-                   then extractBodySchema (isoCodec (body_ req))
+                   then extractBodySchema bodyCodec
                    else Nothing
-        allDefs  = extractBodyDefs (isoCodec (body_ req))
+        allDefs  = extractBodyDefs bodyCodec
                <> foldMap resBodyDefs resInfos
         op = mempty
             & OA.parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
-            & OA.responses  .~ Responses Nothing
+            & OA.responses  .~ OA.Responses Nothing
                 (IHM.fromList
                     [ (HTTP.statusCode (resStatus ri), Inline (mkResResponse ri))
                     | ri <- resInfos

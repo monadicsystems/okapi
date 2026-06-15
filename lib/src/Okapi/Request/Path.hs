@@ -23,7 +23,7 @@ import Okapi.Data (FromPathData (..), IsoPathData, ToPathData (..))
 import Prelude hiding (print)
 
 data Path a where
-    Lit  :: IsoPathData a => a -> Path ()
+    Seg_ :: IsoPathData a => a -> Path ()
     Seg  :: IsoPathData a => Text -> Path a
     Segs :: IsoPathData a => Path (NonEmpty a)
     Raw  :: Path [Text]
@@ -37,10 +37,10 @@ parse :: Codec Path i o -> [Text] -> (Either ParseError o, [Text])
 parse = Codec.parser pathAlg
   where
     pathAlg :: forall a. Path a -> [Text] -> (Either ParseError a, [Text])
-    pathAlg (Lit x) (t : ts)
+    pathAlg (Seg_ x) (t : ts)
         | t == toUrlPiece x = (Right (), ts)
         | otherwise         = (Left ParseError, t : ts)
-    pathAlg (Lit _) [] = (Left ParseError, [])
+    pathAlg (Seg_ _) [] = (Left ParseError, [])
     pathAlg (Seg _name) (t : ts) = case parseUrlPiece t of
         Left _  -> (Left ParseError, t : ts)
         Right v -> (Right v, ts)
@@ -64,17 +64,20 @@ print :: Codec Path i o -> i -> [Text]
 print = Codec.printer pathPrinter
   where
     pathPrinter :: forall a. Path a -> a -> [Text]
-    pathPrinter (Lit x)     ()  = [toUrlPiece x]
+    pathPrinter (Seg_ x)     ()  = [toUrlPiece x]
     pathPrinter (Seg _name) v   = [toUrlPiece v]
     pathPrinter Segs        nel = map toUrlPiece (NEL.toList nel)
     pathPrinter Raw         ts  = ts
 
+-- | Match a literal path segment; contributes nothing to the decoded value.
 seg_ :: IsoPathData a => a -> Codec Path b ()
-seg_ x = Codec.LMap (const ()) (Embed (Lit x))
+seg_ x = Codec.LMap (const ()) (Embed (Seg_ x))
 
+-- | Match and capture a single typed path segment, identified by a name for documentation.
 seg :: IsoPathData a => Text -> Codec Path a a
 seg name = Embed (Seg name)
 
+-- | Match and capture all remaining path segments as a non-empty list.
 segs :: IsoPathData a => Codec Path (NonEmpty a) (NonEmpty a)
 segs = Embed Segs
 
