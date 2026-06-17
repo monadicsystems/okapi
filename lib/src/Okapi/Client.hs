@@ -10,17 +10,17 @@ import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Codec (Value (..))
-import Okapi.Mode (Contract, Signature, parseResponse, printRequest)
+import Okapi.Mode (ClientError (..), Contract, Signature, parseResponses, printRequest)
 import Okapi.Request (Request)
+import Okapi.Responses (ResponseEnum)
 
 data ClientSettings = ClientSettings
     { manager :: HC.Manager
     , baseUrl :: String
     }
 
-data ClientError = ClientError deriving (Eq, Show)
-
 fetch ::
+    ResponseEnum r =>
     HC.Manager ->
     String ->
     Contract (Signature m p q h b r) ->
@@ -30,7 +30,7 @@ fetch mgr baseUrl endpoint reqVal = do
     waiReq <- printRequest endpoint reqVal
     hcReq  <- toHCRequest baseUrl waiReq
     hcRes  <- HC.httpLbs hcReq mgr
-    pure $ maybe (Left ClientError) Right (parseResponse endpoint (fromHCResponse hcRes))
+    either (const (Left ClientError)) Right <$> parseResponses endpoint (fromHCResponse hcRes)
 
 toHCRequest :: String -> Wai.Request -> IO HC.Request
 toHCRequest baseUrl waiReq = do

@@ -144,7 +144,7 @@ data ResInfo = ResInfo
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
-extractResInfos :: Responses a -> [ResInfo]
+extractResInfos :: Responses r aE aV -> [ResInfo]
 extractResInfos (Only res) =
     [ ResInfo
         { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus res.status.isoCodec)
@@ -154,13 +154,6 @@ extractResInfos (Only res) =
         }
     ]
 extractResInfos (Choice l r) = extractResInfos l ++ extractResInfos r
-
-walkResAltCodec :: Codec Responses i o -> [ResInfo]
-walkResAltCodec (Lift ra)    = extractResInfos ra
-walkResAltCodec (FMap _ c)    = walkResAltCodec c
-walkResAltCodec (LMap _ c)    = walkResAltCodec c
-walkResAltCodec (Apply cf cx) = walkResAltCodec cf ++ walkResAltCodec cx
-walkResAltCodec (Pure _)      = []
 
 hdrName :: HTTP.HeaderName -> Text
 hdrName = T.pack . BS8.unpack . CI.original
@@ -222,13 +215,13 @@ endpointToOpenApi (Request
         , headers = IsoCodec headersCodec
         , body    = IsoCodec bodyCodec
         }
-    :-> IsoCodec resAlt) =
+    :-> resAlt) =
     let
         stdMeth  = fromMaybe HTTP.GET (Method.extractMethod methodCodec)
         pieces   = walkPath pathCodec []
         qParams  = extractQueryParams queryCodec
         hParams  = extractHeaderParams headersCodec
-        resInfos = walkResAltCodec resAlt
+        resInfos = extractResInfos resAlt
         reqBody  = if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
                    then extractBodySchema bodyCodec
                    else Nothing

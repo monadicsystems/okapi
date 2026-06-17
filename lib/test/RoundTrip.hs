@@ -178,34 +178,37 @@ test_reqRoundTrip :: IO ()
 test_reqRoundTrip = do
     let rv = request GET "alice" (Just "active") [] (pure "request-body")
     waiReq <- printRequest endpoint rv
-    reqBody <- Wai.strictRequestBody waiReq
     assertEq "req: method" "GET"              (Wai.requestMethod waiReq)
     assertEq "req: path"   ["users", "alice"] (Wai.pathInfo      waiReq)
     assertEq "req: query"  [("filter", Just "active")] (Wai.queryString waiReq)
-    assertEq "req: body"   "request-body"     reqBody
-    case parseRequest endpoint waiReq of
-        Left _     -> do { putStrLn "FAIL: req parse"; exitFailure }
-        Right parsed -> do
+    parsed <- parseRequest endpoint waiReq
+    case parsed of
+        Left _       -> do { putStrLn "FAIL: req parse"; exitFailure }
+        Right parsed' -> do
             putStrLn "PASS: req parse"
-            assertEq "req: path value" ("alice" :: Text) (value parsed.path)
+            assertEq "req: path value" ("alice" :: Text) (value parsed'.path)
+            bodyBytes <- parsed'.body.value
+            assertEq "req: body" "request-body" bodyBytes
 
 test_resRoundTrip :: IO ()
 test_resRoundTrip = do
     let okVal = OkRes (response S200 ("text/html", "/home") (pure "response-body"))
     waiRes <- printResponse endpoint okVal
-    assertEq "res: ok status"  HTTP.status200 (Wai.responseStatus  waiRes)
+    assertEq "res: ok status"  HTTP.status200  (Wai.responseStatus waiRes)
     assertEq "res: ok body"    "response-body" (waiResBody waiRes)
-    case parseResponse endpoint waiRes of
-        Nothing -> do { putStrLn "FAIL: res: ok parse"; exitFailure }
-        Just _  -> putStrLn "PASS: res: ok reconstruct"
+    okParsed <- parseResponses endpoint waiRes
+    case okParsed of
+        Left _  -> do { putStrLn "FAIL: res: ok parse"; exitFailure }
+        Right _ -> putStrLn "PASS: res: ok reconstruct"
 
     let nfVal = NotFoundRes (response S404 (42 :: Int) (pure "not-found-body"))
     waiRes2 <- printResponse endpoint nfVal
     assertEq "res: 404 status"  HTTP.status404   (Wai.responseStatus waiRes2)
     assertEq "res: 404 body"    "not-found-body" (waiResBody waiRes2)
-    case parseResponse endpoint waiRes2 of
-        Nothing -> do { putStrLn "FAIL: res: 404 parse"; exitFailure }
-        Just _  -> putStrLn "PASS: res: 404 reconstruct"
+    nfParsed <- parseResponses endpoint waiRes2
+    case nfParsed of
+        Left _  -> do { putStrLn "FAIL: res: 404 parse"; exitFailure }
+        Right _ -> putStrLn "PASS: res: 404 reconstruct"
 
 test_serverClientRoundTrip :: IO ()
 test_serverClientRoundTrip = do

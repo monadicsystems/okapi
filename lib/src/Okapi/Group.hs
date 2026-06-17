@@ -23,6 +23,7 @@ import Network.Wai qualified as Wai
 import Okapi.Client (ClientSettings (..), fetch)
 import Okapi.Mode (Client (..), Contract, Server (..), Signature, tryServe, type (~>))
 import Okapi.OpenApi (endpointToOpenApi)
+import Okapi.Responses (ResponseEnum)
 
 
 -- ── GServable ────────────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ instance (GServable n epL svL, GServable n epR svR)
         gServe @n @epL @svL runner epL svL
         . gServe @n @epR @svR runner epR svR
 
-instance GServable n
+instance ResponseEnum r => GServable n
     (S1 sm  (Rec0 (Contract (Signature m p q h b r))))
     (S1 sm' (Rec0 (Server n (Signature m p q h b r)))) where
     gServe runner (M1 (K1 ep)) (M1 (K1 sv)) = tryServe runner ep sv
@@ -85,7 +86,7 @@ instance (GClientable epL clL, GClientable epR clR)
     gClient s (epL :*: epR) =
         gClient @epL @clL s epL :*: gClient @epR @clR s epR
 
-instance GClientable
+instance ResponseEnum r => GClientable
     (S1 sm  (Rec0 (Contract (Signature m p q h b r))))
     (S1 sm' (Rec0 (Client (Signature m p q h b r)))) where
     gClient (ClientSettings mgr url) (M1 (K1 ep)) =

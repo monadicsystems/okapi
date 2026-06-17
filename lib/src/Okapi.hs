@@ -91,6 +91,7 @@ module Okapi
     , printRequest
     , parseResponse
     , parseResponseResult
+    , parseResponses
     , printResponse
       -- * Data typeclasses (implement for custom path/query/header types)
     , IsoPathData
@@ -113,7 +114,7 @@ import Okapi.Mode
     ( Client (..), Contract (..), Server (..), Signature
     , fn, serve
     , parseRequest, parseRequestResult, printRequest
-    , parseResponse, parseResponseResult, printResponse
+    , parseResponse, parseResponseResult, parseResponses, printResponse
     )
 import Okapi.OpenApi (endpointToOpenApi)
 import Okapi.Request (Request (..), mDelete, mGet, mPost, path, query, request, seg, seg_)
