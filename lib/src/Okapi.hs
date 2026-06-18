@@ -82,7 +82,7 @@ module Okapi
       -- * Response alternatives
     , ResponseEnum (..)
       -- * Codec utilities
-    , IsoCodec (..)
+    , IsoCodec (isoCodec)
     , Value (..)
     , (=.)
       -- * Testing utilities

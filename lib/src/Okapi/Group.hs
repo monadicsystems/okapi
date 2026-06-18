@@ -123,7 +123,7 @@ instance GOpenApiable epF => GOpenApiable (C1 cm epF) where
 instance (GOpenApiable epL, GOpenApiable epR) => GOpenApiable (epL :*: epR) where
     gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
 
-instance GOpenApiable (S1 sm (Rec0 (Contract (Signature m p q h b r)))) where
+instance ResponseEnum r => GOpenApiable (S1 sm (Rec0 (Contract (Signature m p q h b r)))) where
     gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
 
 

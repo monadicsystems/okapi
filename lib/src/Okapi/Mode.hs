@@ -36,16 +36,15 @@ module Okapi.Mode (
     extractWaiResBody,
 ) where
 
-import Control.Applicative ((<|>))
 import Data.ByteString qualified as BS
-import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
+import Data.Functor.Identity (Identity (..))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Kind (Type)
-import GHC.Generics (Generic (..), Rep)
+import Data.List.NonEmpty qualified as NE
+import Data.Maybe (mapMaybe)
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Network.Wai.Internal qualified as WaiI
 import Okapi.Body qualified as Body
 import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..))
 import Okapi.Headers qualified as Headers
@@ -55,14 +54,16 @@ import Okapi.Request.Method qualified as Method
 import Okapi.Request.Path qualified as Path
 import Okapi.Request.Query qualified as Query
 import Okapi.Response (Response)
-import Okapi.Response qualified as OkRes
-import Okapi.Response.Status qualified as Status
 import Okapi.Responses
-    ( GResponseOut
-    , ResponseEnum (..)
-    , Responses (..)
-    , buildR
-    , runGResponseFrom
+    ( ResponseEnum (..)
+    , Responses (Responses)
+    , extractWaiResBody
+    , parseResponseResult
+    , printOne
+    , resultToParseError
+    , resultToValue
+    , traverseResponse
+    , zipResponse
     )
 
 -- | Type-level tag encoding the method, path, query, header, body, and response shape of one endpoint.
@@ -79,7 +80,7 @@ data
 data Contract sig where
     (:->) ::
         Request IsoCodec m p q h b ->
-        Responses r (GResponseOut (Rep (r ParseError))) (GResponseOut (Rep (r Value))) ->
+        Responses r ->
         Contract (Signature m p q h b r)
 
 data ClientError = ClientError deriving (Eq, Show)
@@ -215,78 +216,29 @@ parseResponse ::
     Wai.Response ->
     IO (Either (Response ParseError s h b) (Response Value s h b))
 parseResponse res waiRes = do
-    let status  = Wai.responseStatus  waiRes
-        hdrs    = Wai.responseHeaders waiRes
-        bodyLbs = extractWaiResBody   waiRes
-        (sr, _) = Status.parse  res.status.isoCodec  status
-        (hr, _) = Headers.parse res.headers.isoCodec hdrs
-        (br, _) = Body.parse    res.body.isoCodec    bodyLbs
-    pure $ case (sr, hr, br) of
-        (Right s, Right h, Right b) -> Right (OkRes.response s h b)
-        _ -> Left OkRes.Response
-            { status  = ParseError (either Just (const Nothing) sr)
-            , headers = ParseError (either Just (const Nothing) hr)
-            , body    = ParseError (either Just (const Nothing) br)
-            }
+    rr <- parseResponseResult res waiRes
+    pure $ maybe (Left (resultToParseError rr)) Right (resultToValue rr)
 
--- | Parse a single 'Response' codec; always returns per-field 'Result'.
-parseResponseResult ::
-    Response IsoCodec s h b ->
-    Wai.Response ->
-    IO (Response Result s h b)
-parseResponseResult res waiRes = do
-    let status  = Wai.responseStatus  waiRes
-        hdrs    = Wai.responseHeaders waiRes
-        bodyLbs = extractWaiResBody   waiRes
-        (sr, _) = Status.parse  res.status.isoCodec  status
-        (hr, _) = Headers.parse res.headers.isoCodec hdrs
-        (br, _) = Body.parse    res.body.isoCodec    bodyLbs
-    pure OkRes.Response
-        { status  = Result sr
-        , headers = Result hr
-        , body    = Result br
-        }
-
--- | Project a parsed 'Result' response into its per-field 'ParseError' view.
-resultToParseError :: Response Result s h b -> Response ParseError s h b
-resultToParseError r = OkRes.Response
-    { status  = ParseError (either Just (const Nothing) r.status.result)
-    , headers = ParseError (either Just (const Nothing) r.headers.result)
-    , body    = ParseError (either Just (const Nothing) r.body.result)
-    }
-
--- | Project a parsed 'Result' response into 'Value' mode; succeeds iff every field parsed.
-resultToValue :: Response Result s h b -> Maybe (Response Value s h b)
-resultToValue r = case (r.status.result, r.headers.result, r.body.result) of
-    (Right s, Right h, Right b) -> Just (OkRes.response s h b)
-    _                           -> Nothing
-
--- | Walk the response tree once, parsing each constructor's codec into per-field
---   'Result' and wrapping it into both Either-trees with the same 'Left'/'Right'
---   nesting: the 'ParseError' view (one per constructor) and the 'Value' view.
-collect :: Responses r aE aV -> Wai.Response -> IO ([aE], Maybe aV)
-collect (Only codec) waiRes = do
-    rr <- parseResponseResult codec waiRes
-    pure ([resultToParseError rr], resultToValue rr)
-collect (Choice l r) waiRes = do
-    (el, mvl) <- collect l waiRes
-    (er, mvr) <- collect r waiRes
-    pure (map Left el ++ map Right er, (Left <$> mvl) <|> (Right <$> mvr))
-
--- | Parse a response sum type using 'ResponseEnum'; returns all per-constructor errors on failure.
+-- | Parse a response sum type using 'ResponseEnum'. Tries every constructor's
+--   codec; returns the first that fully parses, or all per-constructor errors.
 parseResponses ::
     forall m p q h b r.
     ResponseEnum r =>
     Contract (Signature m p q h b r) ->
     Wai.Response ->
     IO (Either [r ParseError] (r Value))
-parseResponses (_ :-> tree) waiRes = do
-    (es, mv) <- collect tree waiRes
-    pure $ maybe (Left (map (buildR @ParseError) es)) (Right . buildR @Value) mv
-
-extractWaiResBody :: Wai.Response -> LBS.ByteString
-extractWaiResBody (WaiI.ResponseBuilder _ _ b) = Builder.toLazyByteString b
-extractWaiResBody _                            = LBS.empty
+parseResponses (_ :-> Responses cs) waiRes = do
+    rs <- traverse parseBranch (NE.toList cs)
+    pure $ case mapMaybe toValue rs of
+        (v : _) -> Right v
+        []      -> Left (map toErrors rs)
+  where
+    parseBranch :: r IsoCodec -> IO (r Result)
+    parseBranch = traverseResponse @IsoCodec @Result (\codec -> parseResponseResult codec waiRes)
+    toValue :: r Result -> Maybe (r Value)
+    toValue = traverseResponse @Result @Value resultToValue
+    toErrors :: r Result -> r ParseError
+    toErrors = runIdentity . traverseResponse @Result @ParseError (Identity . resultToParseError)
 
 printResponse ::
     forall m p q h b r.
@@ -294,15 +246,7 @@ printResponse ::
     Contract (Signature m p q h b r) ->
     r Value ->
     IO Wai.Response
-printResponse (_ :-> tree) rv =
-    printResponseAlt tree (runGResponseFrom @(Rep (r Value)) (from rv))
-
-printResponseAlt :: Responses r aE aV -> aV -> IO Wai.Response
-printResponseAlt (Only res) rv = do
-    bodyBytes <- Body.printM res.body.isoCodec rv.body.value
-    pure (Wai.responseLBS
-        (Status.print  res.status.isoCodec  rv.status.value)
-        (Headers.print res.headers.isoCodec rv.headers.value)
-        bodyBytes)
-printResponseAlt (Choice l _) (Left  a) = printResponseAlt l a
-printResponseAlt (Choice _ r) (Right b) = printResponseAlt r b
+printResponse (_ :-> Responses cs) rv =
+    case [io | c <- NE.toList cs, Just io <- [zipResponse @IsoCodec @Value printOne c rv]] of
+        (io : _) -> io
+        []       -> error "printResponse: no matching response constructor"  -- unreachable: cs covers all constructors

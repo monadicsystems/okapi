@@ -35,8 +35,11 @@ import Okapi.Request.Query qualified as Query
 
 import Okapi.Response qualified as ORes
 import Okapi.Response.Status qualified as Status
-import Okapi.Responses (Responses (..))
+import Okapi.Responses (ResponseEnum, Responses (Responses), traverseResponse)
 import Okapi.Data (ToPathData (..))
+
+import Data.Functor.Const (Const (..), getConst)
+import Data.List.NonEmpty qualified as NE
 
 data PathPiece = PLit Text | PParam Text OA.Schema
 
@@ -144,16 +147,18 @@ data ResInfo = ResInfo
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
-extractResInfos :: Responses r aE aV -> [ResInfo]
-extractResInfos (Only res) =
-    [ ResInfo
-        { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus res.status.isoCodec)
-        , resBodySchema = extractBodySchema res.body.isoCodec
-        , resBodyDefs   = extractBodyDefs   res.body.isoCodec
-        , resHdrNames   = extractResHeaders res.headers.isoCodec
-        }
-    ]
-extractResInfos (Choice l r) = extractResInfos l ++ extractResInfos r
+resInfoOf :: ORes.Response IsoCodec s h b -> ResInfo
+resInfoOf res = ResInfo
+    { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus res.status.isoCodec)
+    , resBodySchema = extractBodySchema res.body.isoCodec
+    , resBodyDefs   = extractBodyDefs   res.body.isoCodec
+    , resHdrNames   = extractResHeaders res.headers.isoCodec
+    }
+
+-- | One 'ResInfo' per constructor: traverse each branch's codec to its (status, schemas).
+extractResInfos :: ResponseEnum r => Responses r -> [ResInfo]
+extractResInfos (Responses cs) =
+    map (getConst . traverseResponse @IsoCodec @IsoCodec (\c -> Const (resInfoOf c))) (NE.toList cs)
 
 hdrName :: HTTP.HeaderName -> Text
 hdrName = T.pack . BS8.unpack . CI.original
@@ -207,7 +212,7 @@ setMethod HTTP.PUT    op pi_ = pi_ { _pathItemPut    = Just op }
 setMethod HTTP.DELETE op pi_ = pi_ { _pathItemDelete = Just op }
 setMethod _           op pi_ = pi_ { _pathItemGet    = Just op }
 
-endpointToOpenApi :: Contract (Signature m p q h b r) -> OpenApi
+endpointToOpenApi :: ResponseEnum r => Contract (Signature m p q h b r) -> OpenApi
 endpointToOpenApi (Request
         { method  = IsoCodec methodCodec
         , path    = IsoCodec pathCodec

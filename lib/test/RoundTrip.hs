@@ -13,6 +13,7 @@ import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Text (Text)
+import Data.Maybe (isJust)
 import GHC.Generics (Generic)
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
@@ -198,8 +199,13 @@ test_resRoundTrip = do
     assertEq "res: ok body"    "response-body" (waiResBody waiRes)
     okParsed <- parseResponses endpoint waiRes
     case okParsed of
-        Left _  -> do { putStrLn "FAIL: res: ok parse"; exitFailure }
-        Right _ -> putStrLn "PASS: res: ok reconstruct"
+        Right (OkRes resVal) -> do
+            putStrLn "PASS: res: ok reconstruct"
+            assertEq "res: ok status val"  S200                       resVal.status.value
+            assertEq "res: ok headers val" ("text/html", "/home" :: Text) resVal.headers.value
+            okBody <- resVal.body.value
+            assertEq "res: ok body val"    "response-body"            okBody
+        _ -> do { putStrLn "FAIL: res: ok parse"; exitFailure }
 
     let nfVal = NotFoundRes (response S404 (42 :: Int) (pure "not-found-body"))
     waiRes2 <- printResponse endpoint nfVal
@@ -207,8 +213,28 @@ test_resRoundTrip = do
     assertEq "res: 404 body"    "not-found-body" (waiResBody waiRes2)
     nfParsed <- parseResponses endpoint waiRes2
     case nfParsed of
-        Left _  -> do { putStrLn "FAIL: res: 404 parse"; exitFailure }
-        Right _ -> putStrLn "PASS: res: 404 reconstruct"
+        Right (NotFoundRes resVal) -> do
+            putStrLn "PASS: res: 404 reconstruct"
+            assertEq "res: 404 status val" S404         resVal.status.value
+            assertEq "res: 404 header val" (42 :: Int)  resVal.headers.value
+        _ -> do { putStrLn "FAIL: res: 404 parse"; exitFailure }
+
+-- | A response matching no branch must fail with one 'ParseError' per constructor.
+test_resParseFailure :: IO ()
+test_resParseFailure = do
+    let waiRes = Wai.responseLBS (HTTP.mkStatus 418 "I'm a teapot") [] "nope"
+    parsed <- parseResponses endpoint waiRes
+    case parsed of
+        Right _ -> do { putStrLn "FAIL: res: expected parse failure"; exitFailure }
+        Left es -> do
+            assertEq "res: one error per constructor" 3 (length es)
+            case es of
+                [OkRes okErr, NotFoundRes nfErr, ErrorRes erErr] -> do
+                    putStrLn "PASS: res: parse failure shape"
+                    assertEq "res: 200 status failed" True (isJust okErr.status.parseError)
+                    assertEq "res: 404 status failed" True (isJust nfErr.status.parseError)
+                    assertEq "res: 500 status failed" True (isJust erErr.status.parseError)
+                _ -> do { putStrLn "FAIL: res: unexpected error shape"; exitFailure }
 
 test_serverClientRoundTrip :: IO ()
 test_serverClientRoundTrip = do
@@ -241,5 +267,6 @@ main = do
     test_statusRoundTrip
     test_reqRoundTrip
     test_resRoundTrip
+    test_resParseFailure
     test_serverClientRoundTrip
     putStrLn "all round-trip tests passed"
