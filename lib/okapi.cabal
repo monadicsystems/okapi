@@ -28,22 +28,21 @@ library
     import:           warnings
     exposed-modules:
         Okapi
-        Okapi.Body
-        Okapi.Client
+        Okapi.Application.Client
+        Okapi.Application.Server
+        Okapi.Artifact.OpenApi
         Okapi.Codec
+        Okapi.Contract
         Okapi.Data
-        Okapi.Group
-        Okapi.Headers
-        Okapi.Mode
-        Okapi.OpenApi
         Okapi.Pattern
-        Okapi.Request
-        Okapi.Request.Method
-        Okapi.Request.Path
-        Okapi.Request.Query
-        Okapi.Response
-        Okapi.Responses
-        Okapi.Response.Status
+        Okapi.Protocol.Request
+        Okapi.Protocol.Request.Method
+        Okapi.Protocol.Request.Path
+        Okapi.Protocol.Request.Query
+        Okapi.Protocol.Response
+        Okapi.Protocol.Response.Status
+        Okapi.Protocol.Shared.Body
+        Okapi.Protocol.Shared.Headers
     build-depends:
         base ^>=4.20.0.0,
         aeson,
@@ -182,6 +181,19 @@ test-suite okapi-subdsl
     import:           warnings
     type:             exitcode-stdio-1.0
     main-is:          SubDsl.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-types,
+        text,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-generic
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Generic.hs
     hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,

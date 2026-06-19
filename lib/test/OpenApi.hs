@@ -26,10 +26,10 @@ data GetUserRes f
     = OkRes       (Response f S200 OkHeaders LBS.ByteString)
     | NotFoundRes (Response f S404 RetryAfter LBS.ByteString)
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 data CreateUserRes f = CreateUserRes (Response f S200 HTTP.ResponseHeaders CreateUserBody)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 okRes
     = s200
@@ -50,7 +50,7 @@ getUserReq
         pure userId
     & query (param' @Text "filter")
 
-getUserEndpoint = getUserReq :-> responsesOf @GetUserRes
+getUserEndpoint = getUserReq :-> cases @GetUserRes
     okRes
     notFoundRes
     errRes
@@ -64,7 +64,7 @@ createUserReq = mPost
     & path (seg_ @Text "users")
     & body (json @CreateUserBody)
 
-createUserEndpoint = createUserReq :-> responsesOf @CreateUserRes (s200 & body (json @CreateUserBody))
+createUserEndpoint = createUserReq :-> cases @CreateUserRes (s200 & body (json @CreateUserBody))
 
 main :: IO ()
 main = do

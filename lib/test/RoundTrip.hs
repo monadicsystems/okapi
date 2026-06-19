@@ -13,6 +13,7 @@ import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Data.Function ((&))
 import Data.Text (Text)
+import Data.List.NonEmpty qualified as NE
 import Data.Maybe (isJust)
 import GHC.Generics (Generic)
 import Network.HTTP.Client qualified as HC
@@ -21,11 +22,11 @@ import Network.Wai qualified as Wai
 import Network.Wai.Handler.Warp qualified as Warp
 import Network.Wai.Internal qualified as WaiI
 import Okapi
-import Okapi.Headers qualified as ReqH
-import Okapi.Request.Method qualified as Method
-import Okapi.Request.Path qualified as Path
-import Okapi.Request.Query qualified as Query
-import Okapi.Response.Status qualified as Status
+import Okapi.Protocol.Shared.Headers qualified as ReqH
+import Okapi.Protocol.Request.Method qualified as Method
+import Okapi.Protocol.Request.Path qualified as Path
+import Okapi.Protocol.Request.Query qualified as Query
+import Okapi.Protocol.Response.Status qualified as Status
 import System.Exit (exitFailure)
 
 assertEq :: (Show a, Eq a) => String -> a -> a -> IO ()
@@ -100,14 +101,14 @@ test_queryRoundTrip = do
     assertEq "query: flag parse" (Right ()) parsedF
 
     let foCodec = Query.flag' "debug"
-    let printedFT = Query.print foCodec True
-    assertEq "query: flag' True print" [("debug", Nothing)] printedFT
+    let printedFT = Query.print foCodec (Just ())
+    assertEq "query: flag' Just () print" [("debug", Nothing)] printedFT
     let (parsedFT, _) = Query.parse foCodec printedFT
-    assertEq "query: flag' True parse" (Right True) parsedFT
-    let printedFF = Query.print foCodec False
-    assertEq "query: flag' False print" [] printedFF
+    assertEq "query: flag' Just () parse" (Right (Just ())) parsedFT
+    let printedFF = Query.print foCodec Nothing
+    assertEq "query: flag' Nothing print" [] printedFF
     let (parsedFF, _) = Query.parse foCodec printedFF
-    assertEq "query: flag' False parse" (Right False) parsedFF
+    assertEq "query: flag' Nothing parse" (Right Nothing) parsedFF
 
 test_headersRoundTrip :: IO ()
 test_headersRoundTrip = do
@@ -157,7 +158,7 @@ data GetUserRes f
     = OkRes       (Response f S200 (Text, Text) LBS.ByteString)
     | NotFoundRes (Response f S404 Int LBS.ByteString)
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 endpoint =
     ( mGet
@@ -167,7 +168,7 @@ endpoint =
           pure uid
       & query (param' @Text "filter")
     ) :->
-    responsesOf @GetUserRes
+    cases @GetUserRes
         (s200 & headers do
             ct  <- fst =. header @Text "content-type"
             loc <- snd =. header @Text "location"
@@ -227,8 +228,8 @@ test_resParseFailure = do
     case parsed of
         Right _ -> do { putStrLn "FAIL: res: expected parse failure"; exitFailure }
         Left es -> do
-            assertEq "res: one error per constructor" 3 (length es)
-            case es of
+            assertEq "res: one error per constructor" 3 (length (getResponses es))
+            case NE.toList (getResponses es) of
                 [OkRes okErr, NotFoundRes nfErr, ErrorRes erErr] -> do
                     putStrLn "PASS: res: parse failure shape"
                     assertEq "res: 200 status failed" True (isJust okErr.status.parseError)

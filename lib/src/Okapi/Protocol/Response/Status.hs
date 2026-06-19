@@ -5,7 +5,7 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Okapi.Response.Status (
+module Okapi.Protocol.Response.Status (
     KnownStatus (..),
     Status,
     ParseError (..),

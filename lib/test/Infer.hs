@@ -48,9 +48,9 @@ data GetUserRes f
     = OkRes       (Response f S200 OkHeaders LBS.ByteString)
     | NotFoundRes (Response f S404 RetryAfter LBS.ByteString)
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
-getUserResCodec = responsesOf @GetUserRes
+getUserResCodec = cases @GetUserRes
     okWithHeaders
     notFoundWithRetry
     serverErrorPlain

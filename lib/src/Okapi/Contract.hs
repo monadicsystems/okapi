@@ -16,16 +16,9 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Mode (
+module Okapi.Contract (
     Signature,
     Contract (..),
-    ClientError (..),
-    Client (..),
-    Server (..),
-    fn,
-    type (~>),
-    serve,
-    tryServe,
     parseRequest,
     parseRequestResult,
     printRequest,
@@ -33,7 +26,6 @@ module Okapi.Mode (
     parseResponseResult,
     parseResponses,
     printResponse,
-    extractWaiResBody,
 ) where
 
 import Data.ByteString qualified as BS
@@ -43,105 +35,50 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Kind (Type)
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (mapMaybe)
-import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Okapi.Body qualified as Body
+import Okapi.Protocol.Shared.Body qualified as Body
 import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..))
-import Okapi.Headers qualified as Headers
-import Okapi.Request (Request)
-import Okapi.Request qualified as OkReq
-import Okapi.Request.Method qualified as Method
-import Okapi.Request.Path qualified as Path
-import Okapi.Request.Query qualified as Query
-import Okapi.Response (Response)
-import Okapi.Responses
-    ( ResponseEnum (..)
+import Okapi.Protocol.Shared.Headers qualified as Headers
+import Okapi.Protocol.Request (Request)
+import Okapi.Protocol.Request qualified as OkReq
+import Okapi.Protocol.Request.Method qualified as Method
+import Okapi.Protocol.Request.Path qualified as Path
+import Okapi.Protocol.Request.Query qualified as Query
+import Okapi.Protocol.Response
+    ( Response
+    , Cases (..)
     , Responses (Responses)
-    , extractWaiResBody
     , parseResponseResult
     , printOne
     , resultToParseError
     , resultToValue
-    , traverseResponse
-    , zipResponse
+    , traverseResponses
+    , zipResponses
     )
 
+
 -- | Type-level tag encoding the method, path, query, header, body, and response shape of one endpoint.
-data
-    Signature
-        (m :: Type)
-        (p :: Type)
-        (q :: Type)
-        (h :: Type)
-        (b :: Type)
-        (r :: ((Type -> Type) -> Type -> Type) -> Type)
+data Signature
+    (method    :: Type)
+    (path      :: Type)
+    (query     :: Type)
+    (headers   :: Type)
+    (body      :: Type)
+    (responses :: ((Type -> Type) -> Type -> Type) -> Type)
 
 -- | An endpoint contract: a request codec paired with a response codec via @:->@.
 data Contract sig where
     (:->) ::
-        Request IsoCodec m p q h b ->
-        Responses r ->
-        Contract (Signature m p q h b r)
-
-data ClientError = ClientError deriving (Eq, Show)
-
-data Client sig where
-    Cb ::
-        (Request Value m p q h b -> IO (Either ClientError (r Value))) ->
-        Client (Signature m p q h b r)
-
-data Server n sig where
-    Fn ::
-        ((Request Value m p q h b, Wai.Request) -> n (r Value)) ->
-        Server n (Signature m p q h b r)
-
--- | Lift a handler function into a 'Server'.
-fn ::
-    ((Request Value m p q h b, Wai.Request) -> n (r Value)) ->
-    Server n (Signature m p q h b r)
-fn = Fn
-
-type (~>) :: (Type -> Type) -> (Type -> Type) -> Type
-type f ~> g = forall a. f a -> g a
-
--- | Build a WAI 'Wai.Application' from a single contract and its handler; returns 400 on parse failure.
-serve ::
-    ResponseEnum r =>
-    (n ~> IO) ->
-    Contract (Signature m p q h b r) ->
-    Server n (Signature m p q h b r) ->
-    Wai.Application
-serve runner endpoint (Fn handler) waiReq respond = do
-    parsed <- parseRequest endpoint waiReq
-    case parsed of
-        Left _    -> respond (Wai.responseLBS HTTP.status400 [] mempty)
-        Right req -> do
-            resVal <- runner (handler (req, waiReq))
-            waiRes <- printResponse endpoint resVal
-            respond waiRes
-
--- | Attempt to handle a request; passes through to the next middleware on contract mismatch.
-tryServe ::
-    ResponseEnum r =>
-    (n ~> IO) ->
-    Contract (Signature m p q h b r) ->
-    Server n (Signature m p q h b r) ->
-    Wai.Middleware
-tryServe runner endpoint (Fn handler) next waiReq respond = do
-    parsed <- parseRequest endpoint waiReq
-    case parsed of
-        Left _    -> next waiReq respond
-        Right req -> do
-            resVal <- runner (handler (req, waiReq))
-            waiRes <- printResponse endpoint resVal
-            respond waiRes
+        Request IsoCodec method path query headers body ->
+        Responses IsoCodec responses ->
+        Contract (Signature method path query headers body responses)
 
 -- | Parse all request fields; body is read only on route match.
 --   @Left@ carries per-field 'ParseError' info; @Right@ carries parsed values.
 parseRequest ::
-    Contract (Signature m p q h b r) ->
+    Contract (Signature method path query headers body responses) ->
     Wai.Request ->
-    IO (Either (Request ParseError m p q h b) (Request Value m p q h b))
+    IO (Either (Request ParseError method path query headers body) (Request Value method path query headers body))
 parseRequest (req :-> _) waiReq = do
     let (mr, _) = Method.parse   req.method.isoCodec  (Wai.requestMethod  waiReq)
         pr       = Path.parseExact req.path.isoCodec   (Wai.pathInfo       waiReq)
@@ -171,9 +108,9 @@ parseRequest (req :-> _) waiReq = do
 
 -- | Parse all request fields; always returns per-field 'Result'.
 parseRequestResult ::
-    Contract (Signature m p q h b r) ->
+    Contract (Signature method path query headers body responses) ->
     Wai.Request ->
-    IO (Request Result m p q h b)
+    IO (Request Result method path query headers body)
 parseRequestResult (req :-> _) waiReq = do
     bodyRaw <- Wai.strictRequestBody waiReq
     let (mr, _)  = Method.parse   req.method.isoCodec  (Wai.requestMethod  waiReq)
@@ -190,8 +127,8 @@ parseRequestResult (req :-> _) waiReq = do
         }
 
 printRequest ::
-    Contract (Signature m p q h b r) ->
-    Request Value m p q h b ->
+    Contract (Signature method path query headers body responses) ->
+    Request Value method path query headers body ->
     IO Wai.Request
 printRequest (req :-> _) rv = do
     bodyBytes <- Body.printM req.body.isoCodec rv.body.value
@@ -212,41 +149,40 @@ printRequest (req :-> _) rv = do
 -- | Parse a single 'Response' codec against a 'Wai.Response', symmetric to 'parseRequest'.
 --   @Left@ carries per-field 'ParseError'; @Right@ carries parsed values.
 parseResponse ::
-    Response IsoCodec s h b ->
+    Response IsoCodec status headers body ->
     Wai.Response ->
-    IO (Either (Response ParseError s h b) (Response Value s h b))
+    IO (Either (Response ParseError status headers body) (Response Value status headers body))
 parseResponse res waiRes = do
     rr <- parseResponseResult res waiRes
     pure $ maybe (Left (resultToParseError rr)) Right (resultToValue rr)
 
--- | Parse a response sum type using 'ResponseEnum'. Tries every constructor's
+-- | Parse a response sum type using 'Cases'. Tries every constructor's
 --   codec; returns the first that fully parses, or all per-constructor errors.
 parseResponses ::
-    forall m p q h b r.
-    ResponseEnum r =>
-    Contract (Signature m p q h b r) ->
-    Wai.Response ->
-    IO (Either [r ParseError] (r Value))
+    forall method path query headers body responses.
+    Cases responses =>
+    Contract (Signature method path query headers body responses) -> Wai.Response ->
+    IO (Either (Responses ParseError responses) (responses Value))
 parseResponses (_ :-> Responses cs) waiRes = do
-    rs <- traverse parseBranch (NE.toList cs)
-    pure $ case mapMaybe toValue rs of
+    rs <- traverse parseBranch cs
+    pure $ case mapMaybe toValue (NE.toList rs) of
         (v : _) -> Right v
-        []      -> Left (map toErrors rs)
+        []      -> Left (Responses (fmap toErrors rs))
   where
-    parseBranch :: r IsoCodec -> IO (r Result)
-    parseBranch = traverseResponse @IsoCodec @Result (\codec -> parseResponseResult codec waiRes)
-    toValue :: r Result -> Maybe (r Value)
-    toValue = traverseResponse @Result @Value resultToValue
-    toErrors :: r Result -> r ParseError
-    toErrors = runIdentity . traverseResponse @Result @ParseError (Identity . resultToParseError)
+    parseBranch :: responses IsoCodec -> IO (responses Result)
+    parseBranch = traverseResponses @IsoCodec @Result (\codec -> parseResponseResult codec waiRes)
+    toValue :: responses Result -> Maybe (responses Value)
+    toValue = traverseResponses @Result @Value resultToValue
+    toErrors :: responses Result -> responses ParseError
+    toErrors = runIdentity . traverseResponses @Result @ParseError (Identity . resultToParseError)
 
 printResponse ::
-    forall m p q h b r.
-    ResponseEnum r =>
-    Contract (Signature m p q h b r) ->
-    r Value ->
+    forall method path query headers body responses.
+    Cases responses =>
+    Contract (Signature method path query headers body responses) ->
+    responses Value ->
     IO Wai.Response
 printResponse (_ :-> Responses cs) rv =
-    case [io | c <- NE.toList cs, Just io <- [zipResponse @IsoCodec @Value printOne c rv]] of
+    case [io | c <- NE.toList cs, Just io <- [zipResponses @IsoCodec @Value printOne c rv]] of
         (io : _) -> io
         []       -> error "printResponse: no matching response constructor"  -- unreachable: cs covers all constructors

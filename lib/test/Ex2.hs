@@ -24,10 +24,10 @@ import System.Exit (exitFailure)
 data UserRes f
     = FoundUser (Response f S200 Text LBS.ByteString)
     | NotFound  (Response f S404 Text LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 data HealthRes f = HealthRes (Response f S200 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ getUserReq
         pure uid
 
 getUserEndpoint
-    = getUserReq :-> responsesOf @UserRes
+    = getUserReq :-> cases @UserRes
         (s200 & headers do header @Text "x-user-id")
         (s404 & headers do header @Text "x-error")
 
@@ -48,7 +48,7 @@ healthReq
     & path do
         seg_ @Text "health"
 
-healthEndpoint = healthReq :-> responsesOf @HealthRes s200
+healthEndpoint = healthReq :-> cases @HealthRes s200
 
 -- ── HKD record ───────────────────────────────────────────────────────────────
 

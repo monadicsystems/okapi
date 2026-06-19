@@ -7,10 +7,10 @@ import Data.List.NonEmpty (NonEmpty (..))
 import Data.Text (Text)
 import Okapi.Codec (Codec)
 import Okapi.Data
-import Okapi.Headers (ForRequest)
-import Okapi.Headers qualified as Headers
-import Okapi.Request.Path qualified as Path
-import Okapi.Request.Query qualified as Query
+import Okapi.Protocol.Shared.Headers (ForRequest)
+import Okapi.Protocol.Shared.Headers qualified as Headers
+import Okapi.Protocol.Request.Path qualified as Path
+import Okapi.Protocol.Request.Query qualified as Query
 import System.Exit (exitFailure)
 
 assertEq :: (Show a, Eq a) => String -> a -> a -> IO ()
@@ -103,13 +103,13 @@ main = do
 
     -- ── Query: flag' ─────────────────────────────────────────────────────────
     let qVerbose = Query.flag' "verbose"
-    assertEq "flag' True roundtrip"
-        (Right True)
-        (fst (Query.parse qVerbose (Query.print qVerbose True)))
+    assertEq "flag' Just () roundtrip"
+        (Right (Just ()))
+        (fst (Query.parse qVerbose (Query.print qVerbose (Just ()))))
 
-    assertEq "flag' False roundtrip"
-        (Right False)
-        (fst (Query.parse qVerbose (Query.print qVerbose False)))
+    assertEq "flag' Nothing roundtrip"
+        (Right Nothing)
+        (fst (Query.parse qVerbose (Query.print qVerbose Nothing)))
 
     -- ── Query: extra params are lenient ──────────────────────────────────────
     let qExtra = [("other", Just "val")]

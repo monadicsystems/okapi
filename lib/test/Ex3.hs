@@ -74,17 +74,17 @@ deleteItemDB iid = do
 -- ── Response types ───────────────────────────────────────────────────────────
 
 data CreatedItemRes f = CreatedItemRes (Response f S201 HTTP.ResponseHeaders Item)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 data GetItemRes f
     = ItemFound (Response f S200 HTTP.ResponseHeaders Item)
     | ItemNotFound (Response f S404 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 data DeleteItemRes f
     = ItemDeleted (Response f S204 HTTP.ResponseHeaders ())
     | DeleteNotFound (Response f S404 HTTP.ResponseHeaders LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 -- ── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ createItemReq =
 
 createItemEndpoint =
     createItemReq
-        :-> responsesOf @CreatedItemRes
+        :-> cases @CreatedItemRes
             (s201 & body (json @Item))
 
 getItemReq =
@@ -108,7 +108,7 @@ getItemReq =
 
 getItemEndpoint =
     getItemReq
-        :-> responsesOf @GetItemRes
+        :-> cases @GetItemRes
             (s200 & body (json @Item))
             s404
 
@@ -121,7 +121,7 @@ deleteItemReq =
 
 deleteItemEndpoint =
     deleteItemReq
-        :-> responsesOf @DeleteItemRes
+        :-> cases @DeleteItemRes
             (s204 & body noContent)
             s404
 

@@ -1,10 +1,16 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Headers (
+module Okapi.Protocol.Shared.Headers (
     ForRequest,
     ForResponse,
     Headers (..),
@@ -20,14 +26,25 @@ module Okapi.Headers (
     setCookie,
     setCookie',
     HasHeaders (..),
+    ConstF (..),
+    CookieF (..),
+    SetCookieF (..),
+    GHeaders (..),
+    headersCodec,
 ) where
 
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
+import Data.CaseInsensitive qualified as CI
 import Data.Kind (Type)
 import Data.List (partition)
+import Data.Proxy (Proxy (..))
+import Data.Text qualified as Text
+import Data.Text.Encoding (encodeUtf8)
+import GHC.Generics (D1, C1, S1, K1 (..), M1 (..), Rec0, (:*:) (..), Generic (..), Selector (..))
+import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
@@ -183,3 +200,83 @@ class HasHeaders (contract :: Type -> Type -> Type) where
         Codec (Headers (Ctx contract)) h h ->
         contract [HTTP.Header] b ->
         contract h b
+
+
+-- ── Generic headers deriving ──────────────────────────────────────────────────
+
+-- | Record field type for a constant-value header assertion.
+--   @val@ is the required header value; the header name comes from the field name (with @_@ → @-@).
+--   The field contributes no value to the decoded type — it only validates presence.
+data ConstF (val :: Symbol) = ConstF deriving (Eq, Show)
+
+-- | Record field type for a request cookie. The field name (with @_@ → @-@) becomes the cookie name.
+newtype CookieF a = CookieF { getCookieF :: a } deriving (Eq, Show)
+
+-- | Record field type for a response Set-Cookie. The field name (with @_@ → @-@) becomes the cookie name.
+newtype SetCookieF a = SetCookieF { getSetCookieF :: a } deriving (Eq, Show)
+
+fieldToHeaderName :: String -> HTTP.HeaderName
+fieldToHeaderName = CI.mk . encodeUtf8 . Text.pack . map (\c -> if c == '_' then '-' else c)
+
+fieldToCookieName :: String -> ByteString
+fieldToCookieName = encodeUtf8 . Text.pack . map (\c -> if c == '_' then '-' else c)
+
+class GHeaders (ctx :: Type) (f :: Type -> Type) where
+    gHeadersCodec :: Codec (Headers ctx) (f ()) (f ())
+
+instance GHeaders ctx f => GHeaders ctx (D1 meta f) where
+    gHeadersCodec = FMap M1 $ LMap unM1 gHeadersCodec
+
+instance GHeaders ctx f => GHeaders ctx (C1 meta f) where
+    gHeadersCodec = FMap M1 $ LMap unM1 gHeadersCodec
+
+instance (GHeaders ctx f, GHeaders ctx g) => GHeaders ctx (f :*: g) where
+    gHeadersCodec =
+        Apply
+            (FMap (\l r -> l :*: r) (LMap (\(l :*: _) -> l) gHeadersCodec))
+            (LMap (\(_ :*: r) -> r) gHeadersCodec)
+
+instance (Selector s, IsoHeaderData a) => GHeaders ctx (S1 s (Rec0 a)) where
+    gHeadersCodec =
+        let key = fieldToHeaderName (selName (undefined :: S1 s (Rec0 a) ()))
+        in FMap (M1 . K1) $ LMap (unK1 . unM1) $ Lift (Header key)
+
+instance {-# OVERLAPPING #-} (Selector s, IsoHeaderData a) => GHeaders ctx (S1 s (Rec0 (Maybe a))) where
+    gHeadersCodec =
+        let key = fieldToHeaderName (selName (undefined :: S1 s (Rec0 (Maybe a)) ()))
+        in FMap (M1 . K1) $ LMap (unK1 . unM1) $ Lift (Header' key)
+
+instance {-# OVERLAPPING #-} (Selector s, IsoCookieData a) => GHeaders ForRequest (S1 s (Rec0 (CookieF a))) where
+    gHeadersCodec =
+        let name = fieldToCookieName (selName (undefined :: S1 s (Rec0 (CookieF a)) ()))
+        in FMap (M1 . K1 . CookieF) $ LMap (getCookieF . unK1 . unM1) $ Lift (Cookie name)
+
+instance {-# OVERLAPPING #-} (Selector s, IsoCookieData a) => GHeaders ForRequest (S1 s (Rec0 (Maybe (CookieF a)))) where
+    gHeadersCodec =
+        let name = fieldToCookieName (selName (undefined :: S1 s (Rec0 (Maybe (CookieF a))) ()))
+        in FMap (M1 . K1 . fmap CookieF) $ LMap (fmap getCookieF . unK1 . unM1) $ Lift (Cookie' name)
+
+instance {-# OVERLAPPING #-} (Selector s, IsoCookieData a) => GHeaders ForResponse (S1 s (Rec0 (SetCookieF a))) where
+    gHeadersCodec =
+        let name = fieldToCookieName (selName (undefined :: S1 s (Rec0 (SetCookieF a)) ()))
+        in FMap (M1 . K1 . SetCookieF) $ LMap (getSetCookieF . unK1 . unM1) $ Lift (SetCookie name)
+
+instance {-# OVERLAPPING #-} (Selector s, IsoCookieData a) => GHeaders ForResponse (S1 s (Rec0 (Maybe (SetCookieF a)))) where
+    gHeadersCodec =
+        let name = fieldToCookieName (selName (undefined :: S1 s (Rec0 (Maybe (SetCookieF a))) ()))
+        in FMap (M1 . K1 . fmap SetCookieF) $ LMap (fmap getSetCookieF . unK1 . unM1) $ Lift (SetCookie' name)
+
+instance {-# OVERLAPPING #-} (Selector s, KnownSymbol val) => GHeaders ctx (S1 s (Rec0 (ConstF val))) where
+    gHeadersCodec =
+        let k = fieldToHeaderName (selName (undefined :: S1 s (Rec0 (ConstF val)) ()))
+            v = encodeUtf8 (Text.pack (symbolVal (Proxy @val)))
+        in FMap (\() -> M1 (K1 ConstF)) $ LMap (const ()) $ Lift (Header_ k v)
+
+-- | Build a 'Headers' codec from a Generic record type.
+--   Field types determine which constructor is used:
+--   @a@ → required header, @Maybe a@ → optional header,
+--   @CookieF a@ → request cookie, @SetCookieF a@ → response Set-Cookie,
+--   @ConstF val@ → constant-value assertion (field name → header key, @val@ → required value).
+--   Field names (with @_@ converted to @-@) become header/cookie names.
+headersCodec :: forall ctx a. (Generic a, GHeaders ctx (Rep a)) => Codec (Headers ctx) a a
+headersCodec = FMap (to @a) $ LMap (from @a) gHeadersCodec

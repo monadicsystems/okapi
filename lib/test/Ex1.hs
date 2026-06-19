@@ -48,7 +48,7 @@ data UserResBody = UserResBody
 data UserRes f
     = FoundUser (Response f S200 Text UserResBody)
     | NoUser (Response f S404 Text LBS.ByteString)
-    deriving (Generic, ResponseEnum)
+    deriving (Generic, Cases)
 
 userRequest
     = mPost
@@ -72,7 +72,7 @@ noUser
     & headers do
         header @Text "x-error"
 
-userResponses = responsesOf @UserRes
+userResponses = cases @UserRes
     foundUser
     noUser
 

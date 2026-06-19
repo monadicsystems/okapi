@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Okapi.Body (
+module Okapi.Protocol.Shared.Body (
     Body (..),
     ForRequest,
     ForResponse,
@@ -24,7 +24,7 @@ import Data.Kind (Type)
 import Data.OpenApi (ToSchema)
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Headers (ForRequest, ForResponse)
+import Okapi.Protocol.Shared.Headers (ForRequest, ForResponse)
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 

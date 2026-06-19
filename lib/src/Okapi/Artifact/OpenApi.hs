@@ -1,9 +1,13 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.OpenApi (endpointToOpenApi) where
+module Okapi.Artifact.OpenApi (endpointToOpenApi, GOpenApiable, openApi) where
 
 import Control.Applicative ((<|>))
 import Control.Lens ((&), (.~), (?~))
@@ -19,23 +23,30 @@ import Data.Proxy (Proxy (..))
 import Data.Typeable (TypeRep, typeRep)
 import Data.Text (Text)
 import Data.Text qualified as T
+import GHC.Generics
+    ( D1, C1, S1, K1 (..), M1 (..), Rec0
+    , Generic (..), Rep
+    , (:*:) (..)
+    )
+import Data.Kind (Type)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Body (Body, IsoJson)
-import Okapi.Body qualified as Body
+import Okapi.Protocol.Shared.Body (Body, IsoJson)
+import Okapi.Protocol.Shared.Body qualified as Body
 import Okapi.Codec (Codec (..), IsoCodec (..))
-import Okapi.Headers (ForRequest, ForResponse, Headers (..))
-import Okapi.Mode (Contract (..), Signature)
-import Okapi.Request (Request (..))
+import Okapi.Protocol.Shared.Headers (ForRequest, ForResponse, Headers (..))
+import Okapi.Contract (Signature)
+import Okapi.Contract (Contract (..))
+import Okapi.Protocol.Request (Request (..))
 
-import Okapi.Request.Method qualified as Method
-import Okapi.Request.Path (Path)
-import Okapi.Request.Path qualified as Path
-import Okapi.Request.Query (Query)
-import Okapi.Request.Query qualified as Query
+import Okapi.Protocol.Request.Method qualified as Method
+import Okapi.Protocol.Request.Path (Path)
+import Okapi.Protocol.Request.Path qualified as Path
+import Okapi.Protocol.Request.Query (Query)
+import Okapi.Protocol.Request.Query qualified as Query
 
-import Okapi.Response qualified as ORes
-import Okapi.Response.Status qualified as Status
-import Okapi.Responses (ResponseEnum, Responses (Responses), traverseResponse)
+import Okapi.Protocol.Response qualified as ORes
+import Okapi.Protocol.Response.Status qualified as Status
+import Okapi.Protocol.Response (Cases, Responses (Responses), traverseResponses)
 import Okapi.Data (ToPathData (..))
 
 import Data.Functor.Const (Const (..), getConst)
@@ -156,9 +167,9 @@ resInfoOf res = ResInfo
     }
 
 -- | One 'ResInfo' per constructor: traverse each branch's codec to its (status, schemas).
-extractResInfos :: ResponseEnum r => Responses r -> [ResInfo]
+extractResInfos :: Cases responses => Responses IsoCodec responses -> [ResInfo]
 extractResInfos (Responses cs) =
-    map (getConst . traverseResponse @IsoCodec @IsoCodec (\c -> Const (resInfoOf c))) (NE.toList cs)
+    map (getConst . traverseResponses @IsoCodec @IsoCodec (\c -> Const (resInfoOf c))) (NE.toList cs)
 
 hdrName :: HTTP.HeaderName -> Text
 hdrName = T.pack . BS8.unpack . CI.original
@@ -212,7 +223,7 @@ setMethod HTTP.PUT    op pi_ = pi_ { _pathItemPut    = Just op }
 setMethod HTTP.DELETE op pi_ = pi_ { _pathItemDelete = Just op }
 setMethod _           op pi_ = pi_ { _pathItemGet    = Just op }
 
-endpointToOpenApi :: ResponseEnum r => Contract (Signature m p q h b r) -> OpenApi
+endpointToOpenApi :: Cases responses => Contract (Signature method path query headers body responses) -> OpenApi
 endpointToOpenApi (Request
         { method  = IsoCodec methodCodec
         , path    = IsoCodec pathCodec
@@ -245,3 +256,31 @@ endpointToOpenApi (Request
         & OA.info . OA.version .~ "0.1.0"
         & OA.components . OA.schemas .~ allDefs
         & OA.paths .~ IHM.singleton (pathTemplate pieces) (setMethod stdMeth op mempty)
+
+
+-- ── GOpenApiable ─────────────────────────────────────────────────────────────
+
+class GOpenApiable (epF :: Type -> Type) where
+    gOpenApi :: epF () -> OpenApi
+
+instance GOpenApiable epF => GOpenApiable (D1 dm epF) where
+    gOpenApi (M1 ep) = gOpenApi @epF ep
+
+instance GOpenApiable epF => GOpenApiable (C1 cm epF) where
+    gOpenApi (M1 ep) = gOpenApi @epF ep
+
+instance (GOpenApiable epL, GOpenApiable epR) => GOpenApiable (epL :*: epR) where
+    gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
+
+instance Cases responses => GOpenApiable (S1 sm (Rec0 (Contract (Signature method path query headers body responses)))) where
+    gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
+
+-- | Derive an OpenAPI 3.0 document from a record of contracts.
+openApi ::
+    forall server.
+    ( Generic (server Contract)
+    , GOpenApiable (Rep (server Contract))
+    ) =>
+    server Contract ->
+    OpenApi
+openApi = gOpenApi @(Rep (server Contract)) . from

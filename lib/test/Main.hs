@@ -58,10 +58,10 @@ data GetUserRes f
     | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
     deriving (Generic)
 
-instance ResponseEnum GetUserRes
+instance Cases GetUserRes
 
 getUserResCodec =
-    responsesOf @GetUserRes
+    cases @GetUserRes
         okWithHeaders
         notFoundWithRetry
         serverErrorPlain
