@@ -49,6 +49,10 @@ module Okapi
     , param'
     , flag
     , flag'
+    , list
+    , list'
+    , ArrayStyle (..)
+    , deepObject
       -- ** Headers DSL
     , HasHeaders (..)
     , header
@@ -58,6 +62,10 @@ module Okapi
     , cookie'
     , setCookie
     , setCookie'
+    , Separator (..)
+    , structHeader
+    , structHeaderL
+    , structHeaderSep
     , ForRequest
     , ForResponse
       -- ** Generic DSL derivation
@@ -71,6 +79,8 @@ module Okapi
       -- ** Body DSL
     , HasBody (..)
     , json
+    , form
+    , html
     , noContent
     , IsoJson
       -- * Responses
@@ -99,6 +109,7 @@ module Okapi
     , parseRequest
     , parseRequestResult
     , printRequest
+    , linkTo
     , parseResponse
     , parseResponseResult
     , parseResponses
@@ -110,7 +121,7 @@ module Okapi
     , IsoCookieData
     ) where
 
-import Okapi.Protocol.Shared.Body (HasBody (..), IsoJson, json, noContent)
+import Okapi.Protocol.Shared.Body (HasBody (..), IsoJson, json, form, html, noContent)
 import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..), (=.))
 import Okapi.Data (IsoHeaderData, IsoCookieData, IsoPathData, IsoQueryData)
 import Okapi.Protocol.Shared.Headers
@@ -118,16 +129,17 @@ import Okapi.Protocol.Shared.Headers
     , HasHeaders (..)
     , cookie, cookie', header, header', header_, setCookie, setCookie'
     , ConstF (..), CookieF (..), SetCookieF (..)
+    , Separator (..), structHeader, structHeaderL, structHeaderSep
     )
 import Okapi.Artifact.OpenApi (endpointToOpenApi, openApi)
 import Okapi.Protocol.Request (Request (..), mDelete, mGet, mPost, path, query, request, seg, seg_, pathOf, queryOf, headersOf)
 import Okapi.Protocol.Request.Path (LitF (..))
 import Okapi.Protocol.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
 import Okapi.Protocol.Request.Path (segs)
-import Okapi.Protocol.Request.Query (flag, flag', param, param')
+import Okapi.Protocol.Request.Query (flag, flag', param, param', list, list', ArrayStyle (..), deepObject)
 import Okapi.Protocol.Response (Response (..), response, s200, s201, s204, s404, s500)
 import Okapi.Protocol.Response (Cases (..), Responses, getResponses)
 import Okapi.Protocol.Response.Status (KnownStatus (..), S200, S201, S204, S404, S500)
-import Okapi.Contract (Signature, Contract (..), parseRequest, parseRequestResult, printRequest, parseResponse, parseResponseResult, parseResponses, printResponse)
+import Okapi.Contract (Signature, Contract (..), parseRequest, parseRequestResult, printRequest, linkTo, parseResponse, parseResponseResult, parseResponses, printResponse)
 import Okapi.Application.Server (Server (..), fn, serve, app)
 import Okapi.Application.Client (Client (..), ClientError (..), ClientSettings (..), fetch, client)

@@ -102,7 +102,12 @@ instance HasHeaders (Response IsoCodec status) where
 
 instance HasBody (Response IsoCodec status) where
     type BodyCtx (Response IsoCodec status) = ForResponse
-    body c r = r { body = IsoCodec c }
+    -- also fold the body's Content-Type into the headers codec (print + lenient assert)
+    body c (Response s h _) = Response s h' (IsoCodec c)
+      where
+        h' = case Body.bodyMediaType c of
+            Nothing -> h
+            Just mt -> IsoCodec (Headers.contentTypeHeader mt (isoCodec h))
 
 extractWaiResBody :: Wai.Response -> LBS.ByteString
 extractWaiResBody (WaiI.ResponseBuilder _ _ b) = Builder.toLazyByteString b

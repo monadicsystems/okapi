@@ -39,20 +39,25 @@ library
         Okapi.Protocol.Request.Method
         Okapi.Protocol.Request.Path
         Okapi.Protocol.Request.Query
+        Okapi.Protocol.Request.Query.DeepObject
         Okapi.Protocol.Response
         Okapi.Protocol.Response.Status
         Okapi.Protocol.Shared.Body
         Okapi.Protocol.Shared.Headers
+        Okapi.Protocol.Shared.Headers.Value
     build-depends:
         base ^>=4.20.0.0,
         aeson,
         bytestring,
         case-insensitive,
         cookie,
+        http-api-data,
         http-client,
+        http-media,
         http-types,
         insert-ordered-containers,
-        lens,
+        lucid,
+        optics-core,
         openapi3,
         profunctors,
         scientific,
@@ -199,6 +204,58 @@ test-suite okapi-generic
         base ^>=4.20.0.0,
         bytestring,
         http-types,
+        text,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-header-value
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          HeaderValue.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-types,
+        text,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-query-list
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          QueryList.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        http-types,
+        text,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-form
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          FormBody.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        bytestring,
+        http-api-data,
+        text,
+        okapi
+    default-language: GHC2024
+
+test-suite okapi-content-type
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          ContentType.hs
+    hs-source-dirs:   test
+    build-depends:
+        base ^>=4.20.0.0,
+        aeson,
+        http-api-data,
+        openapi3,
         text,
         okapi
     default-language: GHC2024

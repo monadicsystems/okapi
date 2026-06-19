@@ -5,6 +5,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -22,6 +23,7 @@ module Okapi.Contract (
     parseRequest,
     parseRequestResult,
     printRequest,
+    linkTo,
     parseResponse,
     parseResponseResult,
     parseResponses,
@@ -35,6 +37,10 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Kind (Type)
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (mapMaybe)
+import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Text.Encoding (decodeUtf8)
+import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Okapi.Protocol.Shared.Body qualified as Body
 import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..))
@@ -145,6 +151,19 @@ printRequest (req :-> _) rv = do
             , Wai.requestHeaders = Headers.print req.headers.isoCodec  rv.headers.value
             }
     pure (Wai.setRequestBodyChunks streamBody baseReq)
+
+-- | Render the typesafe URL — path and query string — for a contract from a
+--   request value. Method, headers, and body are ignored. The result is a
+--   relative reference (@\/path?query@); prepend your origin for an absolute URL
+--   (e.g. for Stripe @success_url@ / @cancel_url@, or an htmx @hx-get@).
+linkTo ::
+    Contract (Signature method path query headers body responses) ->
+    Request Value method path query headers body ->
+    Text
+linkTo (req :-> _) rv =
+    let segs  = Path.print  req.path.isoCodec  rv.path.value
+        query = Query.print req.query.isoCodec rv.query.value
+    in "/" <> T.intercalate "/" segs <> decodeUtf8 (HTTP.renderQuery True query)
 
 -- | Parse a single 'Response' codec against a 'Wai.Response', symmetric to 'parseRequest'.
 --   @Left@ carries per-field 'ParseError'; @Right@ carries parsed values.

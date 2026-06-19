@@ -192,6 +192,13 @@ test_reqRoundTrip = do
             bodyBytes <- parsed'.body.value
             assertEq "req: body" "request-body" bodyBytes
 
+test_linkTo :: IO ()
+test_linkTo = do
+    let rv = request GET "alice" (Just "active") [] (pure "request-body")
+    assertEq "linkTo: path + query" "/users/alice?filter=active" (linkTo endpoint rv)
+    let rv2 = request GET "bob" Nothing [] (pure "")
+    assertEq "linkTo: no query" "/users/bob" (linkTo endpoint rv2)
+
 test_resRoundTrip :: IO ()
 test_resRoundTrip = do
     let okVal = OkRes (response S200 ("text/html", "/home") (pure "response-body"))
@@ -267,6 +274,7 @@ main = do
     test_headersRoundTrip
     test_statusRoundTrip
     test_reqRoundTrip
+    test_linkTo
     test_resRoundTrip
     test_resParseFailure
     test_serverClientRoundTrip

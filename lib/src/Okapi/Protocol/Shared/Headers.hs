@@ -25,6 +25,11 @@ module Okapi.Protocol.Shared.Headers (
     cookie',
     setCookie,
     setCookie',
+    Separator (..),
+    structHeader,
+    structHeaderL,
+    structHeaderSep,
+    contentTypeHeader,
     HasHeaders (..),
     ConstF (..),
     CookieF (..),
@@ -42,13 +47,15 @@ import Data.Kind (Type)
 import Data.List (partition)
 import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
-import Data.Text.Encoding (encodeUtf8)
+import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import GHC.Generics (D1, C1, S1, K1 (..), M1 (..), Rec0, (:*:) (..), Generic (..), Selector (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
 import Okapi.Data (IsoHeaderData, IsoCookieData, parseHeader, toHeader, parseCookieValue, toCookieValue)
+import Okapi.Protocol.Shared.Headers.Value (HeaderValue)
+import Okapi.Protocol.Shared.Headers.Value qualified as HV
 import Prelude hiding (print)
 import Web.Cookie qualified as Cookie
 import Web.Cookie (parseCookies)
@@ -66,6 +73,16 @@ data Headers ctx a where
     Cookie'  :: IsoCookieData a => ByteString -> Headers ForRequest (Maybe a)
     SetCookie  :: IsoCookieData a => ByteString -> Headers ForResponse a
     SetCookie' :: IsoCookieData a => ByteString -> Headers ForResponse (Maybe a)
+    -- | A header whose value has internal structure (a separator-joined list of
+    --   items), decoded by a 'HeaderValue' sub-codec. e.g. @Content-Type@.
+    Structured :: Separator -> HTTP.HeaderName -> Codec HeaderValue a a -> Headers ctx a
+
+-- | Item separator for a structured header value.
+data Separator = Semicolon | Comma deriving (Eq, Show)
+
+sepChar :: Separator -> Char
+sepChar Semicolon = ';'
+sepChar Comma     = ','
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -133,6 +150,13 @@ parse = Codec.parser headersAlg
                 in case parseCookieValue val of
                     Left _  -> (Right Nothing, rest)
                     Right x -> (Right (Just x), rest)
+    headersAlg (Structured sep name c) hs =
+        case partition (\(k, _) -> k == name) hs of
+            ([], _)            -> (Left ParseError, hs)
+            ((_, v) : _, rest) ->
+                case fst (HV.parse c (HV.splitItems (sepChar sep) v)) of
+                    Left _  -> (Left ParseError, hs)
+                    Right x -> (Right x, rest)
 
 isSetCookieFor :: ByteString -> (HTTP.HeaderName, ByteString) -> Bool
 isSetCookieFor name ("set-cookie", v) =
@@ -154,6 +178,7 @@ print = Codec.printer headersPrinter
     headersPrinter (SetCookie name) x          = [renderSC name x]
     headersPrinter (SetCookie' _) Nothing      = []
     headersPrinter (SetCookie' name) (Just x)  = [renderSC name x]
+    headersPrinter (Structured sep name c) a   = [(name, HV.renderItems (sepChar sep) (HV.print c a))]
 
 renderSC :: IsoCookieData a => ByteString -> a -> (HTTP.HeaderName, ByteString)
 renderSC name x =
@@ -193,6 +218,28 @@ setCookie name = Lift (SetCookie name)
 -- | Optional @Set-Cookie@ response header; yields 'Nothing' when absent.
 setCookie' :: IsoCookieData a => ByteString -> Codec (Headers ForResponse) (Maybe a) (Maybe a)
 setCookie' name = Lift (SetCookie' name)
+
+-- | A header whose value is a structured, separator-joined list of items,
+--   decoded by a 'HeaderValue' do-block. Choose the item separator explicitly.
+--   The header must be present on parse.
+structHeaderSep :: Separator -> HTTP.HeaderName -> Codec HeaderValue a a -> Codec (Headers ctx) a a
+structHeaderSep sep name c = Lift (Structured sep name c)
+
+-- | 'structHeaderSep' with a semicolon separator — Content-Type, HSTS, etc.
+structHeader :: HTTP.HeaderName -> Codec HeaderValue a a -> Codec (Headers ctx) a a
+structHeader = structHeaderSep Semicolon
+
+-- | 'structHeaderSep' with a comma separator — flat list headers (Cache-Control, Vary, Allow).
+structHeaderL :: HTTP.HeaderName -> Codec HeaderValue a a -> Codec (Headers ctx) a a
+structHeaderL = structHeaderSep Comma
+
+-- | Fold an (invisible) @Content-Type@ assertion for the given media-type token into an
+--   existing headers codec — prints @Content-Type: <media>@ and, on parse, asserts the
+--   media-type token is present (tolerating parameters like @; charset=utf-8@). The decoded
+--   headers type is unchanged.
+contentTypeHeader :: ByteString -> Codec (Headers ctx) h h -> Codec (Headers ctx) h h
+contentTypeHeader mt hc =
+    Apply (LMap (const ()) (FMap (const id) (structHeader "content-type" (HV.flag (decodeUtf8 mt))))) hc
 
 class HasHeaders (contract :: Type -> Type -> Type) where
     type Ctx contract :: Type

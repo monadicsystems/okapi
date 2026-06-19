@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,7 +11,9 @@
 module Okapi.Artifact.OpenApi (endpointToOpenApi, GOpenApiable, openApi) where
 
 import Control.Applicative ((<|>))
-import Control.Lens ((&), (.~), (?~))
+import Data.Function ((&))
+import Optics.Core ((%), (.~), (?~))
+import Data.OpenApi.Optics ()
 import Data.ByteString.Char8 qualified as BS8
 import Data.CaseInsensitive qualified as CI
 import Data.HashMap.Strict.InsOrd qualified as IHM
@@ -20,7 +23,9 @@ import Data.OpenApi (OpenApi, Operation, Param, ParamLocation (..), PathItem (..
 import Data.OpenApi qualified as OA
 import Data.OpenApi.Declare (execDeclare)
 import Data.Proxy (Proxy (..))
+import Data.String (fromString)
 import Data.Typeable (TypeRep, typeRep)
+import Network.HTTP.Media (MediaType)
 import Data.Text (Text)
 import Data.Text qualified as T
 import GHC.Generics
@@ -57,7 +62,7 @@ data PathPiece = PLit Text | PParam Text OA.Schema
 walkPath :: Codec Path i o -> [PathPiece] -> [PathPiece]
 walkPath (Lift (Path.Seg_ x))    ps = ps ++ [PLit (toUrlPiece x)]
 walkPath (Lift h@(Path.Seg n))   ps = ps ++ [PParam n (typeRepSchema (typeRep (proxyOf h)))]
-walkPath (Lift Path.Segs)        ps = ps ++ [PParam "segs" (mempty & OA.type_ ?~ OA.OpenApiString)]
+walkPath (Lift Path.Segs)        ps = ps ++ [PParam "segs" (mempty & #type ?~ OA.OpenApiString)]
 walkPath (Lift Path.Raw)         ps = ps
 walkPath (FMap _ c)               ps = walkPath c ps
 walkPath (LMap _ c)               ps = walkPath c ps
@@ -81,6 +86,9 @@ extractQueryParams (Lift (Query.Param key))    = [mkParam key ParamQuery True]
 extractQueryParams (Lift (Query.Param' key)) = [mkParam key ParamQuery False]
 extractQueryParams (Lift (Query.Flag key))   = [mkParam key ParamQuery True]
 extractQueryParams (Lift (Query.Flag' key))  = [mkParam key ParamQuery False]
+extractQueryParams (Lift (Query.List  style key)) = [mkArrayParam key True  style]
+extractQueryParams (Lift (Query.List' style key)) = [mkArrayParam key False style]
+extractQueryParams (Lift (Query.DeepObj name _))  = [mkDeepObjectParam name]
 extractQueryParams (Lift Query.Raw)             = []
 extractQueryParams (FMap _ c)                    = extractQueryParams c
 extractQueryParams (LMap _ c)                    = extractQueryParams c
@@ -95,11 +103,11 @@ innerProxyOf _ = Proxy
 
 typeRepSchema :: TypeRep -> OA.Schema
 typeRepSchema tr
-    | tr == typeRep (Proxy :: Proxy T.Text)  = mempty & OA.type_ ?~ OA.OpenApiString
-    | tr == typeRep (Proxy :: Proxy Int)     = mempty & OA.type_ ?~ OA.OpenApiInteger
-    | tr == typeRep (Proxy :: Proxy Integer) = mempty & OA.type_ ?~ OA.OpenApiInteger
-    | tr == typeRep (Proxy :: Proxy Bool)    = mempty & OA.type_ ?~ OA.OpenApiBoolean
-    | otherwise                              = mempty & OA.type_ ?~ OA.OpenApiString
+    | tr == typeRep (Proxy :: Proxy T.Text)  = mempty & #type ?~ OA.OpenApiString
+    | tr == typeRep (Proxy :: Proxy Int)     = mempty & #type ?~ OA.OpenApiInteger
+    | tr == typeRep (Proxy :: Proxy Integer) = mempty & #type ?~ OA.OpenApiInteger
+    | tr == typeRep (Proxy :: Proxy Bool)    = mempty & #type ?~ OA.OpenApiBoolean
+    | otherwise                              = mempty & #type ?~ OA.OpenApiString
 
 extractHeaderParams :: Codec (Headers ForRequest) i o -> [Param]
 extractHeaderParams (Lift hdr) = case hdr of
@@ -109,6 +117,11 @@ extractHeaderParams (Lift hdr) = case hdr of
     h@(Cookie'  name) -> [mkParamWithSchema (T.pack (BS8.unpack name)) ParamCookie False (typeRepSchema (typeRep (innerProxyOf h)))]
     Raw               -> []
     Header_ _ _       -> []
+    -- structured headers degrade to a string-typed header param (lossy); content-type
+    -- is represented via the content map instead, so skip it here.
+    Structured _ name _
+        | name == "content-type" -> []
+        | otherwise              -> [mkParamWithSchema (hdrName name) ParamHeader True (mempty & #type ?~ OA.OpenApiString)]
 extractHeaderParams (FMap _ c)    = extractHeaderParams c
 extractHeaderParams (LMap _ c)    = extractHeaderParams c
 extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParams cx
@@ -122,6 +135,9 @@ extractResHeaders (Lift hdr) = case hdr of
     h@(SetCookie' name) -> [(T.pack (BS8.unpack name), False, typeRepSchema (typeRep (innerProxyOf h)))]
     Raw                 -> []
     Header_ _ _         -> []
+    Structured _ name _
+        | name == "content-type" -> []
+        | otherwise              -> [(hdrName name, True, mempty & #type ?~ OA.OpenApiString)]
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c
 extractResHeaders (Apply cf cx) = extractResHeaders cf ++ extractResHeaders cx
@@ -153,6 +169,7 @@ extractBodyDefs (Pure _)      = mempty
 
 data ResInfo = ResInfo
     { resStatus     :: HTTP.Status
+    , resMediaType  :: Maybe BS8.ByteString
     , resBodySchema :: Maybe OA.Schema
     , resBodyDefs   :: OA.Definitions OA.Schema
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
@@ -161,6 +178,7 @@ data ResInfo = ResInfo
 resInfoOf :: ORes.Response IsoCodec s h b -> ResInfo
 resInfoOf res = ResInfo
     { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus res.status.isoCodec)
+    , resMediaType  = Body.bodyMediaType res.body.isoCodec
     , resBodySchema = extractBodySchema res.body.isoCodec
     , resBodyDefs   = extractBodyDefs   res.body.isoCodec
     , resHdrNames   = extractResHeaders res.headers.isoCodec
@@ -176,45 +194,78 @@ hdrName = T.pack . BS8.unpack . CI.original
 
 mkParam :: Text -> ParamLocation -> Bool -> Param
 mkParam n loc req_ = mempty
-    & OA.name     .~ n
-    & OA.in_      .~ loc
-    & OA.required ?~ req_
+    & #name     .~ n
+    & #in      .~ loc
+    & #required ?~ req_
 
 mkParamWithSchema :: Text -> ParamLocation -> Bool -> OA.Schema -> Param
 mkParamWithSchema n loc req_ sc = mempty
-    & OA.name     .~ n
-    & OA.in_      .~ loc
-    & OA.required ?~ req_
-    & OA.schema   ?~ Inline sc
+    & #name     .~ n
+    & #in      .~ loc
+    & #required ?~ req_
+    & #schema   ?~ Inline sc
+
+-- | An array query parameter with OpenAPI @style@/@explode@ matching the 'Query.ArrayStyle'.
+mkArrayParam :: Text -> Bool -> Query.ArrayStyle -> Param
+mkArrayParam n req_ style = mempty
+    & #name     .~ n
+    & #in      .~ ParamQuery
+    & #required ?~ req_
+    & #style    ?~ st
+    & #explode  ?~ ex
+    & #schema   ?~ Inline arraySchema
+  where
+    arraySchema = mempty
+        & #type  ?~ OA.OpenApiArray
+        & #items ?~ OA.OpenApiItemsObject (Inline (mempty & #type ?~ OA.OpenApiString))
+    (st, ex) = case style of
+        Query.Exploded       -> (OA.StyleForm,           True)
+        Query.CommaDelimited -> (OA.StyleForm,           False)
+        Query.SpaceDelimited -> (OA.StyleSpaceDelimited, False)
+        Query.PipeDelimited  -> (OA.StylePipeDelimited,  False)
+
+-- | A @deepObject@ object query parameter (OpenAPI style=deepObject, explode=true).
+mkDeepObjectParam :: Text -> Param
+mkDeepObjectParam n = mempty
+    & #name     .~ n
+    & #in      .~ ParamQuery
+    & #required ?~ True
+    & #style    ?~ OA.StyleDeepObject
+    & #explode  ?~ True
+    & #schema   ?~ Inline (mempty & #type ?~ OA.OpenApiObject)
 
 mkResResponse :: ResInfo -> Response
 mkResResponse ri =
     mempty
-    & OA.description .~ T.pack (show (HTTP.statusCode (resStatus ri)))
-    & applyResBodySchema (resBodySchema ri)
+    & #description .~ T.pack (show (HTTP.statusCode (resStatus ri)))
+    & applyResBodySchema (resMediaType ri) (resBodySchema ri)
     & applyResHeaders (resHdrNames ri)
 
-applyResBodySchema :: Maybe OA.Schema -> Response -> Response
-applyResBodySchema Nothing   r = r
-applyResBodySchema (Just sc) r = r
-    & OA.content .~ IHM.singleton "application/json"
-        (mempty & OA.schema ?~ Inline sc)
+applyResBodySchema :: Maybe BS8.ByteString -> Maybe OA.Schema -> Response -> Response
+applyResBodySchema _  Nothing   r = r
+applyResBodySchema mt (Just sc) r = r
+    & #content .~ IHM.singleton (mediaKey mt)
+        (mempty & #schema ?~ Inline sc)
 
 applyResHeaders :: [(Text, Bool, OA.Schema)] -> Response -> Response
 applyResHeaders [] r = r
 applyResHeaders hs r = r
-    & OA.headers .~ IHM.fromList
-        [ (name, Inline (mempty & OA.required ?~ req_ & OA.schema ?~ Inline sc))
+    & #headers .~ IHM.fromList
+        [ (name, Inline (mempty & #required ?~ req_ & #schema ?~ Inline sc))
         | (name, req_, sc) <- hs
         ]
 
-applyReqBodySchema :: Maybe OA.Schema -> Operation -> Operation
-applyReqBodySchema Nothing   op = op
-applyReqBodySchema (Just sc) op = op
-    & OA.requestBody ?~ Inline
-        ( mempty & OA.content .~ IHM.singleton "application/json"
-            (mempty & OA.schema ?~ Inline sc)
+applyReqBodySchema :: Maybe BS8.ByteString -> Maybe OA.Schema -> Operation -> Operation
+applyReqBodySchema _  Nothing   op = op
+applyReqBodySchema mt (Just sc) op = op
+    & #requestBody ?~ Inline
+        ( mempty & #content .~ IHM.singleton (mediaKey mt)
+            (mempty & #schema ?~ Inline sc)
         )
+
+-- | The OpenAPI @content@ media-type key for a body, defaulting to @application/json@.
+mediaKey :: Maybe BS8.ByteString -> MediaType
+mediaKey = maybe "application/json" (fromString . BS8.unpack)
 
 setMethod :: HTTP.StdMethod -> Operation -> PathItem -> PathItem
 setMethod HTTP.GET    op pi_ = pi_ { _pathItemGet    = Just op }
@@ -244,18 +295,18 @@ endpointToOpenApi (Request
         allDefs  = extractBodyDefs bodyCodec
                <> foldMap resBodyDefs resInfos
         op = mempty
-            & OA.parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
-            & OA.responses  .~ OA.Responses Nothing
+            & #parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
+            & #responses  .~ OA.Responses Nothing
                 (IHM.fromList
                     [ (HTTP.statusCode (resStatus ri), Inline (mkResResponse ri))
                     | ri <- resInfos
                     ])
-            & applyReqBodySchema reqBody
+            & applyReqBodySchema (Body.bodyMediaType bodyCodec) reqBody
     in mempty
-        & OA.info . OA.title   .~ "API"
-        & OA.info . OA.version .~ "0.1.0"
-        & OA.components . OA.schemas .~ allDefs
-        & OA.paths .~ IHM.singleton (pathTemplate pieces) (setMethod stdMeth op mempty)
+        & #info % #title   .~ "API"
+        & #info % #version .~ "0.1.0"
+        & #components % #schemas .~ allDefs
+        & #paths .~ IHM.singleton (pathTemplate pieces) (setMethod stdMeth op mempty)
 
 
 -- ── GOpenApiable ─────────────────────────────────────────────────────────────

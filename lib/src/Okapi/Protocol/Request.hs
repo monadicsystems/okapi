@@ -119,7 +119,12 @@ instance HasHeaders (Request IsoCodec meth path query) where
 
 instance HasBody (Request IsoCodec meth path query) where
     type BodyCtx (Request IsoCodec meth path query) = ForRequest
-    body c r = r { body = IsoCodec c }
+    -- also fold the body's Content-Type into the headers codec (print + lenient assert)
+    body c (Request m p q h _) = Request m p q h' (IsoCodec c)
+      where
+        h' = case Body.bodyMediaType c of
+            Nothing -> h
+            Just mt -> IsoCodec (Headers.contentTypeHeader mt (isoCodec h))
 
 seg_ :: (Typeable a, ToPathData a, FromPathData a) => a -> Codec Path b ()
 seg_ x = Path.seg_ x
