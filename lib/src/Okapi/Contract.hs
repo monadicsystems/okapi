@@ -42,9 +42,9 @@ import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8)
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Okapi.Protocol.Shared.Body qualified as Body
+import Okapi.Protocol.Request.Body qualified as Body
 import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..))
-import Okapi.Protocol.Shared.Headers qualified as Headers
+import Okapi.Protocol.Headers qualified as Headers
 import Okapi.Protocol.Request (Request)
 import Okapi.Protocol.Request qualified as OkReq
 import Okapi.Protocol.Request.Method qualified as Method
@@ -62,8 +62,6 @@ import Okapi.Protocol.Response
     , zipResponses
     )
 
-
--- | Type-level tag encoding the method, path, query, header, body, and response shape of one endpoint.
 data Signature
     (method    :: Type)
     (path      :: Type)
@@ -72,15 +70,12 @@ data Signature
     (body      :: Type)
     (responses :: ((Type -> Type) -> Type -> Type) -> Type)
 
--- | An endpoint contract: a request codec paired with a response codec via @:->@.
 data Contract sig where
     (:->) ::
         Request IsoCodec method path query headers body ->
         Responses IsoCodec responses ->
         Contract (Signature method path query headers body responses)
 
--- | Parse all request fields; body is read only on route match.
---   @Left@ carries per-field 'ParseError' info; @Right@ carries parsed values.
 parseRequest ::
     Contract (Signature method path query headers body responses) ->
     Wai.Request ->
@@ -96,7 +91,7 @@ parseRequest (req :-> _) waiReq = do
             let (brE, _) = Body.parse req.body.isoCodec bodyRaw
             br <- traverse id brE
             pure $ case br of
-                Right b -> Right $ OkReq.request m p q h (pure b)
+                Right b -> Right $ OkReq.requestValue m p q h (pure b)
                 Left  e -> Left OkReq.Request
                     { method  = ParseError Nothing
                     , path    = ParseError Nothing
@@ -112,7 +107,6 @@ parseRequest (req :-> _) waiReq = do
             , body    = ParseError Nothing
             }
 
--- | Parse all request fields; always returns per-field 'Result'.
 parseRequestResult ::
     Contract (Signature method path query headers body responses) ->
     Wai.Request ->
@@ -152,10 +146,6 @@ printRequest (req :-> _) rv = do
             }
     pure (Wai.setRequestBodyChunks streamBody baseReq)
 
--- | Render the typesafe URL — path and query string — for a contract from a
---   request value. Method, headers, and body are ignored. The result is a
---   relative reference (@\/path?query@); prepend your origin for an absolute URL
---   (e.g. for Stripe @success_url@ / @cancel_url@, or an htmx @hx-get@).
 linkTo ::
     Contract (Signature method path query headers body responses) ->
     Request Value method path query headers body ->
@@ -165,8 +155,6 @@ linkTo (req :-> _) rv =
         query = Query.print req.query.isoCodec rv.query.value
     in "/" <> T.intercalate "/" segs <> decodeUtf8 (HTTP.renderQuery True query)
 
--- | Parse a single 'Response' codec against a 'Wai.Response', symmetric to 'parseRequest'.
---   @Left@ carries per-field 'ParseError'; @Right@ carries parsed values.
 parseResponse ::
     Response IsoCodec status headers body ->
     Wai.Response ->
@@ -175,8 +163,6 @@ parseResponse res waiRes = do
     rr <- parseResponseResult res waiRes
     pure $ maybe (Left (resultToParseError rr)) Right (resultToValue rr)
 
--- | Parse a response sum type using 'Cases'. Tries every constructor's
---   codec; returns the first that fully parses, or all per-constructor errors.
 parseResponses ::
     forall method path query headers body responses.
     Cases responses =>
@@ -204,4 +190,4 @@ printResponse ::
 printResponse (_ :-> Responses cs) rv =
     case [io | c <- NE.toList cs, Just io <- [zipResponses @IsoCodec @Value printOne c rv]] of
         (io : _) -> io
-        []       -> error "printResponse: no matching response constructor"  -- unreachable: cs covers all constructors
+        []       -> error "printResponse: no matching response constructor"

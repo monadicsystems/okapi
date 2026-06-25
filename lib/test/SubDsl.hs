@@ -6,7 +6,6 @@ module Main where
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Text (Text)
 import Okapi.Codec (Codec)
-import Okapi.Data
 import Okapi.Protocol.Shared.Headers (ForRequest)
 import Okapi.Protocol.Shared.Headers qualified as Headers
 import Okapi.Protocol.Request.Path qualified as Path

@@ -33,18 +33,28 @@ library
         Okapi.Artifact.OpenApi
         Okapi.Codec
         Okapi.Contract
-        Okapi.Data
-        Okapi.Pattern
         Okapi.Protocol.Request
         Okapi.Protocol.Request.Method
         Okapi.Protocol.Request.Path
         Okapi.Protocol.Request.Query
-        Okapi.Protocol.Request.Query.DeepObject
+        Okapi.Protocol.Request.Headers
+        Okapi.Protocol.Request.Body
         Okapi.Protocol.Response
         Okapi.Protocol.Response.Status
-        Okapi.Protocol.Shared.Body
-        Okapi.Protocol.Shared.Headers
-        Okapi.Protocol.Shared.Headers.Value
+        Okapi.Protocol.Response.Headers
+        Okapi.Protocol.Response.Body
+        Okapi.Data
+        Okapi.Protocol.Body
+        Okapi.Protocol.Headers
+        Okapi.Protocol.Headers.Cookies
+        Okapi.Protocol.Headers.Attributes
+        Okapi.Protocol.Headers.Structured
+        Okapi.Protocol.Headers.Structured.Lexer
+        Okapi.Protocol.Headers.Structured.BareItem
+        Okapi.Protocol.Headers.Structured.Parameters
+        Okapi.Protocol.Headers.Structured.Item
+        Okapi.Protocol.Headers.Structured.List
+        Okapi.Protocol.Headers.Structured.Dictionary
     build-depends:
         base ^>=4.20.0.0,
         aeson,
@@ -208,16 +218,14 @@ test-suite okapi-generic
         okapi
     default-language: GHC2024
 
-test-suite okapi-header-value
+test-suite okapi-fields
     import:           warnings
     type:             exitcode-stdio-1.0
-    main-is:          HeaderValue.hs
+    main-is:          Fields.hs
     hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         bytestring,
-        http-types,
-        text,
         okapi
     default-language: GHC2024
 
@@ -254,7 +262,9 @@ test-suite okapi-content-type
     build-depends:
         base ^>=4.20.0.0,
         aeson,
+        bytestring,
         http-api-data,
+        lucid,
         openapi3,
         text,
         okapi

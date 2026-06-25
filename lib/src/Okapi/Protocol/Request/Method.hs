@@ -66,11 +66,9 @@ print = Codec.printer methodPrinter
     methodPrinter Raw         m  = m
     methodPrinter (Method km) _  = HTTP.renderStdMethod (knownMethodToStd km)
 
--- | Accept and produce any HTTP method without type-level constraint.
 raw :: Codec Method HTTP.Method HTTP.Method
 raw = Lift Raw
 
--- | Match and produce a specific HTTP method known at compile time.
 method :: KnownMethod m -> Codec Method (KnownMethod m) (KnownMethod m)
 method km = Lift (Method km)
 

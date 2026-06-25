@@ -17,7 +17,7 @@ module Okapi.Application.Client (
     ClientSettings (..),
     Client (..),
     fetch,
-    GClientable,
+    GClient,
     client,
 ) where
 
@@ -85,35 +85,31 @@ fromHCResponse hcRes = Wai.responseLBS
     (HC.responseHeaders hcRes)
     (HC.responseBody    hcRes)
 
-
--- ── GClientable ──────────────────────────────────────────────────────────────
-
-class GClientable (epF :: Type -> Type) (clF :: Type -> Type) where
+class GClient (epF :: Type -> Type) (clF :: Type -> Type) where
     gClient :: ClientSettings -> epF () -> clF ()
 
-instance GClientable epF clF => GClientable (D1 dm epF) (D1 dm' clF) where
+instance GClient epF clF => GClient (D1 dm epF) (D1 dm' clF) where
     gClient s (M1 ep) = M1 (gClient @epF @clF s ep)
 
-instance GClientable epF clF => GClientable (C1 cm epF) (C1 cm' clF) where
+instance GClient epF clF => GClient (C1 cm epF) (C1 cm' clF) where
     gClient s (M1 ep) = M1 (gClient @epF @clF s ep)
 
-instance (GClientable epL clL, GClientable epR clR)
-    => GClientable (epL :*: epR) (clL :*: clR) where
+instance (GClient epL clL, GClient epR clR)
+    => GClient (epL :*: epR) (clL :*: clR) where
     gClient s (epL :*: epR) =
         gClient @epL @clL s epL :*: gClient @epR @clR s epR
 
-instance Cases responses => GClientable
+instance Cases responses => GClient
     (S1 sm  (Rec0 (Contract (Signature method path query headers body responses))))
     (S1 sm' (Rec0 (Client (Signature method path query headers body responses)))) where
     gClient (ClientSettings mgr url) (M1 (K1 ep)) =
         M1 (K1 (Cb \reqVal -> fetch mgr url ep reqVal))
 
--- | Derive a record of HTTP client functions from a record of contracts.
 client ::
     forall server.
     ( Generic (server Contract)
     , Generic (server Client)
-    , GClientable (Rep (server Contract)) (Rep (server Client))
+    , GClient (Rep (server Contract)) (Rep (server Client))
     ) =>
     server Contract ->
     ClientSettings ->

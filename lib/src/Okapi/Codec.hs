@@ -11,8 +11,11 @@ module Okapi.Codec (
     Value (..),
     ParseError (..),
     Result (..),
+    ForRequest,
+    ForResponse,
     StateOf,
     ParseErrorOf,
+    PartOf,
     Parser,
     Printer,
     (=.),
@@ -24,6 +27,9 @@ where
 
 import Data.Kind (Type)
 import Data.Profunctor
+
+data ForRequest
+data ForResponse
 
 type Codec :: (Type -> Type) -> Type -> Type -> Type
 data Codec t i o where
@@ -58,6 +64,8 @@ infixr 5 =.
 
 type family StateOf (t :: Type -> Type) :: Type
 type family ParseErrorOf (t :: Type -> Type) :: Type
+
+type family PartOf (t :: Type -> Type) :: Type
 
 type Parser t a = StateOf t -> (Either (ParseErrorOf t) a, StateOf t)
 type Printer t a = a -> StateOf t

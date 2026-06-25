@@ -19,7 +19,7 @@ module Okapi.Application.Server (
     type (~>),
     serve,
     tryServe,
-    GServable,
+    GServer,
     app,
 ) where
 
@@ -42,7 +42,6 @@ data Server (n :: Type -> Type) sig where
         ((Request Value method path query headers body, Wai.Request) -> n (responses Value)) ->
         Server n (Signature method path query headers body responses)
 
--- | Lift a handler function into a 'Server'.
 fn ::
     ((Request Value method path query headers body, Wai.Request) -> n (responses Value)) ->
     Server n (Signature method path query headers body responses)
@@ -51,7 +50,6 @@ fn = Fn
 type (~>) :: (Type -> Type) -> (Type -> Type) -> Type
 type f ~> g = forall a. f a -> g a
 
--- | Build a WAI 'Wai.Application' from a single contract and its handler; returns 400 on parse failure.
 serve ::
     Cases responses =>
     (n ~> IO) ->
@@ -67,7 +65,6 @@ serve runner endpoint (Fn handler) waiReq respond = do
             waiRes <- printResponse endpoint resVal
             respond waiRes
 
--- | Attempt to handle a request; passes through to the next middleware on contract mismatch.
 tryServe ::
     Cases responses =>
     (n ~> IO) ->
@@ -83,35 +80,31 @@ tryServe runner endpoint (Fn handler) next waiReq respond = do
             waiRes <- printResponse endpoint resVal
             respond waiRes
 
-
--- ── GServable ────────────────────────────────────────────────────────────────
-
-class GServable (n :: Type -> Type) (epF :: Type -> Type) (svF :: Type -> Type) where
+class GServer (n :: Type -> Type) (epF :: Type -> Type) (svF :: Type -> Type) where
     gServe :: (n ~> IO) -> epF () -> svF () -> Wai.Middleware
 
-instance GServable n epF svF => GServable n (D1 dm epF) (D1 dm' svF) where
+instance GServer n epF svF => GServer n (D1 dm epF) (D1 dm' svF) where
     gServe runner (M1 ep) (M1 sv) = gServe @n @epF @svF runner ep sv
 
-instance GServable n epF svF => GServable n (C1 cm epF) (C1 cm' svF) where
+instance GServer n epF svF => GServer n (C1 cm epF) (C1 cm' svF) where
     gServe runner (M1 ep) (M1 sv) = gServe @n @epF @svF runner ep sv
 
-instance (GServable n epL svL, GServable n epR svR)
-    => GServable n (epL :*: epR) (svL :*: svR) where
+instance (GServer n epL svL, GServer n epR svR)
+    => GServer n (epL :*: epR) (svL :*: svR) where
     gServe runner (epL :*: epR) (svL :*: svR) =
         gServe @n @epL @svL runner epL svL
         . gServe @n @epR @svR runner epR svR
 
-instance Cases responses => GServable n
+instance Cases responses => GServer n
     (S1 sm  (Rec0 (Contract (Signature method path query headers body responses))))
     (S1 sm' (Rec0 (Server n (Signature method path query headers body responses)))) where
     gServe runner (M1 (K1 ep)) (M1 (K1 sv)) = tryServe runner ep sv
 
--- | Derive a WAI application from a record of contracts and a matching record of handlers.
 app ::
     forall server n.
     ( Generic (server Contract)
     , Generic (server (Server n))
-    , GServable n (Rep (server Contract)) (Rep (server (Server n)))
+    , GServer n (Rep (server Contract)) (Rep (server (Server n)))
     ) =>
     server Contract ->
     (n ~> IO) ->
