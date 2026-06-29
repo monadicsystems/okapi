@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeApplications #-}
@@ -24,27 +25,22 @@ module Okapi.Protocol.Request.Path (
     pathCodec,
 ) where
 
+import Data.Bifunctor (first)
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NEL
 import Data.Proxy (Proxy (..))
-import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Okapi.Codec (Codec (..), ParseErrorOf, PartOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data
-    ( Data (..), Iso (..), Prim (..)
-    , boolPrim, charPrim, dayPrim, doublePrim, floatPrim, int16Prim, int32Prim
-    , int64Prim, intPrim, integerPrim, localTimePrim, scientificPrim, textPrim
-    , timeOfDayPrim, utcTimePrim, uuidPrim
-    )
+import Okapi.Data (Data (..), Info (..), Iso (..))
 import Prelude hiding (print)
+import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
 data Path a where
     Seg_ :: Iso Path a -> a -> Path ()
@@ -106,25 +102,13 @@ segments vIso = Lift (Segs vIso)
 raw :: Codec Path [Text] [Text]
 raw = Lift Raw
 
-pathIso :: Prim a -> Iso Path a
-pathIso (Prim dec enc nfo) = Iso (either (const (Left ParseError)) Right . dec) enc nfo
-
-instance Data Path Int        where iso = pathIso intPrim
-instance Data Path Int16      where iso = pathIso int16Prim
-instance Data Path Int32      where iso = pathIso int32Prim
-instance Data Path Int64      where iso = pathIso int64Prim
-instance Data Path Integer    where iso = pathIso integerPrim
-instance Data Path Float      where iso = pathIso floatPrim
-instance Data Path Double     where iso = pathIso doublePrim
-instance Data Path Scientific where iso = pathIso scientificPrim
-instance Data Path Bool       where iso = pathIso boolPrim
-instance Data Path Char       where iso = pathIso charPrim
-instance Data Path Text       where iso = pathIso textPrim
-instance Data Path Day        where iso = pathIso dayPrim
-instance Data Path LocalTime  where iso = pathIso localTimePrim
-instance Data Path UTCTime    where iso = pathIso utcTimePrim
-instance Data Path TimeOfDay  where iso = pathIso timeOfDayPrim
-instance Data Path UUID       where iso = pathIso uuidPrim
+instance Data Path Int     where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" Nothing)
+instance Data Path Int16   where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" (Just "int32"))
+instance Data Path Int32   where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" (Just "int32"))
+instance Data Path Int64   where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" (Just "int64"))
+instance Data Path Integer where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" Nothing)
+instance Data Path Text    where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "string" Nothing)
+instance Data Path UUID    where iso = Iso (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "string" (Just "uuid"))
 
 data LitF (sym :: Symbol) = LitF deriving (Eq, Show)
 

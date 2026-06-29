@@ -28,6 +28,7 @@ module Okapi.Protocol.Request.Query (
     queryCodec,
 ) where
 
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
@@ -36,23 +37,18 @@ import Data.Kind (Type)
 import Data.List (partition)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
-import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.Encoding (decodeUtf8Lenient, encodeUtf8)
-import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
+import Data.Time (Day, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import Network.HTTP.Types qualified as HTTP
 import Okapi.Codec (Codec (..), ParseErrorOf, PartOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data
-    ( Data (..), Iso (..), Prim (..)
-    , boolPrim, charPrim, dayPrim, doublePrim, floatPrim, int16Prim, int32Prim
-    , int64Prim, intPrim, integerPrim, localTimePrim, scientificPrim, textPrim
-    , timeOfDayPrim, utcTimePrim, uuidPrim
-    )
+import Okapi.Data (Data (..), Info (..), Iso (..))
 import Prelude hiding (print)
+import Web.HttpApiData (parseQueryParam, toQueryParam)
 
 type Query :: Type -> Type
 data Query a where
@@ -184,25 +180,18 @@ list style key vIso = Lift (List style key vIso)
 list' :: ArrayStyle -> Text -> Iso Query a -> Codec Query [a] [a]
 list' style key vIso = Lift (List' style key vIso)
 
-queryIso :: Prim a -> Iso Query a
-queryIso (Prim dec enc nfo) = Iso (either (const (Left ParseError)) Right . dec) enc nfo
-
-instance Data Query Int        where iso = queryIso intPrim
-instance Data Query Int16      where iso = queryIso int16Prim
-instance Data Query Int32      where iso = queryIso int32Prim
-instance Data Query Int64      where iso = queryIso int64Prim
-instance Data Query Integer    where iso = queryIso integerPrim
-instance Data Query Float      where iso = queryIso floatPrim
-instance Data Query Double     where iso = queryIso doublePrim
-instance Data Query Scientific where iso = queryIso scientificPrim
-instance Data Query Bool       where iso = queryIso boolPrim
-instance Data Query Char       where iso = queryIso charPrim
-instance Data Query Text       where iso = queryIso textPrim
-instance Data Query Day        where iso = queryIso dayPrim
-instance Data Query LocalTime  where iso = queryIso localTimePrim
-instance Data Query UTCTime    where iso = queryIso utcTimePrim
-instance Data Query TimeOfDay  where iso = queryIso timeOfDayPrim
-instance Data Query UUID       where iso = queryIso uuidPrim
+instance Data Query Int        where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "integer" Nothing)
+instance Data Query Int16      where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "integer" (Just "int32"))
+instance Data Query Int32      where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "integer" (Just "int32"))
+instance Data Query Int64      where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "integer" (Just "int64"))
+instance Data Query Integer    where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "integer" Nothing)
+instance Data Query Bool   where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "boolean" Nothing)
+instance Data Query Float  where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "number" (Just "float"))
+instance Data Query Double where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "number" (Just "double"))
+instance Data Query Text   where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "string" Nothing)
+instance Data Query UUID       where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "string" (Just "uuid"))
+instance Data Query Day        where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "string" (Just "date"))
+instance Data Query UTCTime    where iso = Iso (first (const ParseError) . parseQueryParam) toQueryParam (Info "string" (Just "date-time"))
 
 class GQuery (f :: Type -> Type) where
     gQueryCodec :: Codec Query (f ()) (f ())

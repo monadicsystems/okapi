@@ -61,7 +61,7 @@ module Okapi
     , Iso (..)
     , Data (..)
     , int, int16, int32, int64, integer
-    , bool, char, float, double, scientific, text
+    , bool, float, double, text
     , day, localTime, utcTime, timeOfDay, uuid
 
     , request, methodGET, methodPOST, methodDELETE
@@ -91,7 +91,7 @@ import Okapi.Protocol.Body (IsoJson)
 import Okapi.Data
     ( Iso (..), Data (..)
     , int, int16, int32, int64, integer
-    , bool, char, float, double, scientific, text
+    , bool, float, double, text
     , day, localTime, utcTime, timeOfDay, uuid
     )
 import Okapi.Protocol.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)

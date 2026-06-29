@@ -43,7 +43,7 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.List (find, partition)
 import Data.Proxy (Proxy (..))
-import Data.Scientific (Scientific)
+import Data.Bifunctor (first)
 import Data.Text qualified as Text
 import Data.Text.Encoding (decodeUtf8Lenient, encodeUtf8)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime, localTimeOfDay, timeZoneOffsetString, zonedTimeToLocalTime, zonedTimeZone)
@@ -54,16 +54,12 @@ import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Network.HTTP.Types qualified as HTTP
 import Text.Read (readMaybe)
 import Web.Cookie qualified as WC
+import Web.HttpApiData (parseHeader, toHeader)
 import Prelude hiding (print)
 
 import Okapi.Codec (Codec (..), ForRequest, ForResponse, ParseErrorOf, PartOf, StateOf)
 import Okapi.Codec qualified as Codec
-import Okapi.Data
-    ( Data (..), Info (..), Iso (..), Prim (..)
-    , boolPrim, charPrim, dayPrim, doublePrim, floatPrim, int16Prim, int32Prim
-    , int64Prim, intPrim, integerPrim, localTimePrim, scientificPrim, textPrim
-    , timeOfDayPrim, utcTimePrim, uuidPrim
-    )
+import Okapi.Data (Data (..), Info (..), Iso (..))
 import Okapi.Protocol.Headers.Attributes (Attributes)
 import Okapi.Protocol.Headers.Attributes qualified as Attr
 import Okapi.Protocol.Headers.Cookies (Cookie)
@@ -240,47 +236,38 @@ setCookie name vIso attrsC = Lift (SetCookie name vIso attrsC)
 
 
 
-headerIso :: Prim a -> Iso (Headers ctx) a
-headerIso (Prim dec enc nfo) =
-    Iso (\bs -> either (const (Left ParseError)) Right (dec (decodeUtf8Lenient bs)))
-        (encodeUtf8 . enc)
-        nfo
-
-instance Data (Headers ctx) Int        where iso = headerIso intPrim
-instance Data (Headers ctx) Int16      where iso = headerIso int16Prim
-instance Data (Headers ctx) Int32      where iso = headerIso int32Prim
-instance Data (Headers ctx) Int64      where iso = headerIso int64Prim
-instance Data (Headers ctx) Integer    where iso = headerIso integerPrim
-instance Data (Headers ctx) Float      where iso = headerIso floatPrim
-instance Data (Headers ctx) Double     where iso = headerIso doublePrim
-instance Data (Headers ctx) Scientific where iso = headerIso scientificPrim
-instance Data (Headers ctx) Bool       where iso = headerIso boolPrim
-instance Data (Headers ctx) Char       where iso = headerIso charPrim
-instance Data (Headers ctx) Text.Text  where iso = headerIso textPrim
-instance Data (Headers ctx) Day        where iso = headerIso dayPrim
-instance Data (Headers ctx) LocalTime  where iso = headerIso localTimePrim
-instance Data (Headers ctx) UTCTime    where iso = headerIso utcTimePrim
-instance Data (Headers ctx) TimeOfDay  where iso = headerIso timeOfDayPrim
-instance Data (Headers ctx) UUID       where iso = headerIso uuidPrim
+instance Data (Headers ctx) Int       where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "integer" Nothing)
+instance Data (Headers ctx) Int16     where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "integer" (Just "int32"))
+instance Data (Headers ctx) Int32     where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "integer" (Just "int32"))
+instance Data (Headers ctx) Int64     where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "integer" (Just "int64"))
+instance Data (Headers ctx) Integer   where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "integer" Nothing)
+instance Data (Headers ctx) Bool      where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "boolean" Nothing)
+instance Data (Headers ctx) Float     where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "number" (Just "float"))
+instance Data (Headers ctx) Double    where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "number" (Just "double"))
+instance Data (Headers ctx) Text.Text where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "string" Nothing)
+instance Data (Headers ctx) UUID      where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "uuid"))
+instance Data (Headers ctx) Day       where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "date"))
+instance Data (Headers ctx) LocalTime where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "date-time"))
+instance Data (Headers ctx) UTCTime   where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "date-time"))
+instance Data (Headers ctx) TimeOfDay where iso = Iso (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "time"))
 
 instance Data (Headers ctx) ByteString where
     iso = Iso Right id (Info "string" Nothing)
 
 instance Data (Headers ctx) DiffTime where
-    iso = headerIso (Prim dec enc (Info "number" Nothing))
+    iso = Iso dec (encodeUtf8 . Text.pack . show . (realToFrac :: DiffTime -> Double)) (Info "number" Nothing)
       where
-        enc = Text.pack . show . (realToFrac :: DiffTime -> Double)
-        dec t = case (readMaybe (Text.unpack t) :: Maybe Double) of
+        dec bs = case (readMaybe (Text.unpack (decodeUtf8Lenient bs)) :: Maybe Double) of
             Just d  -> Right (realToFrac d)
-            Nothing -> Left ("invalid difftime: " <> t)
+            Nothing -> Left ParseError
 
 instance Data (Headers ctx) (TimeOfDay, TimeZone) where
-    iso = headerIso (Prim dec enc (Info "string" (Just "time")))
+    iso = Iso dec enc (Info "string" (Just "time"))
       where
-        enc (tod, tz) = Text.pack (formatTime defaultTimeLocale "%T" tod <> timeZoneOffsetString tz)
-        dec t = case parseTimeM True defaultTimeLocale "%T%z" (Text.unpack t) of
+        enc (tod, tz) = encodeUtf8 (Text.pack (formatTime defaultTimeLocale "%T" tod <> timeZoneOffsetString tz))
+        dec bs = case parseTimeM True defaultTimeLocale "%T%z" (Text.unpack (decodeUtf8Lenient bs)) of
             Just zt -> Right (localTimeOfDay (zonedTimeToLocalTime zt), zonedTimeZone zt)
-            Nothing -> Left ("invalid (TimeOfDay, TimeZone): " <> t)
+            Nothing -> Left ParseError
 
 
 

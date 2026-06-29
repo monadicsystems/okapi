@@ -31,7 +31,7 @@ import Data.List (find)
 import Okapi.Codec (Codec (..), ParseErrorOf, StateOf)
 import Okapi.Codec qualified as Codec
 import Okapi.Data (Data (..), Iso (..))
-import Okapi.Protocol.Headers.Cookies (Cookie, ParseError (..), cookieIso)
+import Okapi.Protocol.Headers.Cookies (Cookie, ParseError (..))
 import Prelude hiding (print)
 
 type Attributes :: Type -> Type

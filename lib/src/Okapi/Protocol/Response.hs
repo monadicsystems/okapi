@@ -32,10 +32,10 @@ import Okapi.Protocol.Response.Status (Status, S200, S201, S204, S404, S500)
 import Okapi.Protocol.Response.Status qualified as Status
 
 data Response (mode :: (Type -> Type) -> Type -> Type) status headers body = Response
-  { status  :: mode Status status
-  , headers :: mode (Headers ForResponse) headers
-  , body    :: mode (Body ForResponse) (IO body)
-  }
+    { status  :: mode Status status
+    , headers :: mode (Headers ForResponse) headers
+    , body    :: mode (Body ForResponse) (IO body)
+    }
 
 response :: Response IsoCodec HTTP.Status [HTTP.Header] LBS.ByteString
 response = Response

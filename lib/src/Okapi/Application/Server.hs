@@ -115,4 +115,4 @@ app endpoints runner handlers =
         runner
         (from endpoints)
         (from handlers)
-    $ \_ respond -> respond (Wai.responseLBS HTTP.status404 [] mempty)
+    $ \_ respond -> respond (Wai.responseLBS HTTP.status500 [] mempty)
