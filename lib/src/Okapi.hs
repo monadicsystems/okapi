@@ -2,28 +2,23 @@
 
 module Okapi
     (
-      Contract (..)
+      Canopy (..)
     , Signature
     , fn
     , serve
+    , tryServe
     , Server (..)
     , Client (..)
 
-    , ParseError (..)
-    , Result (..)
-
     , app
     , client
+
     , openApi
+    , endpointToOpenApi
 
     , fetch
     , ClientError (..)
     , ClientSettings (..)
-
-    , endpointToOpenApi
-
-    , Request (..)
-    , Response (..)
 
     , KnownMethod (..)
     , GET
@@ -40,14 +35,13 @@ module Okapi
 
     , ArrayStyle (..)
 
-    , Cases (..)
+    , Only (..)
+    , only
+
+    , Cases
     , Responses
     , getResponses
-
-    , IsoCodec (isoCodec)
-    , Value (..)
-    , (=.)
-    , IsoJson
+    , cases
 
     , parseRequest
     , parseRequestResult
@@ -57,56 +51,62 @@ module Okapi
     , parseResponseResult
     , parseResponses
     , printResponse
+    , printResponses
 
-    , Iso (..)
-    , Data (..)
+    , Leaf (..)
+    , Info (..)
+    , HasLeaf (..)
+    , (=.)
     , int, int16, int32, int64, integer
-    , bool, float, double, text
+    , bool, float, double, scientific, text
     , day, localTime, utcTime, timeOfDay, uuid
 
-    , request, methodGET, methodPOST, methodDELETE
-    , method, path, query, pathOf, queryOf, headersOf
+    , IsoJson
+
+    , request, methodGET, methodPOST, methodPUT, methodDELETE
+    , method, path, query, headers, body
+    , pathOf, queryOf, headersOf
 
     , response, status200, status201, status204, status404, status500
 
     , segment, segment_, segments
+    , param, param', param_, flag, flag', list, list'
 
-    , field, field', field_
+    , field, field', field_, contentType, cookie, cookie'
     , fieldStructured, fieldBareItem, fieldItem, fieldList, fieldDictionary
-    , contentType
 
-    , list, list'
-
-    , cookie, cookie', setCookie
     , attribute, attribute', secure, httpOnly
     ) where
 
-import Okapi.Codec (IsoCodec (..), ParseError (..), Result (..), Value (..), (=.))
+import Okapi.Forest.Canopy (Canopy (..), Signature)
+import Okapi.Forest.Server (Server (..), fn, serve, tryServe, app)
+import Okapi.Forest.Client (Client (..), ClientError (..), ClientSettings (..), fetch, client)
 import Okapi.Artifact.OpenApi (endpointToOpenApi, openApi)
-import Okapi.Protocol.Request
-    ( Request (..), method, path, query
-    , pathOf, queryOf, headersOf, methodGET, methodPOST, methodDELETE, request
-    )
-import Okapi.Protocol.Body (IsoJson)
-import Okapi.Data
-    ( Iso (..), Data (..)
+import Okapi.Leaf
+    ( Leaf (..), Info (..), HasLeaf (..)
     , int, int16, int32, int64, integer
-    , bool, float, double, text
+    , bool, float, double, scientific, text
     , day, localTime, utcTime, timeOfDay, uuid
     )
-import Okapi.Protocol.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
-import Okapi.Protocol.Request.Query (ArrayStyle (..), list, list')
-import Okapi.Protocol.Response
-    ( Response (..), Cases (..), Responses, getResponses
-    , response, status200, status201, status204, status404, status500
+import Okapi.Tree ((=.))
+import Okapi.HTTP.Request
+    ( request, methodGET, methodPOST, methodPUT, methodDELETE
+    , method, path, query, headers, body
+    , pathOf, queryOf, headersOf
+    , parseRequest, parseRequestResult, printRequest, linkTo
     )
-import Okapi.Protocol.Response.Status (KnownStatus (..), S200, S201, S204, S404, S500)
-import Okapi.Protocol.Request.Path (segment, segment_, segments)
-import Okapi.Protocol.Headers
-    ( field, field', field_, fieldStructured, fieldBareItem, fieldItem
-    , fieldList, fieldDictionary, contentType, cookie, cookie', setCookie
+import Okapi.HTTP.Request.Body (IsoJson)
+import Okapi.HTTP.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
+import Okapi.HTTP.Request.Path (segment, segment_, segments)
+import Okapi.HTTP.Request.Query (ArrayStyle (..), param, param', param_, flag, flag', list, list')
+import Okapi.HTTP.Request.Headers
+    ( field, field', field_, contentType, cookie, cookie'
+    , fieldStructured, fieldBareItem, fieldItem, fieldList, fieldDictionary
     )
-import Okapi.Protocol.Headers.Attributes (attribute, attribute', secure, httpOnly)
-import Okapi.Contract (Signature, Contract (..), parseRequest, parseRequestResult, printRequest, linkTo, parseResponse, parseResponseResult, parseResponses, printResponse)
-import Okapi.Application.Server (Server (..), fn, serve, app)
-import Okapi.Application.Client (Client (..), ClientError (..), ClientSettings (..), fetch, client)
+import Okapi.HTTP.Response
+    ( response, status200, status201, status204, status404, status500
+    , parseResponse, parseResponseResult, printResponse
+    )
+import Okapi.HTTP.Response.Status (KnownStatus (..), S200, S201, S204, S404, S500)
+import Okapi.HTTP.Responses (Only (..), only, Cases, Responses, getResponses, cases, parseResponses, printResponses)
+import Okapi.HTTP.Headers.Attributes (attribute, attribute', secure, httpOnly)

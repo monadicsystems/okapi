@@ -27,48 +27,45 @@ import Data.Proxy (Proxy (..))
 import Data.String (fromString)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Functor.Const (Const (..), getConst)
+import Data.List.NonEmpty qualified as NE
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:*:) (..))
 import Network.HTTP.Media (MediaType)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Codec (Codec (..), IsoCodec (..))
-import Okapi.Contract (Contract (..), Signature)
-import Okapi.Protocol.Body (Body (..), IsoJson)
-import Okapi.Protocol.Body qualified as Body
-import Okapi.Data (Info (..), Iso (..))
-import Okapi.Protocol.Headers (Headers (..))
-import Okapi.Protocol.Headers qualified as H
-import Okapi.Protocol.Request (Request (..))
+import Okapi.Forest.Canopy (Canopy (..), Signature)
+import Okapi.Leaf (Info (..), Leaf (..))
+import Okapi.Mode.Tree qualified as Tree
+import Okapi.HTTP.Request.Method qualified as Method
+import Okapi.HTTP.Request.Path (Path)
+import Okapi.HTTP.Request.Path qualified as Path
+import Okapi.HTTP.Request.Query (Query)
+import Okapi.HTTP.Request.Query qualified as Query
+import Okapi.HTTP.Request.Headers qualified as ReqH
+import Okapi.HTTP.Request.Body qualified as ReqBody
+import Okapi.HTTP.Response.Headers qualified as ResH
+import Okapi.HTTP.Response.Body qualified as ResBody
+import Okapi.HTTP.Response.Status qualified as Status
+import Okapi.HTTP.Responses (Cases, Responses (..))
+import Okapi.HTTP.Responses qualified as Resps
+import Okapi.Tree (Tree (..))
 import Optics.Core ((%), (.~), (?~))
-
-import Okapi.Protocol.Request.Method qualified as Method
-import Okapi.Protocol.Request.Path (Path)
-import Okapi.Protocol.Request.Path qualified as Path
-import Okapi.Protocol.Request.Query (Query)
-import Okapi.Protocol.Request.Query qualified as Query
-
-import Okapi.Protocol.Response (Cases, Responses (Responses), traverseResponses)
-import Okapi.Protocol.Response qualified as ORes
-import Okapi.Protocol.Response.Status qualified as Status
-
-import Data.Functor.Const (Const (..), getConst)
-import Data.List.NonEmpty qualified as NE
 
 data PathPiece = PLit Text | PParam Text OA.Schema
 
-walkPath :: Codec Path i o -> [PathPiece] -> [PathPiece]
-walkPath (Lift (Path.Seg_ vIso x)) ps = ps ++ [PLit (vIso.encode x)]
-walkPath (Lift (Path.Seg n vIso)) ps  = ps ++ [PParam n (infoSchema vIso.info)]
-walkPath (Lift (Path.Segs vIso)) ps   = ps ++ [PParam "segs" (infoSchema vIso.info)]
-walkPath (Lift Path.Raw) ps           = ps
-walkPath (FMap _ c) ps                = walkPath c ps
-walkPath (LMap _ c) ps                = walkPath c ps
-walkPath (Apply cf cx) ps             = walkPath cx (walkPath cf ps)
-walkPath (Pure _) ps                  = ps
+walkPath :: Tree Path i o -> [PathPiece] -> [PathPiece]
+walkPath (Node (Path.Seg_ vLeaf x)) ps = ps ++ [PLit (vLeaf.encode x)]
+walkPath (Node (Path.Seg n vLeaf))  ps = ps ++ [PParam n (infoSchema vLeaf.info)]
+walkPath (Node (Path.Segs vLeaf))   ps = ps ++ [PParam "segs" (infoSchema vLeaf.info)]
+walkPath (Node Path.Raw)            ps = ps
+walkPath (FMap _ c)   ps               = walkPath c ps
+walkPath (LMap _ c)   ps               = walkPath c ps
+walkPath (Apply cf cx) ps              = walkPath cx (walkPath cf ps)
+walkPath (Pure _)      ps              = ps
 
 pathTemplate :: [PathPiece] -> FilePath
 pathTemplate pieces = "/" <> intercalate "/" (map piece pieces)
   where
-    piece (PLit t)    = T.unpack t
+    piece (PLit t)     = T.unpack t
     piece (PParam n _) = "{" <> T.unpack n <> "}"
 
 pathOAParams :: [PathPiece] -> [Param]
@@ -77,19 +74,20 @@ pathOAParams pieces =
     | PParam name sc <- pieces
     ]
 
-extractQueryParams :: Codec Query i o -> [Param]
-extractQueryParams (Lift (Query.Param key vIso))       = [mkParamWithSchema key ParamQuery True (infoSchema vIso.info)]
-extractQueryParams (Lift (Query.Param' key vIso))      = [mkParamWithSchema key ParamQuery False (infoSchema vIso.info)]
-extractQueryParams (Lift (Query.Param_ key vIso _))    = [mkParamWithSchema key ParamQuery True (infoSchema vIso.info)]
-extractQueryParams (Lift (Query.Flag key))             = [mkParam key ParamQuery True]
-extractQueryParams (Lift (Query.Flag' key))            = [mkParam key ParamQuery False]
-extractQueryParams (Lift (Query.List style key _))     = [mkArrayParam key True style]
-extractQueryParams (Lift (Query.List' style key _))    = [mkArrayParam key False style]
-extractQueryParams (Lift Query.Raw)                    = []
-extractQueryParams (FMap _ c)                          = extractQueryParams c
-extractQueryParams (LMap _ c)                          = extractQueryParams c
-extractQueryParams (Apply cf cx)                       = extractQueryParams cf ++ extractQueryParams cx
-extractQueryParams (Pure _)                            = []
+extractQueryParams :: Tree Query i o -> [Param]
+extractQueryParams (Node qry) = case qry of
+    Query.Param  key vLeaf   -> [mkParamWithSchema key ParamQuery True  (infoSchema vLeaf.info)]
+    Query.Param' key vLeaf   -> [mkParamWithSchema key ParamQuery False (infoSchema vLeaf.info)]
+    Query.Param_ key vLeaf _ -> [mkParamWithSchema key ParamQuery True  (infoSchema vLeaf.info)]
+    Query.Flag   key         -> [mkParam key ParamQuery True]
+    Query.Flag'  key         -> [mkParam key ParamQuery False]
+    Query.List  style key _  -> [mkArrayParam key True  style]
+    Query.List' style key _  -> [mkArrayParam key False style]
+    Query.Raw                -> []
+extractQueryParams (FMap _ c)    = extractQueryParams c
+extractQueryParams (LMap _ c)    = extractQueryParams c
+extractQueryParams (Apply cf cx) = extractQueryParams cf ++ extractQueryParams cx
+extractQueryParams (Pure _)      = []
 
 infoSchema :: Info -> OA.Schema
 infoSchema (Info ty fmt) = withFmt (mempty & #type ?~ oaType ty)
@@ -100,66 +98,88 @@ infoSchema (Info ty fmt) = withFmt (mempty & #type ?~ oaType ty)
     oaType _         = OA.OpenApiString
     withFmt s = maybe s (\f -> s & #format ?~ f) fmt
 
-extractHeaderParams :: Codec (Headers ctx) i o -> [Param]
-extractHeaderParams (Lift hdr) = case hdr of
-    H.Field key vIso      -> [mkParamWithSchema (hdrName key) ParamHeader True (infoSchema vIso.info)]
-    H.Field' key vIso     -> [mkParamWithSchema (hdrName key) ParamHeader False (infoSchema vIso.info)]
-    H.Raw                 -> []
-    H.Field_ _ _          -> []
-    H.FieldStructured n _ -> [mkParamWithSchema (hdrName n) ParamHeader True (mempty & #type ?~ OA.OpenApiString)]
-    H.Cookie{}            -> []
-    H.Cookie'{}           -> []
-    H.SetCookie{}         -> []
-extractHeaderParams (FMap _ c)    = extractHeaderParams c
-extractHeaderParams (LMap _ c)    = extractHeaderParams c
-extractHeaderParams (Apply cf cx) = extractHeaderParams cf ++ extractHeaderParams cx
-extractHeaderParams (Pure _)      = []
+extractReqHeaderParams :: Tree ReqH.Headers i o -> [Param]
+extractReqHeaderParams (Node hdr) = case hdr of
+    ReqH.Field  key vLeaf    -> [mkParamWithSchema (hdrName key) ParamHeader True  (infoSchema vLeaf.info)]
+    ReqH.Field' key vLeaf    -> [mkParamWithSchema (hdrName key) ParamHeader False (infoSchema vLeaf.info)]
+    ReqH.Raw                 -> []
+    ReqH.Field_ _ _          -> []
+    ReqH.FieldStructured n _ -> [mkParamWithSchema (hdrName n) ParamHeader True (mempty & #type ?~ OA.OpenApiString)]
+    ReqH.Cookie  _ _         -> []
+    ReqH.Cookie' _ _         -> []
+extractReqHeaderParams (FMap _ c)    = extractReqHeaderParams c
+extractReqHeaderParams (LMap _ c)    = extractReqHeaderParams c
+extractReqHeaderParams (Apply cf cx) = extractReqHeaderParams cf ++ extractReqHeaderParams cx
+extractReqHeaderParams (Pure _)      = []
 
-extractResHeaders :: Codec (Headers ctx) i o -> [(Text, Bool, OA.Schema)]
-extractResHeaders (Lift hdr) = case hdr of
-    H.Field key vIso      -> [(hdrName key, True,  infoSchema vIso.info)]
-    H.Field' key vIso     -> [(hdrName key, False, infoSchema vIso.info)]
-    H.Raw                 -> []
-    H.Field_ _ _          -> []
-    H.FieldStructured n _ -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
-    H.Cookie{}            -> []
-    H.Cookie'{}           -> []
-    H.SetCookie{}         -> []
+extractResHeaders :: Tree ResH.Headers i o -> [(Text, Bool, OA.Schema)]
+extractResHeaders (Node hdr) = case hdr of
+    ResH.Field  key vLeaf    -> [(hdrName key, True,  infoSchema vLeaf.info)]
+    ResH.Field' key vLeaf    -> [(hdrName key, False, infoSchema vLeaf.info)]
+    ResH.Raw                 -> []
+    ResH.Field_ _ _          -> []
+    ResH.FieldStructured n _ -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
+    ResH.SetCookie _ _ _     -> []
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c
 extractResHeaders (Apply cf cx) = extractResHeaders cf ++ extractResHeaders cx
 extractResHeaders (Pure _)      = []
 
-extractContentType :: Codec (Headers ctx) i o -> Maybe ByteString
-extractContentType (Lift (Field_ k v)) | k == "content-type" = Just v
-extractContentType (FMap _ c)    = extractContentType c
-extractContentType (LMap _ c)    = extractContentType c
-extractContentType (Apply cf cx) = extractContentType cf <|> extractContentType cx
-extractContentType _             = Nothing
+extractReqContentType :: Tree ReqH.Headers i o -> Maybe ByteString
+extractReqContentType (Node (ReqH.Field_ k v)) | k == "content-type" = Just v
+extractReqContentType (FMap _ c)    = extractReqContentType c
+extractReqContentType (LMap _ c)    = extractReqContentType c
+extractReqContentType (Apply cf cx) = extractReqContentType cf <|> extractReqContentType cx
+extractReqContentType _             = Nothing
 
-bodySchemaOf :: forall (b :: Type -> Type -> Type) ctx a. IsoJson a => b ctx (IO a) -> OA.Schema
+extractResContentType :: Tree ResH.Headers i o -> Maybe ByteString
+extractResContentType (Node (ResH.Field_ k v)) | k == "content-type" = Just v
+extractResContentType (FMap _ c)    = extractResContentType c
+extractResContentType (LMap _ c)    = extractResContentType c
+extractResContentType (Apply cf cx) = extractResContentType cf <|> extractResContentType cx
+extractResContentType _             = Nothing
+
+bodySchemaOf :: forall (b :: Type -> Type) a. ReqBody.IsoJson a => b (IO a) -> OA.Schema
 bodySchemaOf _ = toSchema (Proxy @a)
 
-bodyDefsOf :: forall (b :: Type -> Type -> Type) ctx a. IsoJson a => b ctx (IO a) -> OA.Definitions OA.Schema
+bodyDefsOf :: forall (b :: Type -> Type) a. ReqBody.IsoJson a => b (IO a) -> OA.Definitions OA.Schema
 bodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
 
-extractBodySchema :: Codec (Body ctx) i o -> Maybe OA.Schema
-extractBodySchema (Lift body) = case body of
-    Body.Json -> Just (bodySchemaOf body)
-    _         -> Nothing
-extractBodySchema (FMap _ c)    = extractBodySchema c
-extractBodySchema (LMap _ c)    = extractBodySchema c
-extractBodySchema (Apply cf cx) = extractBodySchema cf <|> extractBodySchema cx
-extractBodySchema (Pure _)      = Nothing
+extractReqBodySchema :: Tree ReqBody.Body i o -> Maybe OA.Schema
+extractReqBodySchema (Node body) = case body of
+    ReqBody.Json -> Just (bodySchemaOf body)
+    _            -> Nothing
+extractReqBodySchema (FMap _ c)    = extractReqBodySchema c
+extractReqBodySchema (LMap _ c)    = extractReqBodySchema c
+extractReqBodySchema (Apply cf cx) = extractReqBodySchema cf <|> extractReqBodySchema cx
+extractReqBodySchema (Pure _)      = Nothing
 
-extractBodyDefs :: Codec (Body ctx) i o -> OA.Definitions OA.Schema
-extractBodyDefs (Lift body) = case body of
-    Body.Json -> bodyDefsOf body
-    _         -> mempty
-extractBodyDefs (FMap _ c)    = extractBodyDefs c
-extractBodyDefs (LMap _ c)    = extractBodyDefs c
-extractBodyDefs (Apply cf cx) = extractBodyDefs cf <> extractBodyDefs cx
-extractBodyDefs (Pure _)      = mempty
+extractReqBodyDefs :: Tree ReqBody.Body i o -> OA.Definitions OA.Schema
+extractReqBodyDefs (Node body) = case body of
+    ReqBody.Json -> bodyDefsOf body
+    _            -> mempty
+extractReqBodyDefs (FMap _ c)    = extractReqBodyDefs c
+extractReqBodyDefs (LMap _ c)    = extractReqBodyDefs c
+extractReqBodyDefs (Apply cf cx) = extractReqBodyDefs cf <> extractReqBodyDefs cx
+extractReqBodyDefs (Pure _)      = mempty
+
+extractResBodySchema :: Tree ResBody.Body i o -> Maybe OA.Schema
+extractResBodySchema (Node body) = case body of
+    ResBody.Json -> Just (bodySchemaOf body)
+    _            -> Nothing
+extractResBodySchema (FMap _ c)    = extractResBodySchema c
+extractResBodySchema (LMap _ c)    = extractResBodySchema c
+extractResBodySchema (Apply cf cx) = extractResBodySchema cf <|> extractResBodySchema cx
+extractResBodySchema (Pure _)      = Nothing
+
+extractResBodyDefs :: Tree ResBody.Body i o -> OA.Definitions OA.Schema
+extractResBodyDefs (Node body) = case body of
+    ResBody.Json -> bodyDefsOf body
+    _            -> mempty
+extractResBodyDefs (FMap _ c)    = extractResBodyDefs c
+extractResBodyDefs (LMap _ c)    = extractResBodyDefs c
+extractResBodyDefs (Apply cf cx) = extractResBodyDefs cf <> extractResBodyDefs cx
+extractResBodyDefs (Pure _)      = mempty
 
 data ResInfo = ResInfo
     { resStatus     :: HTTP.Status
@@ -169,19 +189,28 @@ data ResInfo = ResInfo
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
-resInfoOf :: ORes.Response IsoCodec s h b -> ResInfo
-resInfoOf res =
-    ResInfo
-        { resStatus     = fromMaybe HTTP.status200 (Status.extractStatus res.status.isoCodec)
-        , resMediaType  = extractContentType res.headers.isoCodec
-        , resBodySchema = extractBodySchema res.body.isoCodec
-        , resBodyDefs   = extractBodyDefs res.body.isoCodec
-        , resHdrNames   = extractResHeaders res.headers.isoCodec
-        }
+resStatusOf :: Status.Status s -> HTTP.Status
+resStatusOf Status.Raw        = HTTP.status200
+resStatusOf (Status.Status ks) = Status.knownStatusToHTTP ks
 
-extractResInfos :: Cases responses => Responses IsoCodec responses -> [ResInfo]
+resInfoOf :: Tree.Response s h b -> ResInfo
+resInfoOf res = ResInfo
+    { resStatus     = resStatusOf res.status
+    , resMediaType  = extractResContentType res.headers
+    , resBodySchema = extractResBodySchema res.body
+    , resBodyDefs   = extractResBodyDefs res.body
+    , resHdrNames   = extractResHeaders res.headers
+    }
+
+extractResInfos :: Cases responses => Responses Tree.Response responses -> [ResInfo]
 extractResInfos (Responses cs) =
-    map (getConst . traverseResponses @IsoCodec @IsoCodec (\c -> Const (resInfoOf c))) (NE.toList cs)
+    map
+        (getConst . Resps.traverseResponses @Tree.Response @Tree.Response (\c -> Const (resInfoOf c)))
+        (NE.toList cs)
+
+methodStdOf :: Method.Method m -> Maybe HTTP.StdMethod
+methodStdOf Method.Raw        = Nothing
+methodStdOf (Method.Method km) = Just (Method.knownMethodToStd km)
 
 hdrName :: HTTP.HeaderName -> Text
 hdrName = T.pack . BS8.unpack . CI.original
@@ -257,29 +286,23 @@ setMethod HTTP.PUT    op pi_ = pi_{_pathItemPut    = Just op}
 setMethod HTTP.DELETE op pi_ = pi_{_pathItemDelete = Just op}
 setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 
-endpointToOpenApi :: Cases responses => Contract (Signature method path query headers body responses) -> OpenApi
-endpointToOpenApi
-    ( Request
-            { method  = IsoCodec methodCodec
-            , path    = IsoCodec pathCodec
-            , query   = IsoCodec queryCodec
-            , headers = IsoCodec headersCodec
-            , body    = IsoCodec bodyCodec
-            }
-            :-> resAlt
-        ) =
+endpointToOpenApi :: Canopy (Signature method path query headers body responses) -> OpenApi
+endpointToOpenApi endpoint = case endpoint of
+    (req :-> singleRes) -> toOpenApi req [resInfoOf singleRes]
+    (req :-< resAlt)    -> toOpenApi req (extractResInfos resAlt)
+  where
+    toOpenApi req resInfos =
         let
-            stdMeth  = fromMaybe HTTP.GET (Method.extractMethod methodCodec)
-            pieces   = walkPath pathCodec []
-            qParams  = extractQueryParams queryCodec
-            hParams  = extractHeaderParams headersCodec
-            resInfos = extractResInfos resAlt
-            reqBody  =
+            stdMeth = fromMaybe HTTP.GET (methodStdOf req.method)
+            pieces  = walkPath req.path []
+            qParams = extractQueryParams req.query
+            hParams = extractReqHeaderParams req.headers
+            reqBody =
                 if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
-                    then extractBodySchema bodyCodec
+                    then extractReqBodySchema req.body
                     else Nothing
             allDefs =
-                extractBodyDefs bodyCodec
+                extractReqBodyDefs req.body
                     <> foldMap resBodyDefs resInfos
             op =
                 mempty
@@ -290,7 +313,7 @@ endpointToOpenApi
                             | ri <- resInfos
                             ]
                         )
-                    & applyReqBodySchema (extractContentType headersCodec) reqBody
+                    & applyReqBodySchema (extractReqContentType req.headers) reqBody
          in
             mempty
                 & #info % #title .~ "API"
@@ -310,14 +333,14 @@ instance GenericOAPI epF => GenericOAPI (C1 cm epF) where
 instance (GenericOAPI epL, GenericOAPI epR) => GenericOAPI (epL :*: epR) where
     gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
 
-instance Cases responses => GenericOAPI (S1 sm (Rec0 (Contract (Signature method path query headers body responses)))) where
+instance GenericOAPI (S1 sm (Rec0 (Canopy (Signature method path query headers body responses)))) where
     gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
 
 openApi ::
     forall server.
-    ( Generic (server Contract)
-    , GenericOAPI (Rep (server Contract))
+    ( Generic (server Canopy)
+    , GenericOAPI (Rep (server Canopy))
     ) =>
-    server Contract ->
+    server Canopy ->
     OpenApi
-openApi = gOpenApi @(Rep (server Contract)) . from
+openApi = gOpenApi @(Rep (server Canopy)) . from

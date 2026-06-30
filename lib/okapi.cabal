@@ -28,33 +28,36 @@ library
     import:           warnings
     exposed-modules:
         Okapi
-        Okapi.Application.Client
-        Okapi.Application.Server
+        Okapi.Leaf
+        Okapi.Tree
+        Okapi.Forest.Canopy
+        Okapi.Forest.Server
+        Okapi.Forest.Client
         Okapi.Artifact.OpenApi
-        Okapi.Codec
-        Okapi.Contract
-        Okapi.Protocol.Request
-        Okapi.Protocol.Request.Method
-        Okapi.Protocol.Request.Path
-        Okapi.Protocol.Request.Query
-        Okapi.Protocol.Request.Headers
-        Okapi.Protocol.Request.Body
-        Okapi.Protocol.Response
-        Okapi.Protocol.Response.Status
-        Okapi.Protocol.Response.Headers
-        Okapi.Protocol.Response.Body
-        Okapi.Data
-        Okapi.Protocol.Body
-        Okapi.Protocol.Headers
-        Okapi.Protocol.Headers.Cookies
-        Okapi.Protocol.Headers.Attributes
-        Okapi.Protocol.Headers.Structured
-        Okapi.Protocol.Headers.Structured.Lexer
-        Okapi.Protocol.Headers.Structured.BareItem
-        Okapi.Protocol.Headers.Structured.Parameters
-        Okapi.Protocol.Headers.Structured.Item
-        Okapi.Protocol.Headers.Structured.List
-        Okapi.Protocol.Headers.Structured.Dictionary
+        Okapi.Mode.Tree
+        Okapi.Mode.Error
+        Okapi.Mode.Result
+        Okapi.Mode.Data
+        Okapi.HTTP.Request
+        Okapi.HTTP.Request.Method
+        Okapi.HTTP.Request.Path
+        Okapi.HTTP.Request.Query
+        Okapi.HTTP.Request.Headers
+        Okapi.HTTP.Request.Body
+        Okapi.HTTP.Response
+        Okapi.HTTP.Response.Status
+        Okapi.HTTP.Response.Headers
+        Okapi.HTTP.Response.Body
+        Okapi.HTTP.Responses
+        Okapi.HTTP.Headers.Cookies
+        Okapi.HTTP.Headers.Attributes
+        Okapi.HTTP.Headers.Structured
+        Okapi.HTTP.Headers.Structured.Lexer
+        Okapi.HTTP.Headers.Structured.BareItem
+        Okapi.HTTP.Headers.Structured.Parameters
+        Okapi.HTTP.Headers.Structured.Item
+        Okapi.HTTP.Headers.Structured.List
+        Okapi.HTTP.Headers.Structured.Dictionary
     build-depends:
         base ^>=4.20.0.0,
         aeson,
