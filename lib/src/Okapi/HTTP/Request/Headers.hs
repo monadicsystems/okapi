@@ -1,25 +1,17 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.HTTP.Request.Headers (
     Headers (..),
     ParseError (..),
-    parse,
-    print,
+    parser,
+    printer,
+    coalesceCookies,
     raw,
     field,
     field',
     field_,
-    fieldStructured,
+    fieldRFC9651,
     fieldBareItem,
     fieldItem,
     fieldList,
@@ -36,7 +28,6 @@ module Okapi.HTTP.Request.Headers (
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
-import Data.CaseInsensitive qualified as CI
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.List (partition)
@@ -47,22 +38,35 @@ import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime, localT
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
-import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
+import GHC.TypeLits (KnownSymbol, symbolVal)
 import Network.HTTP.Types qualified as HTTP
 import Text.Read (readMaybe)
 import Web.Cookie qualified as WC
 import Web.HttpApiData (parseHeader, toHeader)
-import Prelude hiding (print)
-import Okapi.Leaf (ErrorOf, HasLeaf (..), Info (..), Leaf (..), PieceOf, StateOf)
-import Okapi.Tree (Tree (..))
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Okapi.HTTP.Headers.Cookies (Cookie)
-import Okapi.HTTP.Headers.Structured (Structured)
-import Okapi.HTTP.Headers.Structured qualified as Structured
-import Okapi.HTTP.Headers.Structured.BareItem (BareItem)
-import Okapi.HTTP.Headers.Structured.Item (Item, bareItem)
-import Okapi.HTTP.Headers.Structured.List (List)
-import Okapi.HTTP.Headers.Structured.Dictionary (Dictionary)
+import Okapi.HTTP.Headers (MediaType (..), ConstF (..), fieldToHeaderName, mediaTypeBytes)
+import Okapi.HTTP.Request.Cookies (Cookie)
+import Okapi.HTTP.RFC9651 (RFC9651)
+import Okapi.HTTP.RFC9651 qualified as RFC9651
+import Okapi.HTTP.RFC9651.BareItem (BareItem)
+import Okapi.HTTP.RFC9651.Item (Item, bareItem)
+import Okapi.HTTP.RFC9651.List (List)
+import Okapi.HTTP.RFC9651.Dictionary (Dictionary)
+
+-- $setup
+-- >>> :set -XApplicativeDo
+-- >>> import Okapi.Tree (printParse, printStable, int, (=.))
+-- >>> :{
+-- let twoFields = do
+--       a <- fst =. field "x-a" int
+--       b <- snd =. field "x-b" int
+--       pure (a, b)
+--     twoCookies = do
+--       a <- fst =. cookie "sid" int
+--       b <- snd =. cookie "tok" int
+--       pure (a, b)
+-- :}
 
 type Headers :: Type -> Type
 data Headers a where
@@ -70,128 +74,131 @@ data Headers a where
     Field           :: HTTP.HeaderName -> Leaf Headers a -> Headers a
     Field'          :: HTTP.HeaderName -> Leaf Headers a -> Headers (Maybe a)
     Field_          :: HTTP.HeaderName -> ByteString -> Headers ()
-    FieldStructured :: HTTP.HeaderName -> Tree Structured a a -> Headers a
+    FieldRFC9651 :: HTTP.HeaderName -> Tree RFC9651 a a -> Headers a
     Cookie          :: ByteString -> Leaf Cookie a -> Headers a
     Cookie'         :: ByteString -> Leaf Cookie a -> Headers (Maybe a)
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance StateOf Headers = [HTTP.Header]
-type instance ErrorOf Headers = ParseError
-type instance PieceOf Headers = ByteString
-
-parse :: Tree Headers i o -> [HTTP.Header] -> (Either ParseError o, [HTTP.Header])
-parse = Tree.grow headersAlg
-  where
-    headersAlg :: forall a. Headers a -> HTTP.RequestHeaders -> (Either ParseError a, HTTP.RequestHeaders)
-    headersAlg Raw hs = (Right hs, [])
-    headersAlg (Field key vLeaf) hs =
-        case partition (\(k, _) -> k == key) hs of
-            ([], _)            -> (Left ParseError, hs)
-            ((_, v) : _, rest) -> case vLeaf.decode v of
-                Left _  -> (Left ParseError, hs)
-                Right x -> (Right x, rest)
-    headersAlg (Field' key vLeaf) hs =
-        case partition (\(k, _) -> k == key) hs of
-            ([], _)            -> (Right Nothing, hs)
-            ((_, v) : _, rest) -> case vLeaf.decode v of
-                Left _  -> (Right Nothing, rest)
-                Right x -> (Right (Just x), rest)
-    headersAlg (Field_ k v) hs =
-        case lookup k hs of
-            Just v' | v' == v -> (Right (), filter (\(k', _) -> k' /= k) hs)
-            _                 -> (Left ParseError, hs)
-    headersAlg (FieldStructured name c) hs =
-        case partition (\(k, _) -> k == name) hs of
-            ([], _)            -> (Left ParseError, hs)
-            ((_, v) : _, rest) -> case fst (Structured.parseStructured c v) of
-                Left _  -> (Left ParseError, hs)
-                Right x -> (Right x, rest)
-    headersAlg (Cookie name vLeaf) hs =
-        case lookup name (reqCookiePairs hs) of
-            Just v  -> case vLeaf.decode v of
-                Left _  -> (Left ParseError, hs)
-                Right x -> (Right x, hs)
-            Nothing -> (Left ParseError, hs)
-    headersAlg (Cookie' name vLeaf) hs =
-        case lookup name (reqCookiePairs hs) of
-            Just v  -> (Right (either (const Nothing) Just (vLeaf.decode v)), hs)
-            Nothing -> (Right Nothing, hs)
+type instance Context Headers = [HTTP.Header]
+type instance Failure Headers = ParseError
+type instance Piece Headers = ByteString
 
 reqCookiePairs :: [HTTP.Header] -> WC.Cookies
 reqCookiePairs hs = WC.parseCookies (BS.intercalate "; " [v | (n, v) <- hs, n == "cookie"])
-
-print :: Tree Headers i o -> i -> [HTTP.Header]
-print c i = coalesceCookies (Tree.eat headersPrinter c i)
-  where
-    headersPrinter :: forall a. Headers a -> a -> HTTP.RequestHeaders
-    headersPrinter Raw hs = hs
-    headersPrinter (Field key vLeaf) x = [(key, vLeaf.encode x)]
-    headersPrinter (Field' _ _) Nothing = []
-    headersPrinter (Field' key vLeaf) (Just x) = [(key, vLeaf.encode x)]
-    headersPrinter (Field_ k v) () = [(k, v)]
-    headersPrinter (FieldStructured name c) a = [(name, Structured.printStructured c a)]
-    headersPrinter (Cookie name vLeaf) x = [("cookie", name <> "=" <> vLeaf.encode x)]
-    headersPrinter (Cookie' _ _) Nothing = []
-    headersPrinter (Cookie' name vLeaf) (Just x) = [("cookie", name <> "=" <> vLeaf.encode x)]
 
 coalesceCookies :: [HTTP.Header] -> [HTTP.Header]
 coalesceCookies hs =
     let (cks, rest) = partition ((== "cookie") . fst) hs
      in rest ++ [("cookie", BS.intercalate "; " (map snd cks)) | not (null cks)]
 
-data MediaType
-    = JSON
-    | HTML
-    | PlainText
-    | FormUrlEncoded
-    | OctetStream
-    | EventStream
-    | Custom ByteString
-    deriving (Eq, Show)
+parser :: Tree Headers i o -> Parser Headers o
+parser = Tree.parser alg
+  where
+    alg :: Headers a -> Parser Headers a
+    alg Raw hs = (Right hs, [])
+    alg (Field key vLeaf) hs =
+        case partition (\(k, _) -> k == key) hs of
+            ([], _)            -> (Left ParseError, hs)
+            ((_, v) : _, rest) -> case vLeaf.decode v of
+                Left _  -> (Left ParseError, hs)
+                Right x -> (Right x, rest)
+    alg (Field' key vLeaf) hs =
+        case partition (\(k, _) -> k == key) hs of
+            ([], _)            -> (Right Nothing, hs)
+            ((_, v) : _, rest) -> case vLeaf.decode v of
+                Left _  -> (Right Nothing, rest)
+                Right x -> (Right (Just x), rest)
+    alg (Field_ k v) hs =
+        case lookup k hs of
+            Just v' | v' == v -> (Right (), filter (\(k', _) -> k' /= k) hs)
+            _                 -> (Left ParseError, hs)
+    alg (FieldRFC9651 name c) hs =
+        case partition (\(k, _) -> k == name) hs of
+            ([], _)            -> (Left ParseError, hs)
+            ((_, v) : _, rest) -> case fst (RFC9651.parser c v) of
+                Left _  -> (Left ParseError, hs)
+                Right x -> (Right x, rest)
+    alg (Cookie name vLeaf) hs =
+        let cookies = reqCookiePairs hs
+            (_, nonCookieHs) = partition ((== "cookie") . fst) hs
+            remaining = filter ((/= name) . fst) cookies
+            newHs = nonCookieHs ++ [("cookie", BS.intercalate "; " [k <> "=" <> v | (k, v) <- remaining]) | not (null remaining)]
+        in case lookup name cookies of
+            Nothing -> (Left ParseError, hs)
+            Just v  -> case vLeaf.decode v of
+                Left _  -> (Left ParseError, hs)
+                Right x -> (Right x, newHs)
+    alg (Cookie' name vLeaf) hs =
+        let cookies = reqCookiePairs hs
+            (_, nonCookieHs) = partition ((== "cookie") . fst) hs
+            remaining = filter ((/= name) . fst) cookies
+            newHs = nonCookieHs ++ [("cookie", BS.intercalate "; " [k <> "=" <> v | (k, v) <- remaining]) | not (null remaining)]
+        in case lookup name cookies of
+            Nothing -> (Right Nothing, hs)
+            Just v  -> (Right (either (const Nothing) Just (vLeaf.decode v)), newHs)
 
-mediaTypeBytes :: MediaType -> ByteString
-mediaTypeBytes JSON           = "application/json"
-mediaTypeBytes HTML           = "text/html"
-mediaTypeBytes PlainText      = "text/plain"
-mediaTypeBytes FormUrlEncoded = "application/x-www-form-urlencoded"
-mediaTypeBytes OctetStream    = "application/octet-stream"
-mediaTypeBytes EventStream    = "text/event-stream"
-mediaTypeBytes (Custom bs)    = bs
+printer :: Tree Headers i o -> Printer Headers i
+printer = Tree.printer alg
+  where
+    alg :: Headers a -> Printer Headers a
+    alg Raw                    hs       = hs
+    alg (Field key vLeaf)      x        = [(key, vLeaf.encode x)]
+    alg (Field' _ _)           Nothing  = []
+    alg (Field' key vLeaf)     (Just x) = [(key, vLeaf.encode x)]
+    alg (Field_ k v)           ()       = [(k, v)]
+    alg (FieldRFC9651 name c)  a        = [(name, RFC9651.printer c a)]
+    alg (Cookie name vLeaf)    x        = [("cookie", name <> "=" <> vLeaf.encode x)]
+    alg (Cookie' _ _)          Nothing  = []
+    alg (Cookie' name vLeaf)   (Just x) = [("cookie", name <> "=" <> vLeaf.encode x)]
 
 raw :: Tree Headers HTTP.RequestHeaders HTTP.RequestHeaders
 raw = Node Raw
 
+-- | Parse and print a required request header field.
+--
+-- prop> printParse parser printer (field "x-foo" int) (x :: Int)
+-- prop> printStable parser printer (field "x-foo" int) (x :: Int)
 field :: HTTP.HeaderName -> Leaf Headers a -> Tree Headers a a
 field key vLeaf = Node (Field key vLeaf)
 
+-- | Parse and print an optional request header field.
+--
+-- prop> printParse parser printer (field' "x-foo" int) (x :: Maybe Int)
 field' :: HTTP.HeaderName -> Leaf Headers a -> Tree Headers (Maybe a) (Maybe a)
 field' key vLeaf = Node (Field' key vLeaf)
 
 field_ :: HTTP.HeaderName -> ByteString -> Tree Headers h h -> Tree Headers h h
 field_ k v c = Apply (LMap (const ()) (FMap (const id) (Node (Field_ k v)))) c
 
-fieldStructured :: HTTP.HeaderName -> Tree Structured a a -> Tree Headers a a
-fieldStructured name c = Node (FieldStructured name c)
+fieldRFC9651 :: HTTP.HeaderName -> Tree RFC9651 a a -> Tree Headers a a
+fieldRFC9651 name c = Node (FieldRFC9651 name c)
 
 fieldBareItem :: HTTP.HeaderName -> Leaf BareItem a -> Tree Headers a a
-fieldBareItem name i = fieldStructured name (Structured.item (bareItem i))
+fieldBareItem name i = fieldRFC9651 name (RFC9651.item (bareItem i))
 
 fieldItem :: HTTP.HeaderName -> Tree Item a a -> Tree Headers a a
-fieldItem name c = fieldStructured name (Structured.item c)
+fieldItem name c = fieldRFC9651 name (RFC9651.item c)
 
 fieldList :: HTTP.HeaderName -> Tree List a a -> Tree Headers a a
-fieldList name c = fieldStructured name (Structured.list c)
+fieldList name c = fieldRFC9651 name (RFC9651.list c)
 
 fieldDictionary :: HTTP.HeaderName -> Tree Dictionary a a -> Tree Headers a a
-fieldDictionary name c = fieldStructured name (Structured.dictionary c)
+fieldDictionary name c = fieldRFC9651 name (RFC9651.dictionary c)
 
 contentType :: MediaType -> Tree Headers h h -> Tree Headers h h
 contentType mt = field_ "content-type" (mediaTypeBytes mt)
 
+-- | Parse and print a required request cookie.
+--
+-- prop> printParse parser printer (cookie "sid" int) (x :: Int)
+-- prop> printStable parser printer (cookie "sid" int) (x :: Int)
 cookie :: ByteString -> Leaf Cookie a -> Tree Headers a a
 cookie name vLeaf = Node (Cookie name vLeaf)
 
+-- | Parse and print an optional request cookie.
+--
+-- prop> printParse parser printer (cookie' "sid" int) (x :: Maybe Int)
 cookie' :: ByteString -> Leaf Cookie a -> Tree Headers (Maybe a) (Maybe a)
 cookie' name vLeaf = Node (Cookie' name vLeaf)
 
@@ -228,11 +235,6 @@ instance HasLeaf Headers (TimeOfDay, TimeZone) where
             Just zt -> Right (localTimeOfDay (zonedTimeToLocalTime zt), zonedTimeZone zt)
             Nothing -> Left ParseError
 
-data ConstF (val :: Symbol) = ConstF deriving (Eq, Show)
-
-fieldToHeaderName :: String -> HTTP.HeaderName
-fieldToHeaderName = CI.mk . encodeUtf8 . Text.pack . map (\c -> if c == '_' then '-' else c)
-
 class GHeaders (f :: Type -> Type) where
     gHeadersCodec :: Tree Headers (f ()) (f ())
 
@@ -266,3 +268,16 @@ instance {-# OVERLAPPING #-} (Selector s, KnownSymbol val) => GHeaders (S1 s (Re
 
 headersCodec :: forall a. (Generic a, GHeaders (Rep a)) => Tree Headers a a
 headersCodec = FMap (to @a) $ LMap (from @a) gHeadersCodec
+
+-- $combined
+-- >>> parser twoFields [("x-a", "1"), ("x-b", "2"), ("x-c", "3")]
+-- (Right (1,2),[("x-c","3")])
+--
+-- prop> printParse parser printer twoFields (xy :: (Int, Int))
+-- prop> printStable parser printer twoFields (xy :: (Int, Int))
+--
+-- >>> parser twoCookies [("cookie", "sid=1; tok=2; other=3")]
+-- (Right (1,2),[("cookie","other=3")])
+--
+-- prop> printParse parser printer twoCookies (xy :: (Int, Int))
+-- prop> printStable parser printer twoCookies (xy :: (Int, Int))

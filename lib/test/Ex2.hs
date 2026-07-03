@@ -83,7 +83,7 @@ myEndpoints = MyApi
 
 -- ── Handlers ─────────────────────────────────────────────────────────────────
 
-myHandlers :: MyApi (Server IO)
+myHandlers :: MyApi (Function IO)
 myHandlers = MyApi
     { userEp = fn \(req, _) ->
         pure if req.path.value == ("alice" :: Text)
@@ -95,7 +95,7 @@ myHandlers = MyApi
 
 -- ── Grouped application ───────────────────────────────────────────────────────
 
-myApp = app myEndpoints id myHandlers
+myApp = server myEndpoints id myHandlers
 
 -- ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ main = do
     mgr <- HC.newManager HC.defaultManagerSettings
     Warp.testWithApplication (pure myApp) \port -> do
         let cs = ClientSettings{manager = mgr, baseUrl = "http://localhost:" ++ show port}
-            MyApi (Cb goUser) (Cb goHealth) = client myEndpoints cs
+            MyApi (Interface goUser) (Interface goHealth) = client myEndpoints cs
 
         r1 <- goUser (request GET "alice" [] [] (pure ""))
         case r1 of

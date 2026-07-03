@@ -1,10 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoFieldSelectors #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 
 module Okapi.HTTP.Request (
     request,
@@ -23,7 +19,7 @@ module Okapi.HTTP.Request (
     parseRequest,
     parseRequestResult,
     printRequest,
-    linkTo,
+    link,
 ) where
 
 import Data.ByteString qualified as BS
@@ -35,16 +31,16 @@ import Data.Text.Encoding (decodeUtf8)
 import GHC.Generics (Generic, Rep)
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Okapi.Mode.Tree (Request (..))
-import Okapi.Mode.Tree qualified as Tree
-import Okapi.Mode.Error    qualified as Error
-import Okapi.Mode.Result   qualified as Result
-import Okapi.Mode.Data    qualified as Data
+import Okapi.Record.Tree (Request (..))
+import Okapi.Record.Tree qualified as Tree
+import Okapi.Record.Failure    qualified as Error
+import Okapi.Record.Result   qualified as Result
+import Okapi.Record.Data    qualified as Data
 import Okapi.HTTP.Request.Body (Body)
 import Okapi.HTTP.Request.Body qualified as Body
 import Okapi.HTTP.Request.Headers (GHeaders, Headers)
 import Okapi.HTTP.Request.Headers qualified as Headers
-import Okapi.HTTP.Request.Method (DELETE, GET, KnownMethod (..), Method, POST, PUT)
+import Okapi.HTTP.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
 import Okapi.HTTP.Request.Method qualified as Method
 import Okapi.HTTP.Request.Path (GPath, Path)
 import Okapi.HTTP.Request.Path qualified as Path
@@ -129,22 +125,22 @@ parseRequest ::
     Wai.Request ->
     IO (Either (Error.Request method path query headers body) (Data.Request method path query headers body))
 parseRequest req waiReq = do
-    let mr      = Method.parse    req.method  (Wai.requestMethod  waiReq)
-        pr      = Path.parseExact req.path    (Wai.pathInfo       waiReq)
-        (qr, _) = Query.parse    req.query   (Wai.queryString    waiReq)
-        (hr, _) = Headers.parse  req.headers (Wai.requestHeaders waiReq)
+    let mr      = Method.parse req.method  (Wai.requestMethod  waiReq)
+        pr      = Path.parseExact req.path (Wai.pathInfo       waiReq)
+        (qr, _) = Query.parser   req.query   (Wai.queryString    waiReq)
+        (hr, _) = Headers.parser req.headers (Wai.requestHeaders waiReq)
         bodyIO  = Wai.strictRequestBody waiReq
-        (br, _) = Body.parse     req.body    bodyIO
+        (br, _) = Body.parser    req.body    bodyIO
     pure $ case (mr, pr, qr, hr, br) of
         (Right method, Right path, Right query, Right headers, Right body) ->
             Right $ Data.Request { method, path, query, headers, body }
         _ ->
             Left $ Error.Request
-                { method  = either Just         (const Nothing) mr
-                , path    = either (Just . fst) (const Nothing) pr
-                , query   = either Just         (const Nothing) qr
-                , headers = either Just         (const Nothing) hr
-                , body    = either Just         (const Nothing) br
+                { method  = either Just                            (const Nothing) mr
+                , path    = either (Just . either id (const Path.ParseError)) (const Nothing) pr
+                , query   = either Just                            (const Nothing) qr
+                , headers = either Just                            (const Nothing) hr
+                , body    = either Just                            (const Nothing) br
                 }
 
 parseRequestResult ::
@@ -152,15 +148,15 @@ parseRequestResult ::
     Wai.Request ->
     IO (Result.Request method path query headers body)
 parseRequestResult req waiReq = do
-    let mr      = Method.parse    req.method  (Wai.requestMethod  waiReq)
-        pr      = Path.parseExact req.path    (Wai.pathInfo       waiReq)
-        (qr, _) = Query.parse    req.query   (Wai.queryString    waiReq)
-        (hr, _) = Headers.parse  req.headers (Wai.requestHeaders waiReq)
+    let mr      = Method.parse req.method  (Wai.requestMethod  waiReq)
+        pr      = Path.parseExact req.path (Wai.pathInfo       waiReq)
+        (qr, _) = Query.parser   req.query   (Wai.queryString    waiReq)
+        (hr, _) = Headers.parser req.headers (Wai.requestHeaders waiReq)
         bodyIO  = Wai.strictRequestBody waiReq
-        (br, _) = Body.parse     req.body    bodyIO
+        (br, _) = Body.parser    req.body    bodyIO
     pure $ Result.Request
         { method  = mr
-        , path    = either (Left . fst) Right pr
+        , path    = either (Left . either id (const Path.ParseError)) Right pr
         , query   = qr
         , headers = hr
         , body    = br
@@ -171,7 +167,7 @@ printRequest ::
     Data.Request method path query headers body ->
     IO Wai.Request
 printRequest req rv = do
-    bodyBytes <- Body.print req.body rv.body
+    bodyBytes <- Body.printer req.body rv.body
     bodyRef   <- newIORef (LBS.toChunks bodyBytes)
     let streamBody = do
             chunks <- readIORef bodyRef
@@ -179,18 +175,19 @@ printRequest req rv = do
                 []     -> pure BS.empty
                 (c:cs) -> writeIORef bodyRef cs >> pure c
     let baseReq = Wai.defaultRequest
-            { Wai.requestMethod  = Method.print  req.method  rv.method
-            , Wai.pathInfo       = Path.print    req.path    rv.path
-            , Wai.queryString    = Query.print   req.query   rv.query
-            , Wai.requestHeaders = Headers.print req.headers rv.headers
+            { Wai.requestMethod  = Method.print                            req.method  rv.method
+            , Wai.pathInfo       = Path.printer    req.path    rv.path
+            , Wai.queryString    = Query.printer   req.query   rv.query
+            , Wai.requestHeaders = Headers.coalesceCookies (Headers.printer  req.headers rv.headers)
             }
     pure (Wai.setRequestBodyChunks streamBody baseReq)
 
-linkTo ::
+link ::
     Tree.Request method path query headers body ->
-    Data.Request method path query headers body ->
+    path ->
+    query ->
     Text
-linkTo req rv =
-    let segs = Path.print  req.path  rv.path
-        qs   = Query.print req.query rv.query
+link req pathVal queryVal =
+    let segs = Path.printer  req.path  pathVal
+        qs   = Query.printer req.query queryVal
     in "/" <> T.intercalate "/" segs <> decodeUtf8 (HTTP.renderQuery True qs)

@@ -1,0 +1,4 @@
+packages:
+    .
+    /home/rgover/okapi/lib
+store-dir: /tmp/bench-store-okapi-256

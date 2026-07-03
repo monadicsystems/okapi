@@ -1,11 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.Artifact.OpenApi (endpointToOpenApi, GenericOAPI, openApi) where
@@ -32,9 +27,9 @@ import Data.List.NonEmpty qualified as NE
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:*:) (..))
 import Network.HTTP.Media (MediaType)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Forest.Canopy (Canopy (..), Signature)
-import Okapi.Leaf (Info (..), Leaf (..))
-import Okapi.Mode.Tree qualified as Tree
+import Okapi.Mode.Forest (Forest (..), Shape)
+import Okapi.Tree (Info (..), Leaf (..))
+import Okapi.Record.Tree qualified as Tree
 import Okapi.HTTP.Request.Method qualified as Method
 import Okapi.HTTP.Request.Path (Path)
 import Okapi.HTTP.Request.Path qualified as Path
@@ -45,7 +40,7 @@ import Okapi.HTTP.Request.Body qualified as ReqBody
 import Okapi.HTTP.Response.Headers qualified as ResH
 import Okapi.HTTP.Response.Body qualified as ResBody
 import Okapi.HTTP.Response.Status qualified as Status
-import Okapi.HTTP.Responses (Cases, Responses (..))
+import Okapi.HTTP.Responses (Cases, Responses)
 import Okapi.HTTP.Responses qualified as Resps
 import Okapi.Tree (Tree (..))
 import Optics.Core ((%), (.~), (?~))
@@ -104,7 +99,7 @@ extractReqHeaderParams (Node hdr) = case hdr of
     ReqH.Field' key vLeaf    -> [mkParamWithSchema (hdrName key) ParamHeader False (infoSchema vLeaf.info)]
     ReqH.Raw                 -> []
     ReqH.Field_ _ _          -> []
-    ReqH.FieldStructured n _ -> [mkParamWithSchema (hdrName n) ParamHeader True (mempty & #type ?~ OA.OpenApiString)]
+    ReqH.FieldRFC9651 n _ -> [mkParamWithSchema (hdrName n) ParamHeader True (mempty & #type ?~ OA.OpenApiString)]
     ReqH.Cookie  _ _         -> []
     ReqH.Cookie' _ _         -> []
 extractReqHeaderParams (FMap _ c)    = extractReqHeaderParams c
@@ -118,7 +113,7 @@ extractResHeaders (Node hdr) = case hdr of
     ResH.Field' key vLeaf    -> [(hdrName key, False, infoSchema vLeaf.info)]
     ResH.Raw                 -> []
     ResH.Field_ _ _          -> []
-    ResH.FieldStructured n _ -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
+    ResH.FieldRFC9651 n _ -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
     ResH.SetCookie _ _ _     -> []
 extractResHeaders (FMap _ c)    = extractResHeaders c
 extractResHeaders (LMap _ c)    = extractResHeaders c
@@ -203,10 +198,10 @@ resInfoOf res = ResInfo
     }
 
 extractResInfos :: Cases responses => Responses Tree.Response responses -> [ResInfo]
-extractResInfos (Responses cs) =
+extractResInfos rs =
     map
         (getConst . Resps.traverseResponses @Tree.Response @Tree.Response (\c -> Const (resInfoOf c)))
-        (NE.toList cs)
+        (NE.toList (Resps.getResponses rs))
 
 methodStdOf :: Method.Method m -> Maybe HTTP.StdMethod
 methodStdOf Method.Raw        = Nothing
@@ -286,7 +281,7 @@ setMethod HTTP.PUT    op pi_ = pi_{_pathItemPut    = Just op}
 setMethod HTTP.DELETE op pi_ = pi_{_pathItemDelete = Just op}
 setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 
-endpointToOpenApi :: Canopy (Signature method path query headers body responses) -> OpenApi
+endpointToOpenApi :: Forest (Shape method path query headers body result) -> OpenApi
 endpointToOpenApi endpoint = case endpoint of
     (req :-> singleRes) -> toOpenApi req [resInfoOf singleRes]
     (req :-< resAlt)    -> toOpenApi req (extractResInfos resAlt)
@@ -333,14 +328,14 @@ instance GenericOAPI epF => GenericOAPI (C1 cm epF) where
 instance (GenericOAPI epL, GenericOAPI epR) => GenericOAPI (epL :*: epR) where
     gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
 
-instance GenericOAPI (S1 sm (Rec0 (Canopy (Signature method path query headers body responses)))) where
+instance GenericOAPI (S1 sm (Rec0 (Forest (Shape method path query headers body result)))) where
     gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
 
 openApi ::
     forall server.
-    ( Generic (server Canopy)
-    , GenericOAPI (Rep (server Canopy))
+    ( Generic (server Forest)
+    , GenericOAPI (Rep (server Forest))
     ) =>
-    server Canopy ->
+    server Forest ->
     OpenApi
-openApi = gOpenApi @(Rep (server Canopy)) . from
+openApi = gOpenApi @(Rep (server Forest)) . from

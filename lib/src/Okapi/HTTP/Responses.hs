@@ -1,16 +1,15 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.HTTP.Responses where
+module Okapi.HTTP.Responses
+    ( Responses
+    , getResponses
+    , Cases
+    , cases
+    , parseResponses
+    , printResponses
+    , traverseResponses
+    ) where
 
 import Data.Functor.Identity (Identity (..))
 import Data.Kind (Type)
@@ -18,23 +17,13 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NE
 import Data.Maybe (mapMaybe)
 import GHC.Generics
+import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Network.Wai qualified as Wai
-import Okapi.Mode.Tree qualified as Tree
-import Okapi.Mode.Error    qualified as Error
-import Okapi.Mode.Result   qualified as Result
-import Okapi.Mode.Data    qualified as Data
+import Okapi.Record.Tree qualified as Tree
+import Okapi.Record.Failure    qualified as Error
+import Okapi.Record.Result   qualified as Result
+import Okapi.Record.Data    qualified as Data
 import Okapi.HTTP.Response qualified as Res
-
-newtype Only
-    (status  :: Type)
-    (headers :: Type)
-    (body    :: Type)
-    (f       :: Type -> Type -> Type -> Type)
-    = Only { unOnly :: f status headers body }
-    deriving (Generic)
-
-only :: f status headers body -> Only status headers body f
-only = Only
 
 newtype Responses
     (f         :: Type -> Type -> Type -> Type)
@@ -44,15 +33,15 @@ newtype Responses
 getResponses :: Responses f responses -> NonEmpty (responses f)
 getResponses (Responses xs) = xs
 
-type family GResponseFunc
+type family GArgs
     (f   :: Type -> Type -> Type -> Type)
     (rep :: Type -> Type)
     (res :: Type)
     :: Type where
-    GResponseFunc f (D1 meta fi)                              res = GResponseFunc f fi res
-    GResponseFunc f (C1 meta fi)                              res = GResponseFunc f fi res
-    GResponseFunc f (S1 meta (Rec0 (f status headers body))) res = f status headers body -> res
-    GResponseFunc f (fi :+: gi)                              res = GResponseFunc f fi (GResponseFunc f gi res)
+    GArgs f (D1 meta fi)                              res = GArgs f fi res
+    GArgs f (C1 meta fi)                              res = GArgs f fi res
+    GArgs f (S1 meta (Rec0 (f status headers body))) res = f status headers body -> res
+    GArgs f (fi :+: gi)                              res = GArgs f fi (GArgs f gi res)
 
 class GTraverse
     (f  :: Type -> Type -> Type -> Type)
@@ -79,6 +68,15 @@ instance (GTraverse f g fil fgl, GTraverse f g fir fgr)
     => GTraverse f g (fil :+: fir) (fgl :+: fgr) where
     gtraverse k (L1 x) = L1 <$> gtraverse k x
     gtraverse k (R1 x) = R1 <$> gtraverse k x
+
+instance {-# OVERLAPPABLE #-}
+    TypeError
+        ( 'Text "Cannot traverse this `responses` type — its shape isn't supported."
+        ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
+        ':$$: 'Text "Example: data MyResponses f = Ok (f S200 () Body) | NotFound (f S404 () ())"
+        )
+    => GTraverse f g fi fg where
+    gtraverse _ = error "unreachable: resolved via TypeError instance"
 
 traverseResponses ::
     forall f g responses t.
@@ -117,6 +115,15 @@ instance (GZip f g fil fgl, GZip f g fir fgr)
     gzip k (R1 a) (R1 b) = gzip k a b
     gzip _ _      _      = Nothing
 
+instance {-# OVERLAPPABLE #-}
+    TypeError
+        ( 'Text "Cannot zip this `responses` type — its shape isn't supported."
+        ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
+        ':$$: 'Text "Example: data MyResponses f = Ok (f S200 () Body) | NotFound (f S404 () ())"
+        )
+    => GZip f g fi fg where
+    gzip _ = error "unreachable: resolved via TypeError instance"
+
 zipResponses ::
     forall f g responses c.
     ( Generic (responses f)
@@ -133,7 +140,7 @@ class GConstruct (rep :: Type -> Type) where
         Generic (responses Tree.Response) =>
         (rep () -> Rep (responses Tree.Response) ()) ->
         (NonEmpty (responses Tree.Response) -> res) ->
-        GResponseFunc Tree.Response rep res
+        GArgs Tree.Response rep res
 
 instance GConstruct fi => GConstruct (D1 meta fi) where
     gConstruct inject cont = gConstruct (inject . M1) cont
@@ -149,6 +156,15 @@ instance (GConstruct fil, GConstruct fir) => GConstruct (fil :+: fir) where
         gConstruct (inject . L1) $ \ls ->
         gConstruct (inject . R1) $ \rs ->
         cont (ls <> rs)
+
+instance {-# OVERLAPPABLE #-}
+    TypeError
+        ( 'Text "Cannot build `cases` for this `responses` type — its shape isn't supported."
+        ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
+        ':$$: 'Text "Example: data MyResponses f = Ok (f S200 () Body) | NotFound (f S404 () ())"
+        )
+    => GConstruct rep where
+    gConstruct = error "unreachable: resolved via TypeError instance"
 
 class
     ( Generic (responses Tree.Response)
@@ -172,7 +188,7 @@ class
 cases ::
     forall (responses :: (Type -> Type -> Type -> Type) -> Type).
     Cases responses =>
-    GResponseFunc
+    GArgs
         Tree.Response
         (Rep (responses Tree.Response))
         (Responses Tree.Response responses)

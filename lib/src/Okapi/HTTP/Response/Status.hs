@@ -1,9 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Okapi.HTTP.Response.Status (
     KnownStatus (..),
@@ -25,7 +19,7 @@ module Okapi.HTTP.Response.Status (
 import Data.Kind (Type)
 import GHC.TypeLits (Nat)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Leaf (ErrorOf, StateOf)
+import Okapi.Tree (Failure, Context)
 import Prelude hiding (print)
 
 data KnownStatus (s :: Nat) where
@@ -86,8 +80,8 @@ data Status a where
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance StateOf Status = HTTP.Status
-type instance ErrorOf Status = ParseError
+type instance Context Status = HTTP.Status
+type instance Failure Status = ParseError
 
 parse :: Status status -> HTTP.Status -> Either ParseError status
 parse Raw         s = Right s

@@ -1,5 +1,4 @@
 {-# LANGUAGE NoFieldSelectors #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 
 module Okapi.HTTP.Response (
     response,
@@ -23,11 +22,11 @@ import Data.ByteString.Lazy qualified as LBS
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
-import Okapi.Mode.Tree (Response (..))
-import Okapi.Mode.Tree qualified as Tree
-import Okapi.Mode.Error qualified as Error
-import Okapi.Mode.Result qualified as Result
-import Okapi.Mode.Data qualified as Data
+import Okapi.Record.Tree (Response (..))
+import Okapi.Record.Tree qualified as Tree
+import Okapi.Record.Failure qualified as Error
+import Okapi.Record.Result qualified as Result
+import Okapi.Record.Data qualified as Data
 import Okapi.HTTP.Response.Body (Body)
 import Okapi.HTTP.Response.Body qualified as Body
 import Okapi.HTTP.Response.Headers (Headers)
@@ -102,8 +101,8 @@ parseResponseResult codec waiRes = do
     let httpStatus = Wai.responseStatus waiRes
         waiHeaders = Wai.responseHeaders waiRes
         sr         = Status.parse codec.status httpStatus
-        (hr, _)    = Headers.parse codec.headers waiHeaders
-        (br, _)    = Body.parse codec.body (extractWaiResBody waiRes)
+        (hr, _)    = Headers.parser codec.headers waiHeaders
+        (br, _)    = Body.parser codec.body (extractWaiResBody waiRes)
     pure $ Result.Response { status = sr, headers = hr, body = br }
 
 resultToValue ::
@@ -136,6 +135,6 @@ printResponse ::
     Data.Response status headers body ->
     IO Wai.Response
 printResponse codec value = do
-    bodyBytes <- Body.print codec.body value.body
-    let responseHeaders = Headers.print codec.headers value.headers
+    bodyBytes <- Body.printer codec.body value.body
+    let responseHeaders = Headers.printer codec.headers value.headers
     pure $ Wai.responseLBS (Status.print codec.status value.status) responseHeaders bodyBytes

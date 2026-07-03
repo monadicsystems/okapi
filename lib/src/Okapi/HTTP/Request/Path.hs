@@ -1,25 +1,16 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.HTTP.Request.Path (
     Path (..),
     ParseError (..),
+    parser,
+    printer,
+    parseExact,
     segment_,
     segment,
     segments,
     raw,
-    parse,
-    parseExact,
-    print,
     LitF (..),
     GPath (..),
     pathCodec,
@@ -28,6 +19,10 @@ module Okapi.HTTP.Request.Path (
 import Data.Bifunctor (first)
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
+-- In the import of `Data.List.NonEmpty':
+--   an item called `(:|)'
+--   is exported, but it is a data constructor of
+--   `NonEmpty'.
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NEL
 import Data.Proxy (Proxy (..))
@@ -36,11 +31,20 @@ import Data.Text qualified as Text
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
-import Okapi.Leaf (ErrorOf, HasLeaf (..), Info (..), Leaf (..), PieceOf, StateOf)
-import Okapi.Tree (Tree (..))
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Prelude hiding (print)
 import Web.HttpApiData (parseUrlPiece, toUrlPiece)
+
+-- $setup
+-- >>> :set -XApplicativeDo
+-- >>> import Okapi.Tree (printParse, printStable, int, integer, (=.))
+-- >>> import Data.List.NonEmpty (NonEmpty((:|)))
+-- >>> :{
+-- let twoSegs = do
+--       n <- fst =. segment "n" int
+--       m <- snd =. segment "m" int
+--       pure (n, m)
+-- :}
 
 data Path a where
     Seg_ :: Leaf Path a -> a -> Path ()
@@ -50,52 +54,78 @@ data Path a where
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance StateOf  Path = [Text]
-type instance ErrorOf  Path = ParseError
-type instance PieceOf  Path = Text
+type instance Context  Path = [Text]
+type instance Failure  Path = ParseError
+type instance Piece  Path = Text
 
-parse :: Tree Path i o -> [Text] -> (Either ParseError o, [Text])
-parse = Tree.grow pathAlg
+parser :: Tree Path i o -> Parser Path o
+parser = Tree.parser alg
   where
-    pathAlg :: forall a. Path a -> [Text] -> (Either ParseError a, [Text])
-    pathAlg (Seg_ vLeaf x) (t : ts)
+    alg :: Path a -> Parser Path a
+    alg (Seg_ vLeaf x) (t : ts)
         | t == vLeaf.encode x = (Right (), ts)
-        | otherwise = (Left ParseError, t : ts)
-    pathAlg (Seg_ _ _) [] = (Left ParseError, [])
-    pathAlg (Seg _name vLeaf) (t : ts) = case vLeaf.decode t of
+        | otherwise            = (Left ParseError, t : ts)
+    alg (Seg_ _ _) [] = (Left ParseError, [])
+    alg (Seg _name vLeaf) (t : ts) = case vLeaf.decode t of
         Left _  -> (Left ParseError, t : ts)
         Right v -> (Right v, ts)
-    pathAlg (Seg _ _) [] = (Left ParseError, [])
-    pathAlg (Segs vLeaf) ts = case NEL.nonEmpty ts of
+    alg (Seg _ _) [] = (Left ParseError, [])
+    alg (Segs vLeaf) ts = case NEL.nonEmpty ts of
         Nothing  -> (Left ParseError, [])
         Just nel -> case traverse vLeaf.decode (NEL.toList nel) of
             Left _   -> (Left ParseError, ts)
             Right xs -> case NEL.nonEmpty xs of
                 Nothing   -> (Left ParseError, [])
                 Just nel' -> (Right nel', [])
-    pathAlg Raw ts = (Right ts, [])
+    alg Raw ts = (Right ts, [])
 
-parseExact :: Tree Path i o -> [Text] -> Either (ParseError, [Text]) o
-parseExact pathCodec' path = case parse pathCodec' path of
-    (Left e, p)  -> Left (e, p)
-    (Right a, []) -> Right a
-    (Right _, p) -> Left (ParseError, p)
-
-print :: Tree Path i o -> i -> [Text]
-print = Tree.eat pathPrinter
+printer :: Tree Path i o -> Printer Path i
+printer = Tree.printer alg
   where
-    pathPrinter :: forall a. Path a -> a -> [Text]
-    pathPrinter (Seg_ vLeaf x) () = [vLeaf.encode x]
-    pathPrinter (Seg _name vLeaf) v = [vLeaf.encode v]
-    pathPrinter (Segs vLeaf) nel = map vLeaf.encode (NEL.toList nel)
-    pathPrinter Raw ts = ts
+    alg :: Path a -> Printer Path a
+    alg (Seg_ vLeaf x) () = [vLeaf.encode x]
+    alg (Seg _name vLeaf) v = [vLeaf.encode v]
+    alg (Segs vLeaf) nel = map vLeaf.encode (NEL.toList nel)
+    alg Raw ts = ts
 
+parseExact :: Tree Path i o -> [Text] -> Either (Either ParseError [Text]) o
+parseExact c ts = case parser c ts of
+    (Left e, _)        -> Left (Left e)
+    (Right a, [])      -> Right a
+    (Right _, ts')     -> Left (Right ts')
+
+-- | Match a fixed literal segment.
+--
+-- >>> printer (segment_ int 42) ()
+-- ["42"]
+-- >>> parser (segment_ int 42) ["42"]
+-- (Right (),[])
+-- >>> parser (segment_ int 42) ["99"]
+-- (Left ParseError,["99"])
 segment_ :: Leaf Path a -> a -> Tree Path () ()
 segment_ vLeaf x = LMap (const ()) (Node (Seg_ vLeaf x))
 
+-- | Parse and print a single typed path segment.
+--
+-- >>> printer (segment "id" int) (42 :: Int)
+-- ["42"]
+-- >>> parser (segment "id" int) ["42"]
+-- (Right 42,[])
+-- >>> parser (segment "id" int) ["hello"]
+-- (Left ParseError,["hello"])
+-- >>> parser (segment "id" int) []
+-- (Left ParseError,[])
+--
+-- prop> printParse parser printer (segment "n" int) (x :: Int)
+-- prop> printParse parser printer (segment "n" integer) x
+-- prop> printStable parser printer (segment "n" int) (x :: Int)
 segment :: Text -> Leaf Path a -> Tree Path a a
 segment name vLeaf = Node (Seg name vLeaf)
 
+-- | Parse and print all remaining path segments as a non-empty list.
+--
+-- prop> printParse parser printer (segments int) (x :| xs)
+-- prop> printStable parser printer (segments int) (x :| xs)
 segments :: Leaf Path a -> Tree Path (NonEmpty a) (NonEmpty a)
 segments vLeaf = Node (Segs vLeaf)
 
@@ -139,3 +169,10 @@ instance (Selector meta, HasLeaf Path a) => GPath (S1 meta (Rec0 a)) where
 
 pathCodec :: forall a. (Generic a, GPath (Rep a)) => Tree Path a a
 pathCodec = FMap (to @a) $ LMap (from @a) gPathCodec
+
+-- $combined
+-- >>> parser twoSegs ["42", "99", "extra"]
+-- (Right (42,99),["extra"])
+--
+-- prop> printParse parser printer twoSegs (xy :: (Int, Int))
+-- prop> printStable parser printer twoSegs (xy :: (Int, Int))

@@ -1,3 +1,5 @@
 # Changelog for okapi
 
-## Unreleased changes
+## 0.2.0.0
+
+<PLACEHOLDER>

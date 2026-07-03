@@ -1,8 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Okapi.HTTP.Request.Method (
     KnownMethod (..),
@@ -22,7 +17,7 @@ module Okapi.HTTP.Request.Method (
 
 import GHC.TypeLits (Symbol)
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Leaf (ErrorOf, StateOf)
+import Okapi.Tree (Failure, Context)
 import Prelude hiding (print)
 
 data KnownMethod (m :: Symbol) where
@@ -45,8 +40,8 @@ data Method a where
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance StateOf Method = HTTP.Method
-type instance ErrorOf Method = ParseError
+type instance Context Method = HTTP.Method
+type instance Failure Method = ParseError
 
 parse :: Method method -> HTTP.Method -> Either ParseError method
 parse Raw m = Right m

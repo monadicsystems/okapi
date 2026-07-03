@@ -1,24 +1,31 @@
-{-# LANGUAGE DuplicateRecordFields #-}
-
 module Okapi
     (
-      Canopy (..)
-    , Signature
+      Forest (..)
+    , Shape
     , fn
     , serve
     , tryServe
     , Server (..)
     , Client (..)
 
-    , app
+    , Route (..)
+    , Handle (..)
+    , handle
+
+    , server
     , client
 
     , openApi
     , endpointToOpenApi
 
+    , type (~>)
     , fetch
     , ClientError (..)
     , ClientSettings (..)
+
+    , URI (..)
+    , Link (..)
+    , links
 
     , KnownMethod (..)
     , GET
@@ -35,9 +42,6 @@ module Okapi
 
     , ArrayStyle (..)
 
-    , Only (..)
-    , only
-
     , Cases
     , Responses
     , getResponses
@@ -46,13 +50,14 @@ module Okapi
     , parseRequest
     , parseRequestResult
     , printRequest
-    , linkTo
+    , link
     , parseResponse
     , parseResponseResult
     , parseResponses
     , printResponse
     , printResponses
 
+    , SymTree
     , Leaf (..)
     , Info (..)
     , HasLeaf (..)
@@ -73,27 +78,30 @@ module Okapi
     , param, param', param_, flag, flag', list, list'
 
     , field, field', field_, contentType, cookie, cookie'
-    , fieldStructured, fieldBareItem, fieldItem, fieldList, fieldDictionary
+    , fieldRFC9651, fieldBareItem, fieldItem, fieldList, fieldDictionary
 
     , attribute, attribute', secure, httpOnly
     ) where
 
-import Okapi.Forest.Canopy (Canopy (..), Signature)
-import Okapi.Forest.Server (Server (..), fn, serve, tryServe, app)
-import Okapi.Forest.Client (Client (..), ClientError (..), ClientSettings (..), fetch, client)
+import Okapi.Mode.Forest (Forest (..), Shape)
+import Okapi.Mode.Server (Server (..), fn, type (~>), serve, tryServe, server)
+import Okapi.Handle (Route (..), Handle (..), handle)
+import Okapi.Mode.Client (Client (..), ClientError (..), ClientSettings (..), fetch, client)
+import Okapi.Mode.Link (URI (..), Link (..), links)
 import Okapi.Artifact.OpenApi (endpointToOpenApi, openApi)
-import Okapi.Leaf
-    ( Leaf (..), Info (..), HasLeaf (..)
+import Okapi.Tree
+    ( SymTree
+    , Leaf (..), Info (..), HasLeaf (..)
     , int, int16, int32, int64, integer
     , bool, float, double, scientific, text
     , day, localTime, utcTime, timeOfDay, uuid
+    , (=.)
     )
-import Okapi.Tree ((=.))
 import Okapi.HTTP.Request
     ( request, methodGET, methodPOST, methodPUT, methodDELETE
     , method, path, query, headers, body
     , pathOf, queryOf, headersOf
-    , parseRequest, parseRequestResult, printRequest, linkTo
+    , parseRequest, parseRequestResult, printRequest, link
     )
 import Okapi.HTTP.Request.Body (IsoJson)
 import Okapi.HTTP.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
@@ -101,12 +109,12 @@ import Okapi.HTTP.Request.Path (segment, segment_, segments)
 import Okapi.HTTP.Request.Query (ArrayStyle (..), param, param', param_, flag, flag', list, list')
 import Okapi.HTTP.Request.Headers
     ( field, field', field_, contentType, cookie, cookie'
-    , fieldStructured, fieldBareItem, fieldItem, fieldList, fieldDictionary
+    , fieldRFC9651, fieldBareItem, fieldItem, fieldList, fieldDictionary
     )
 import Okapi.HTTP.Response
     ( response, status200, status201, status204, status404, status500
     , parseResponse, parseResponseResult, printResponse
     )
 import Okapi.HTTP.Response.Status (KnownStatus (..), S200, S201, S204, S404, S500)
-import Okapi.HTTP.Responses (Only (..), only, Cases, Responses, getResponses, cases, parseResponses, printResponses)
-import Okapi.HTTP.Headers.Attributes (attribute, attribute', secure, httpOnly)
+import Okapi.HTTP.Responses (Cases, Responses, getResponses, cases, parseResponses, printResponses)
+import Okapi.HTTP.Response.Attributes (attribute, attribute', secure, httpOnly)

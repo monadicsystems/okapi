@@ -1,32 +1,23 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module Okapi.HTTP.Response.Body (
     Body (..),
     IsoJson,
     ParseError (..),
-    parse,
-    print,
+    parser,
+    printer,
     raw,
     json,
     html,
     noContent,
 ) where
 
-import Control.Applicative (liftA2)
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
-import Data.OpenApi (ToSchema)
 import Lucid (Html, renderBS)
-import Okapi.Leaf (ErrorOf, StateOf)
-import Okapi.Tree (Tree (..))
+import Okapi.Tree (Failure, Parser, Printer, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Prelude hiding (print)
-
-type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
+import Okapi.HTTP.Body (IsoJson, jsonDecode)
 
 type Body :: Type -> Type
 data Body a where
@@ -37,35 +28,26 @@ data Body a where
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance StateOf Body = IO LBS.ByteString
-type instance ErrorOf Body = ParseError
+type instance Context Body = IO LBS.ByteString
+type instance Failure Body = ParseError
 
-parse :: Tree Body i o -> IO LBS.ByteString -> (Either ParseError o, IO LBS.ByteString)
-parse = Tree.grow bodyAlg
+parser :: Tree Body i o -> Parser Body o
+parser = Tree.parser alg
   where
-    bodyAlg :: forall a. Body a -> IO LBS.ByteString -> (Either ParseError a, IO LBS.ByteString)
-    bodyAlg Raw       ioLbs = (Right ioLbs,                  pure mempty)
-    bodyAlg Json      ioLbs = (Right (ioLbs >>= jsonDecode), pure mempty)
-    bodyAlg Html      _     = (Left ParseError,              pure mempty)
-    bodyAlg NoContent _     = (Right (pure ()),              pure mempty)
+    alg :: Body a -> Parser Body a
+    alg Raw       ioLbs = (Right ioLbs,                  pure mempty)
+    alg Json      ioLbs = (Right (ioLbs >>= jsonDecode), pure mempty)
+    alg Html      _     = (Left ParseError,              pure mempty)
+    alg NoContent _     = (Right (pure ()),              pure mempty)
 
-jsonDecode :: IsoJson a => LBS.ByteString -> IO a
-jsonDecode bs = case Aeson.eitherDecode bs of
-    Left err -> fail err
-    Right x  -> pure x
-
-print :: Tree Body i o -> i -> IO LBS.ByteString
-print = go
+printer :: Tree Body i o -> Printer Body i
+printer = Tree.printer alg
   where
-    go :: forall i' o'. Tree Body i' o' -> i' -> IO LBS.ByteString
-    go (Pure _)         _     = pure mempty
-    go (FMap _ c)       i     = go c i
-    go (LMap f c)       i     = go c (f i)
-    go (Apply cf cx)    i     = liftA2 (<>) (go cf i) (go cx i)
-    go (Node Raw)       ioLbs = ioLbs
-    go (Node Json)      ioA   = Aeson.encode <$> ioA
-    go (Node Html)      ioH   = renderBS <$> ioH
-    go (Node NoContent) _     = pure mempty
+    alg :: Body a -> Printer Body a
+    alg Raw       ioLbs = ioLbs
+    alg Json      ioA   = Aeson.encode <$> ioA
+    alg Html      ioH   = renderBS <$> ioH
+    alg NoContent _     = pure mempty
 
 raw :: Tree Body (IO LBS.ByteString) (IO LBS.ByteString)
 raw = Node Raw

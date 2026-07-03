@@ -150,7 +150,7 @@ itemsEndpoints =
 
 -- ── Handlers ─────────────────────────────────────────────────────────────────
 
-itemsHandlers :: (MonadReader Config m, MonadIO m) => ItemsApi (Server m)
+itemsHandlers :: (MonadReader Config m, MonadIO m) => ItemsApi (Function m)
 itemsHandlers =
     ItemsApi
         { createItem = fn \(req, _) -> do
@@ -185,12 +185,12 @@ main = SQLite.withConnection ":memory:" \conn -> do
         "CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL)"
 
     let cfg = Config{dbConn = conn}
-        myApp = app itemsEndpoints (flip runReaderT cfg) itemsHandlers
+        myApp = server itemsEndpoints (flip runReaderT cfg) itemsHandlers
 
     mgr <- HC.newManager HC.defaultManagerSettings
     Warp.testWithApplication (pure myApp) \port -> do
         let cs = ClientSettings{manager = mgr, baseUrl = "http://localhost:" ++ show port}
-            ItemsApi (Cb goCreate) (Cb goGet) (Cb goDelete) = client itemsEndpoints cs
+            ItemsApi (Interface goCreate) (Interface goGet) (Interface goDelete) = client itemsEndpoints cs
 
         r1 <- goCreate (request POST () [] [] (pure NewItem{itemName = "Widget"}))
         createdId <- case r1 of

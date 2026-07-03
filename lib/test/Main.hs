@@ -79,7 +79,7 @@ getUserEndpoint
 getUserEndpoint = getUserReq :-> getUserResCodec
 
 getUserServer
-    :: Server
+    :: Function
         IO
         ( Signature
             GET

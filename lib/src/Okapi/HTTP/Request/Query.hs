@@ -1,21 +1,12 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.HTTP.Request.Query (
     Query (..),
     ArrayStyle (..),
     ParseError (..),
-    parse,
-    print,
+    parser,
+    printer,
     raw,
     param,
     param',
@@ -44,11 +35,20 @@ import Data.Time (Day, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Leaf (ErrorOf, HasLeaf (..), Info (..), Leaf (..), PieceOf, StateOf)
-import Okapi.Tree (Tree (..))
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Prelude hiding (print)
 import Web.HttpApiData (parseQueryParam, toQueryParam)
+
+-- $setup
+-- >>> :set -XApplicativeDo
+-- >>> import Okapi.Tree (printParse, printStable, int, integer, (=.))
+-- >>> import Data.List.NonEmpty (NonEmpty((:|)))
+-- >>> :{
+-- let twoParams = do
+--       x <- fst =. param "x" int
+--       y <- snd =. param "y" int
+--       pure (x, y)
+-- :}
 
 type Query :: Type -> Type
 data Query a where
@@ -65,68 +65,68 @@ data ArrayStyle = Exploded | CommaDelimited | SpaceDelimited | PipeDelimited der
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance StateOf Query = HTTP.Query
-type instance ErrorOf Query = ParseError
-type instance PieceOf Query = Text
+type instance Context Query = HTTP.Query
+type instance Failure Query = ParseError
+type instance Piece Query = Text
 
-parse :: Tree Query i o -> HTTP.Query -> (Either ParseError o, HTTP.Query)
-parse = Tree.grow queryAlg
+parser :: Tree Query i o -> Parser Query o
+parser = Tree.parser alg
   where
-    queryAlg :: forall a. Query a -> HTTP.Query -> (Either ParseError a, HTTP.Query)
-    queryAlg Raw q = (Right q, [])
-    queryAlg (Param key vLeaf) q =
+    alg :: Query a -> Parser Query a
+    alg Raw q = (Right q, [])
+    alg (Param key vLeaf) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
-            ([], _) -> (Left ParseError, q)
-            ((_, Nothing) : _, _) -> (Left ParseError, q)
+            ([], _)                 -> (Left ParseError, q)
+            ((_, Nothing) : _, _)  -> (Left ParseError, q)
             ((_, Just v) : _, rest) -> case vLeaf.decode (decodeUtf8Lenient v) of
                 Left e  -> (Left e, q)
                 Right x -> (Right x, rest)
-    queryAlg (Param' key vLeaf) q =
+    alg (Param' key vLeaf) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
-            ([], _) -> (Right Nothing, q)
+            ([], _)                  -> (Right Nothing, q)
             ((_, Nothing) : _, rest) -> (Right Nothing, rest)
-            ((_, Just v) : _, rest) -> case vLeaf.decode (decodeUtf8Lenient v) of
+            ((_, Just v) : _, rest)  -> case vLeaf.decode (decodeUtf8Lenient v) of
                 Left _  -> (Right Nothing, rest)
                 Right x -> (Right (Just x), rest)
-    queryAlg (Flag key) q =
+    alg (Flag key) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)       -> (Left ParseError, q)
             (_ : _, rest) -> (Right (), rest)
-    queryAlg (Param_ key vLeaf x) q =
+    alg (Param_ key vLeaf x) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ((_, Just v) : _, rest) | decodeUtf8Lenient v == vLeaf.encode x -> (Right (), rest)
             _ -> (Left ParseError, q)
-    queryAlg (Flag' key) q =
+    alg (Flag' key) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)       -> (Right False, q)
             (_ : _, rest) -> (Right True, rest)
-    queryAlg (List style key vLeaf) q =
+    alg (List style key vLeaf) q =
         let (vals, rest) = collectList style key q
          in case traverse (vLeaf.decode . decodeUtf8Lenient) vals of
                 Left _   -> (Left ParseError, q)
                 Right xs -> case NE.nonEmpty xs of
                     Nothing  -> (Left ParseError, q)
                     Just nel -> (Right nel, rest)
-    queryAlg (List' style key vLeaf) q =
+    alg (List' style key vLeaf) q =
         let (vals, rest) = collectList style key q
          in case traverse (vLeaf.decode . decodeUtf8Lenient) vals of
                 Left _   -> (Left ParseError, q)
                 Right xs -> (Right xs, rest)
 
-print :: Tree Query i o -> i -> HTTP.Query
-print = Tree.eat queryPrinter
+printer :: Tree Query i o -> Printer Query i
+printer = Tree.printer alg
   where
-    queryPrinter :: forall a. Query a -> a -> HTTP.Query
-    queryPrinter Raw q = q
-    queryPrinter (Param key vLeaf) x = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
-    queryPrinter (Param' _ _) Nothing = []
-    queryPrinter (Param' key vLeaf) (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
-    queryPrinter (Param_ key vLeaf x) () = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
-    queryPrinter (Flag key) () = [(encodeUtf8 key, Nothing)]
-    queryPrinter (Flag' key) True  = [(encodeUtf8 key, Nothing)]
-    queryPrinter (Flag' _) False   = []
-    queryPrinter (List style key vLeaf) nel  = renderList style key vLeaf (NE.toList nel)
-    queryPrinter (List' style key vLeaf) xs  = renderList style key vLeaf xs
+    alg :: Query a -> Printer Query a
+    alg Raw                    q        = q
+    alg (Param key vLeaf)      x        = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
+    alg (Param' _ _)           Nothing  = []
+    alg (Param' key vLeaf)     (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
+    alg (Param_ key vLeaf x)   ()       = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
+    alg (Flag key)             ()       = [(encodeUtf8 key, Nothing)]
+    alg (Flag' key)            True     = [(encodeUtf8 key, Nothing)]
+    alg (Flag' _)              False    = []
+    alg (List style key vLeaf)  nel     = renderList style key vLeaf (NE.toList nel)
+    alg (List' style key vLeaf) xs      = renderList style key vLeaf xs
 
 collectList :: ArrayStyle -> Text -> HTTP.Query -> ([ByteString], HTTP.Query)
 collectList Exploded key q =
@@ -159,21 +159,39 @@ delim Exploded       = ','
 raw :: Tree Query HTTP.Query HTTP.Query
 raw = Node Raw
 
+-- | Parse and print a required query parameter.
+--
+-- prop> printParse parser printer (param "k" int) (x :: Int)
+-- prop> printStable parser printer (param "k" int) (x :: Int)
 param :: Text -> Leaf Query a -> Tree Query a a
 param key vLeaf = Node (Param key vLeaf)
 
+-- | Parse and print an optional query parameter.
+--
+-- prop> printParse parser printer (param' "k" int) (x :: Maybe Int)
+-- prop> printStable parser printer (param' "k" int) (x :: Maybe Int)
 param' :: Text -> Leaf Query a -> Tree Query (Maybe a) (Maybe a)
 param' key vLeaf = Node (Param' key vLeaf)
 
 param_ :: Text -> Leaf Query a -> a -> Tree Query () ()
 param_ key vLeaf x = Node (Param_ key vLeaf x)
 
+-- | Parse and print a boolean flag (presence = True).
+--
+-- prop> printParse parser printer (flag "f") ()
+-- prop> printParse parser printer (flag' "f") (x :: Bool)
+-- prop> printStable parser printer (flag' "f") (x :: Bool)
 flag :: Text -> Tree Query () ()
 flag key = Node (Flag key)
 
 flag' :: Text -> Tree Query Bool Bool
 flag' key = Node (Flag' key)
 
+-- | Parse and print a non-empty list of query parameters.
+--
+-- prop> printParse parser printer (list Exploded "k" int) (x :| xs)
+-- prop> printParse parser printer (list CommaDelimited "k" int) (x :| xs)
+-- prop> printStable parser printer (list Exploded "k" int) (x :| xs)
 list :: ArrayStyle -> Text -> Leaf Query a -> Tree Query (NonEmpty a) (NonEmpty a)
 list style key vLeaf = Node (List style key vLeaf)
 
@@ -230,3 +248,10 @@ instance {-# OVERLAPPING #-} (Selector s) => GQuery (S1 s (Rec0 Bool)) where
 
 queryCodec :: forall a. (Generic a, GQuery (Rep a)) => Tree Query a a
 queryCodec = FMap (to @a) $ LMap (from @a) gQueryCodec
+
+-- $combined
+-- >>> parser twoParams [("x", Just "1"), ("y", Just "2"), ("z", Just "3")]
+-- (Right (1,2),[("z",Just "3")])
+--
+-- prop> printParse parser printer twoParams (xy :: (Int, Int))
+-- prop> printStable parser printer twoParams (xy :: (Int, Int))
