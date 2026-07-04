@@ -63,7 +63,6 @@ library
         Okapi.HTTP.Response.SetCookies
         Okapi.HTTP.Response.Attributes
         Okapi.HTTP.RFC9651
-        Okapi.HTTP.RFC9651.Lexer
         Okapi.HTTP.RFC9651.BareItem
         Okapi.HTTP.RFC9651.Parameters
         Okapi.HTTP.RFC9651.Item
@@ -80,7 +79,6 @@ library
         http-media               ^>=0.8,
         http-types               ^>=0.12,
         insert-ordered-containers ^>=0.2,
-        lucid                    ^>=2.11,
         optics-core              ^>=0.4,
         openapi3                 ^>=3.2,
         profunctors              ^>=5.6,
@@ -88,7 +86,6 @@ library
         text                     ^>=2.1,
         time                     ^>=1.12,
         uuid                     ^>=1.3,
-        vector                   ^>=0.13,
         wai                      ^>=3.2
     hs-source-dirs:   src
     default-language: GHC2024
@@ -289,7 +286,6 @@ test-suite okapi-content-type
         aeson,
         bytestring,
         http-api-data,
-        lucid,
         openapi3,
         text,
         okapi

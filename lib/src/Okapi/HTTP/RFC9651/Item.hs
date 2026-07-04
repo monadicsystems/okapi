@@ -14,10 +14,37 @@ import Data.ByteString (ByteString)
 import Data.Kind (Type)
 import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..), (=.))
 import Okapi.Tree qualified as Tree
+import Data.ByteString qualified as BS
+import Data.Word (Word8)
 import Okapi.HTTP.RFC9651.BareItem (BareItem)
-import Okapi.HTTP.RFC9651.Lexer (ParseError (..), firstAndRest, strip)
 import Okapi.HTTP.RFC9651.Parameters (Parameters)
 import Okapi.HTTP.RFC9651.Parameters qualified as Parameters
+
+data ParseError = ParseError deriving (Eq, Show)
+
+strip :: ByteString -> ByteString
+strip = BS.dropWhileEnd isSp . BS.dropWhile isSp
+  where isSp w = w == 32 || w == 9
+
+firstTop :: Word8 -> ByteString -> Maybe Int
+firstTop sep bs = go False (0 :: Int) 0
+  where
+    n = BS.length bs
+    go inQ depth i
+        | i >= n = Nothing
+        | otherwise =
+            let w = BS.index bs i
+            in if w == 34 then go (not inQ) depth (i + 1)
+               else if inQ then go inQ depth (i + 1)
+               else if w == 40 then go inQ (depth + 1) (i + 1)
+               else if w == 41 then go inQ (max 0 (depth - 1)) (i + 1)
+               else if w == sep && depth == 0 then Just i
+               else go inQ depth (i + 1)
+
+firstAndRest :: Word8 -> ByteString -> (ByteString, ByteString)
+firstAndRest sep bs = case firstTop sep bs of
+    Nothing -> (bs, BS.empty)
+    Just i  -> (BS.take i bs, BS.drop (i + 1) bs)
 
 type Item :: Type -> Type
 data Item a where
@@ -49,9 +76,13 @@ parser = Tree.parser alg
   where
     alg :: Item a -> Parser Item a
     alg t s = case t of
-        Bare vLeaf -> (vLeaf.decode (strip bare), s)
+        Bare vLeaf -> case vLeaf.decode (strip bare) of
+                          Left _  -> (Left ParseError, s)
+                          Right a -> (Right a, s)
         BareEq c   -> (if strip bare == c then Right () else Left ParseError, s)
-        Params c   -> (fst (Parameters.parser c ps), s)
+        Params c   -> case fst (Parameters.parser c ps) of
+                          Left _  -> (Left ParseError, s)
+                          Right p -> (Right p, s)
         Raw        -> (Right s, s)
       where
         (bare, ps) = firstAndRest 59 s

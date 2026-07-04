@@ -1,10 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Okapi.Mode.Link (
+module Okapi.Mode.Map (
     URI (..),
-    Link (..),
-    GLink,
+    Map (..),
+    GMap,
     links,
 ) where
 
@@ -30,12 +30,12 @@ data URI = URI
     }
 
 instance HasField "full" URI Text where
-    getField u = u.path <> u.query
+    getField uri = uri.path <> uri.query
 
-data Link shape where
+data Map shape where
     Location ::
         (path -> query -> URI) ->
-        Link (Shape method path query headers body result)
+        Map (Shape method path query headers body result)
 
 buildURI ::
     Tree.Request method path query headers body ->
@@ -47,32 +47,32 @@ buildURI req pathVal queryVal = URI
     , query = decodeUtf8 (HTTP.renderQuery True (Query.printer req.query queryVal))
     }
 
-class GLink (epF :: Type -> Type) (lnF :: Type -> Type) where
-    gLink :: epF () -> lnF ()
+class GMap (epF :: Type -> Type) (lnF :: Type -> Type) where
+    gMap :: epF () -> lnF ()
 
-instance GLink epF lnF => GLink (D1 dm epF) (D1 dm' lnF) where
-    gLink (M1 ep) = M1 (gLink @epF @lnF ep)
+instance GMap epF lnF => GMap (D1 dm epF) (D1 dm' lnF) where
+    gMap (M1 ep) = M1 (gMap @epF @lnF ep)
 
-instance GLink epF lnF => GLink (C1 cm epF) (C1 cm' lnF) where
-    gLink (M1 ep) = M1 (gLink @epF @lnF ep)
+instance GMap epF lnF => GMap (C1 cm epF) (C1 cm' lnF) where
+    gMap (M1 ep) = M1 (gMap @epF @lnF ep)
 
-instance (GLink epL lnL, GLink epR lnR) => GLink (epL :*: epR) (lnL :*: lnR) where
-    gLink (epL :*: epR) = gLink @epL @lnL epL :*: gLink @epR @lnR epR
+instance (GMap epL lnL, GMap epR lnR) => GMap (epL :*: epR) (lnL :*: lnR) where
+    gMap (epL :*: epR) = gMap @epL @lnL epL :*: gMap @epR @lnR epR
 
-instance GLink
+instance GMap
     (S1 sm  (Rec0 (Forest (Shape method path query headers body result))))
-    (S1 sm' (Rec0 (Link (Shape method path query headers body result)))) where
-    gLink (M1 (K1 ep)) = M1 (K1 (case ep of
+    (S1 sm' (Rec0 (Map (Shape method path query headers body result)))) where
+    gMap (M1 (K1 ep)) = M1 (K1 (case ep of
         (req :-> _) -> Location (buildURI req)
         (req :-< _) -> Location (buildURI req)))
 
 links ::
     forall server.
     ( Generic (server Forest)
-    , Generic (server Link)
-    , GLink (Rep (server Forest)) (Rep (server Link))
+    , Generic (server Map)
+    , GMap (Rep (server Forest)) (Rep (server Map))
     ) =>
     server Forest ->
-    server Link
+    server Map
 links endpoints =
-    to (gLink @(Rep (server Forest)) @(Rep (server Link)) (from endpoints))
+    to (gMap @(Rep (server Forest)) @(Rep (server Map)) (from endpoints))

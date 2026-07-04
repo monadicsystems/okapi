@@ -14,10 +14,41 @@ import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
 import Okapi.Tree qualified as Tree
+import Data.Word (Word8)
 import Okapi.HTTP.RFC9651.BareItem (BareItem, parseInnerToList, renderInner)
 import Okapi.HTTP.RFC9651.Item (Item)
 import Okapi.HTTP.RFC9651.Item qualified as Item
-import Okapi.HTTP.RFC9651.Lexer (ParseError (..), firstAndRest, splitTop, strip)
+
+data ParseError = ParseError deriving (Eq, Show)
+
+strip :: ByteString -> ByteString
+strip = BS.dropWhileEnd isSp . BS.dropWhile isSp
+  where isSp w = w == 32 || w == 9
+
+firstTop :: Word8 -> ByteString -> Maybe Int
+firstTop sep bs = go False (0 :: Int) 0
+  where
+    n = BS.length bs
+    go inQ depth i
+        | i >= n = Nothing
+        | otherwise =
+            let w = BS.index bs i
+            in if w == 34 then go (not inQ) depth (i + 1)
+               else if inQ then go inQ depth (i + 1)
+               else if w == 40 then go inQ (depth + 1) (i + 1)
+               else if w == 41 then go inQ (max 0 (depth - 1)) (i + 1)
+               else if w == sep && depth == 0 then Just i
+               else go inQ depth (i + 1)
+
+firstAndRest :: Word8 -> ByteString -> (ByteString, ByteString)
+firstAndRest sep bs = case firstTop sep bs of
+    Nothing -> (bs, BS.empty)
+    Just i  -> (BS.take i bs, BS.drop (i + 1) bs)
+
+splitTop :: Word8 -> ByteString -> [ByteString]
+splitTop sep bs = case firstTop sep bs of
+    Nothing -> [bs]
+    Just i  -> BS.take i bs : splitTop sep (BS.drop (i + 1) bs)
 
 type List :: Type -> Type
 data List a where
@@ -47,10 +78,16 @@ parser = Tree.parser alg
     alg :: List a -> Parser List a
     alg t s = case t of
         ListItem c      -> let (m, rest) = firstAndRest 44 s
-                           in (fst (Item.parser c (strip m)), rest)
+                           in case fst (Item.parser c (strip m)) of
+                               Left _  -> (Left ParseError, rest)
+                               Right a -> (Right a, rest)
         InnerList vLeaf -> let (m, rest) = firstAndRest 44 s
-                           in (parseInnerToList vLeaf (strip m), rest)
-        Items c         -> (traverse (\m -> fst (Item.parser c m)) (members s), BS.empty)
+                           in case parseInnerToList vLeaf (strip m) of
+                               Left _   -> (Left ParseError, rest)
+                               Right xs -> (Right xs, rest)
+        Items c         -> (traverse (\m -> case fst (Item.parser c m) of
+                               Left _  -> Left ParseError
+                               Right a -> Right a) (members s), BS.empty)
         Raw             -> (Right s, BS.empty)
       where
         members bs = filter (not . BS.null) (map strip (splitTop 44 bs))

@@ -11,7 +11,7 @@ import Data.Function ((&))
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Lucid (p_)
+
 import Okapi
 import Okapi.Protocol.Shared.Body qualified as Body
 import Okapi.Protocol.Shared.Headers qualified as H
@@ -62,15 +62,5 @@ main = do
     assertEq "form req emits content-type"
         [("content-type", "application/x-www-form-urlencoded")]
         (H.print fh [])
-
-    -- ── HTML response body → text/html ─────────────────────────────────────────
-    let hres = s200 & body html
-    let rh = isoCodec hres.headers
-    assertEq "html res emits content-type"
-        [("content-type", "text/html")]
-        (H.print rh [])
-    -- the HTML body actually renders lucid markup to bytes
-    htmlBytes <- Body.printM Body.html (pure (p_ "hi"))
-    assertEq "html body renders markup" "<p>hi</p>" (LBS.toStrict htmlBytes)
 
     putStrLn "all content-type tests passed"

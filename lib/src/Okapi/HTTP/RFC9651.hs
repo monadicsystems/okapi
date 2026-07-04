@@ -10,16 +10,26 @@ module Okapi.HTTP.RFC9651 (
 ) where
 
 import Data.ByteString (ByteString)
+import Data.ByteString qualified as BS
 import Data.Kind (Type)
+import Data.Maybe (fromMaybe)
 import Okapi.Tree (Failure, Parser, Printer, Context, Tree (..))
 import Okapi.Tree qualified as Tree
 import Okapi.HTTP.RFC9651.Dictionary (Dictionary)
 import Okapi.HTTP.RFC9651.Dictionary qualified as Dictionary
 import Okapi.HTTP.RFC9651.Item (Item)
 import Okapi.HTTP.RFC9651.Item qualified as Item
-import Okapi.HTTP.RFC9651.Lexer (ParseError (..), strip, stripLead)
 import Okapi.HTTP.RFC9651.List (List)
 import Okapi.HTTP.RFC9651.List qualified as List
+
+data ParseError = ParseError deriving (Eq, Show)
+
+strip :: ByteString -> ByteString
+strip = BS.dropWhileEnd isSp . BS.dropWhile isSp
+  where isSp w = w == 32 || w == 9
+
+stripLead :: ByteString -> ByteString
+stripLead bs = fromMaybe bs (BS.stripPrefix ", " bs)
 
 type RFC9651 :: Type -> Type
 data RFC9651 a where
@@ -43,9 +53,15 @@ parser :: Tree RFC9651 i o -> Parser RFC9651 o
 parser = Tree.parser alg
   where
     alg :: RFC9651 a -> Parser RFC9651 a
-    alg (SItem c) s = (fst (Item.parser c (strip s)), s)
-    alg (SList c) s = (fst (List.parser c (strip s)), s)
-    alg (SDict c) s = (fst (Dictionary.parser c (strip s)), s)
+    alg (SItem c) s = case fst (Item.parser c (strip s)) of
+        Left _  -> (Left ParseError, s)
+        Right a -> (Right a, s)
+    alg (SList c) s = case fst (List.parser c (strip s)) of
+        Left _  -> (Left ParseError, s)
+        Right a -> (Right a, s)
+    alg (SDict c) s = case fst (Dictionary.parser c (strip s)) of
+        Left _  -> (Left ParseError, s)
+        Right a -> (Right a, s)
 
 printer :: Tree RFC9651 i o -> Printer RFC9651 i
 printer = Tree.printer alg
