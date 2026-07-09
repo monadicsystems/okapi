@@ -27,6 +27,7 @@ module Okapi.Tree (
     SymTree,
     Tag (..),
     annotate,
+    widen,
     (=.),
     cost,
     parser,
@@ -185,6 +186,21 @@ data Tag
 -- qualify the import if both are needed in the same file.)
 annotate :: [Tag] -> Tree t i o -> Tree t i o
 annotate = Annotate
+
+-- | A 'Tree' whose own input is already @()@ — i.e. it needs nothing from
+--   the surrounding context, only ever checks something and contributes no
+--   value of its own (e.g. a fixed-literal match) — can be widened to fit
+--   /any/ context. Sound for exactly one reason: @()@ is terminal, so
+--   @const ()@ is the only total function @i -> ()@ there is; nothing is
+--   being invented or discarded that wasn't already unused. This is what
+--   every @_@-suffixed \"matches a fixed value, contributes nothing\"
+--   combinator (e.g. 'Okapi.HTTP.Request.Path.segment_',
+--   'Okapi.HTTP.Request.Headers.field_') is built from, baked into the
+--   combinator itself rather than applied at each call site — so two such
+--   combinators (or one alongside an ordinary value-producing leaf) always
+--   compose directly via 'Applicative'\/@do@, with no explicit alignment.
+widen :: Tree t () o -> Tree t i o
+widen = LMap (const ())
 
 instance Functor (Tree t i) where
     fmap = FMap

@@ -31,7 +31,7 @@ import Data.Text qualified as Text
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), widen)
 import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
@@ -114,8 +114,8 @@ parseExact = Tree.parseExact parser
 -- (Right (),[])
 -- >>> parser (segment_ int 42) ["99"]
 -- (Left ParseError,["99"])
-segment_ :: Leaf Path a -> a -> Tree Path () ()
-segment_ vLeaf x = LMap (const ()) (Node (Seg_ vLeaf x))
+segment_ :: Leaf Path a -> a -> Tree Path i ()
+segment_ vLeaf x = widen (Node (Seg_ vLeaf x))
 
 -- | Parse and print a single typed path segment.
 --

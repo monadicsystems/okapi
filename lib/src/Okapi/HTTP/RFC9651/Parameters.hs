@@ -14,7 +14,7 @@ module Okapi.HTTP.RFC9651.Parameters (
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
-import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..))
+import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..), widen)
 import Okapi.Tree qualified as Tree
 import Okapi.HTTP.RFC9651.BareItem (BareItem)
 import Okapi.HTTP.RFC9651.Scan (strip, firstTop, splitTop)
@@ -117,8 +117,8 @@ param' k vLeaf = Node (Param' k vLeaf)
 --
 -- prop> printParse parser printer (param_ "a" (integer :: Leaf BareItem Integer) 1) ()
 -- prop> forAll mixedFixedInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (param_ "a" (integer :: Leaf BareItem Integer) 1) bs)
-param_ :: Key -> Leaf BareItem a -> a -> Tree Parameters () ()
-param_ k vLeaf x = Node (Param_ k vLeaf x)
+param_ :: Key -> Leaf BareItem a -> a -> Tree Parameters i ()
+param_ k vLeaf x = widen (Node (Param_ k vLeaf x))
 
 -- | A boolean-valued parameter present with no value (bare @;a@) or absent
 --   entirely — either is accepted, and printing always emits the bare form.

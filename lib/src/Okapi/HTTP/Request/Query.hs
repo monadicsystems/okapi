@@ -36,7 +36,7 @@ import Data.Time (Day, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import Network.HTTP.Types qualified as HTTP
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), widen)
 import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseQueryParam, toQueryParam)
 
@@ -197,8 +197,8 @@ param' key vLeaf = Node (Param' key vLeaf)
 -- (Left ParseError,[("v",Just "2")])
 -- >>> printer (param_ "v" int 1) ()
 -- [("v",Just "1")]
-param_ :: Text -> Leaf Query a -> a -> Tree Query () ()
-param_ key vLeaf x = Node (Param_ key vLeaf x)
+param_ :: Text -> Leaf Query a -> a -> Tree Query i ()
+param_ key vLeaf x = widen (Node (Param_ key vLeaf x))
 
 -- | Parse and print a boolean flag (presence = True).
 --

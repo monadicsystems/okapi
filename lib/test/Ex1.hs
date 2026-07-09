@@ -15,13 +15,14 @@ import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as HTTP
-import Okapi
 import Okapi.HTTP.Request.Body (json)
 import Okapi.HTTP.Headers (MediaType(..))
 import Okapi.Record.Tree (Request (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Okapi.Record.Data qualified as Data
+
+import Okapi
 
 data Message = Message
     { temperature :: Integer
@@ -38,18 +39,18 @@ data InnerMessage = InnerMessage
     deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
 createMessageReq = requestPOST
-        { path = do
-            segment_ text "v1"
-            segment_ text "messages"
-            pure ()
-        , headers = do
-            const () =. field_ "X-Api-Key" ""
-            const () =. contentType JSON
-            const () =. field_ "anthropic-version" "2023-06-01"
-            maybeUserProfileId <- field' "anthropic-user-profile-id" text
-            pure maybeUserProfileId
-        , body = json @Message
-        }
+    { path = do
+        segment_ text "v1"
+        segment_ text "messages"
+        pure ()
+    , headers = do
+        contentType JSON
+        field_ "X-Api-Key" "<API_KEY>"
+        field_ "anthropic-version" "2023-06-01"
+        maybeUserProfileId <- field' "anthropic-user-profile-id" text
+        pure maybeUserProfileId
+    , body = json @Message
+    }
 
 data CreateMessageResponses f
     = Created (f (KnownStatus 201) HTTP.ResponseHeaders (IO LBS.ByteString))

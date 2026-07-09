@@ -44,7 +44,7 @@ import Network.HTTP.Types qualified as HTTP
 import Text.Read (readMaybe)
 import Web.Cookie qualified as WC
 import Web.HttpApiData (parseHeader, toHeader)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), widen)
 import Okapi.Tree qualified as Tree
 import Okapi.HTTP.Headers (MediaType (..), ConstF (..), fieldToHeaderName, mediaTypeBytes)
 import Okapi.HTTP.Request.Cookies (Cookie)
@@ -194,10 +194,11 @@ field' key vLeaf = Node (Field' key vLeaf)
 
 -- | A required header field matched against a fixed literal value, e.g.
 --   the assertion in the RFC 9651 §3.2 boolean-shorthand style — matches
---   'Okapi.HTTP.Request.Path.segment_'\'s shape: a complete, standalone
---   value contributing @()@, composed with siblings via ordinary
---   'Applicative'\/@do@-block sequencing (not a wrapping combinator that
---   takes "the rest of your headers" as an explicit argument).
+--   'Okapi.HTTP.Request.Path.segment_'\'s shape: contributes @()@, and
+--   ('widen'-built in) composes with siblings of /any/ type via ordinary
+--   'Applicative'\/@do@-block sequencing, no explicit alignment needed —
+--   not a wrapping combinator that takes "the rest of your headers" as an
+--   explicit argument.
 --
 -- >>> parser (field_ "x-version" "2") [("x-version", "2")]
 -- (Right (),[])
@@ -205,8 +206,8 @@ field' key vLeaf = Node (Field' key vLeaf)
 -- (Left ParseError,[("x-version","1")])
 -- >>> printer (field_ "x-version" "2") ()
 -- [("x-version","2")]
-field_ :: HTTP.HeaderName -> ByteString -> Tree Headers () ()
-field_ k v = Node (Field_ k v)
+field_ :: HTTP.HeaderName -> ByteString -> Tree Headers i ()
+field_ k v = widen (Node (Field_ k v))
 
 -- | A header field whose value is parsed\/printed via an RFC 9651 codec.
 --   If @c@ doesn't consume the entire header value, the unrecognized
@@ -264,7 +265,7 @@ fieldDictionary name c = fieldRFC9651 name (RFC9651.dictionary c)
 --
 -- >>> parser (contentType JSON) [("content-type", "application/json")]
 -- (Right (),[])
-contentType :: MediaType -> Tree Headers () ()
+contentType :: MediaType -> Tree Headers i ()
 contentType mt = field_ "content-type" (mediaTypeBytes mt)
 
 -- | Parse and print a required request cookie.
