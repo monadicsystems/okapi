@@ -1,40 +1,45 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Okapi.Handle
-    ( Route (..)
-    , Handle (..)
+    ( Handle
     , handle
+    , scope
+    , tryHandle
     ) where
 
-import Data.Kind (Type)
 import Network.Wai qualified as Wai
-import Okapi.Mode.Forest (Forest (..))
-import Okapi.Mode.Server (Server (..), type (~>))
-import Okapi.HTTP.Request qualified as Req
-import Okapi.HTTP.Response qualified as Res
-import Okapi.HTTP.Responses qualified as Resps
+import Okapi.Mode.Forest (Forest (..), stripTags)
+import Okapi.Mode.Route (Route (..))
+import Okapi.Mode.Server (type (~>), tryServe)
 
-data Route (n :: Type -> Type) where
-    (:=) :: Forest shape -> Server n shape -> Route n
+data Handle where
+    Handle ::
+        (n ~> IO) ->
+        [Wai.Middleware] ->
+        Maybe Handle ->
+        Route n shape ->
+        Handle
 
-infixl 0 :=
+handle :: (n ~> IO) -> Route n shape -> Handle
+handle nt route = Handle nt [] Nothing route
 
-newtype Handle = Handle
-    { runHandle :: Wai.Request -> IO (Maybe Wai.Response) }
+scope :: Wai.Middleware -> Handle -> Handle
+scope mw (Handle nt mws alt route) = Handle nt (mw : mws) alt route
 
-handle :: (n ~> IO) -> Route n -> Handle
-handle nt (forest := Function f) = Handle $ \waiReq -> case forest of
-    (req :-> singleRes) ->
-        Req.parseRequest req waiReq >>= \case
-            Left _       -> pure Nothing
-            Right reqVal -> do
-                resVal <- nt (f (reqVal, waiReq))
-                waiRes <- Res.printResponse singleRes resVal
-                pure (Just waiRes)
-    (req :-< resContracts) ->
-        Req.parseRequest req waiReq >>= \case
-            Left _       -> pure Nothing
-            Right reqVal -> do
-                resVal <- nt (f (reqVal, waiReq))
-                waiRes <- Resps.printResponses resContracts resVal
-                pure (Just waiRes)
+instance Semigroup Handle where
+    Handle nt mws Nothing  route <> h2 = Handle nt mws (Just h2) route
+    Handle nt mws (Just a) route <> h2 = Handle nt mws (Just (a <> h2)) route
+
+-- | Dispatch itself doesn't depend on which 'Forest' constructor @forest@
+--   is — 'tryServe' handles that (and strips any 'annotate'd metadata)
+--   itself — but a match is still needed here to refine @forest@'s GADT
+--   type enough for 'tryServe'\'s signature to apply.
+tryHandle :: Handle -> Wai.Middleware
+tryHandle (Handle nt mws alt (forest := srv)) backup req respond =
+    case stripTags forest of
+        (_ :-> _)    -> foldr (.) id mws (tryServe nt forest srv nextApp) req respond
+        (_ :-< _)    -> foldr (.) id mws (tryServe nt forest srv nextApp) req respond
+        Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
+  where
+    nextApp :: Wai.Application
+    nextApp _ignoredReq _ignoredRespond = case alt of
+        Nothing   -> backup req respond
+        Just altH -> tryHandle altH backup req respond

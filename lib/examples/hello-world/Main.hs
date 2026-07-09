@@ -20,4 +20,4 @@ helloWorld =
 main =
     Warp.run 8000
         . withDefault helloWorld
-        $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+        $ \_ resp -> resp $ Wai.responseLBS HTTP.response404 [] "Not Found..."

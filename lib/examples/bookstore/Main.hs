@@ -108,4 +108,4 @@ getUserPreferences userId
 -- Run the API on port 8009
 main :: IO ()
 main = Warp.run 8009 . withDefault api $ \req resp ->
-    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+    resp $ Wai.responseLBS HTTP.response404 [] "Not Found..."

@@ -39,6 +39,7 @@ library
         Okapi.Mode.Forest
         Okapi.Mode.Server
         Okapi.Mode.Client
+        Okapi.Mode.Route
         Okapi.Handle
         Okapi.Mode.Link
         Okapi.Artifact.OpenApi
@@ -63,6 +64,7 @@ library
         Okapi.HTTP.Response.SetCookies
         Okapi.HTTP.Response.Attributes
         Okapi.HTTP.RFC9651
+        Okapi.HTTP.RFC9651.Scan
         Okapi.HTTP.RFC9651.BareItem
         Okapi.HTTP.RFC9651.Parameters
         Okapi.HTTP.RFC9651.Item
@@ -71,6 +73,7 @@ library
     build-depends:
         base                     ^>=4.20.0.0,
         aeson                    ^>=2.2,
+        base64-bytestring        ^>=1.2,
         bytestring               ^>=0.12,
         case-insensitive         ^>=1.2,
         cookie                   ^>=0.5,
@@ -98,195 +101,29 @@ test-suite okapi-doctests
     build-depends:
         base ^>=4.20.0.0,
         doctest-parallel,
+        QuickCheck,
+        quickcheck-instances,
+        time,
         okapi
     default-language: GHC2024
 
-test-suite okapi-examples
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          Main.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-types,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-infer
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          Infer.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        cookie,
-        http-types,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-openapi
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          OpenApi.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        aeson,
-        bytestring,
-        http-types,
-        text,
-        okapi,
-        openapi3
-    default-language: GHC2024
-
-test-suite okapi-roundtrip
-    import:           warnings
+-- Deliberately an `executable`, not a `test-suite` — this example calls a
+-- real external API with a real credential, and must never be swept up in
+-- an automatic `cabal test all` run.
+executable okapi-ex1
+    import:           warnings, ghc-extensions
     ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
-    main-is:          RoundTrip.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-client,
-        http-types,
-        text,
-        wai,
-        warp,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-ex1
-    import:           warnings
-    ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
     main-is:          Ex1.hs
     hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         aeson,
-        aeson-pretty,
         bytestring,
         http-client,
-        openapi3,
-        text,
-        warp,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-ex3
-    import:           warnings
-    ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
-    main-is:          Ex3.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        aeson,
-        bytestring,
-        http-client,
+        http-client-tls,
         http-types,
-        mtl,
-        openapi3,
-        sqlite-simple,
-        text,
-        warp,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-ex2
-    import:           warnings
-    ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
-    main-is:          Ex2.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-client,
-        http-types,
-        text,
-        warp,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-subdsl
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          SubDsl.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-types,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-generic
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          Generic.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-types,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-fields
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          Fields.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-query-list
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          QueryList.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        http-types,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-form
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          FormBody.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-api-data,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-content-type
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          ContentType.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        aeson,
-        bytestring,
-        http-api-data,
         openapi3,
         text,
         okapi
     default-language: GHC2024
+

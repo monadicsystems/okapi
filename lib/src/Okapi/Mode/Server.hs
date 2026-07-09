@@ -20,7 +20,7 @@ import GHC.Generics
     )
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Okapi.Mode.Forest (Forest (..), Shape)
+import Okapi.Mode.Forest (Forest (..), Shape, stripTags)
 import Okapi.Record.Data qualified as Data
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
@@ -44,46 +44,48 @@ serve ::
     Forest (Shape method path query headers body result) ->
     Server n (Shape method path query headers body result) ->
     Wai.Application
-serve runner endpoint (Function handler) waiReq respond = case endpoint of
+serve runner endpoint (Function handler) waiReq respond = case stripTags endpoint of
     (req :-> singleRes) -> do
-        parsed <- Req.parseRequest req waiReq
+        parsed <- Req.parser req waiReq
         case parsed of
             Left _       -> respond (Wai.responseLBS HTTP.status400 [] mempty)
             Right reqVal -> do
                 resVal <- runner (handler (reqVal, waiReq))
-                waiRes <- Res.printResponse singleRes resVal
+                waiRes <- Res.printer singleRes resVal
                 respond waiRes
     (req :-< resContracts) -> do
-        parsed <- Req.parseRequest req waiReq
+        parsed <- Req.parser req waiReq
         case parsed of
             Left _       -> respond (Wai.responseLBS HTTP.status400 [] mempty)
             Right reqVal -> do
                 resVal <- runner (handler (reqVal, waiReq))
                 waiRes <- Resps.printResponses resContracts resVal
                 respond waiRes
+    Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
 
 tryServe ::
     (n ~> IO) ->
     Forest (Shape method path query headers body result) ->
     Server n (Shape method path query headers body result) ->
     Wai.Middleware
-tryServe runner endpoint (Function handler) next waiReq respond = case endpoint of
+tryServe runner endpoint (Function handler) next waiReq respond = case stripTags endpoint of
     (req :-> singleRes) -> do
-        parsed <- Req.parseRequest req waiReq
+        parsed <- Req.parser req waiReq
         case parsed of
             Left _       -> next waiReq respond
             Right reqVal -> do
                 resVal <- runner (handler (reqVal, waiReq))
-                waiRes <- Res.printResponse singleRes resVal
+                waiRes <- Res.printer singleRes resVal
                 respond waiRes
     (req :-< resContracts) -> do
-        parsed <- Req.parseRequest req waiReq
+        parsed <- Req.parser req waiReq
         case parsed of
             Left _       -> next waiReq respond
             Right reqVal -> do
                 resVal <- runner (handler (reqVal, waiReq))
                 waiRes <- Resps.printResponses resContracts resVal
                 respond waiRes
+    Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
 
 class GServer (n :: Type -> Type) (epF :: Type -> Type) (svF :: Type -> Type) where
     gServe :: (n ~> IO) -> epF () -> svF () -> Wai.Middleware

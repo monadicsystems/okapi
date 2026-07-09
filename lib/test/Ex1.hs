@@ -2,145 +2,94 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
 
-module Main where
+module Ex1 where
 
 import Data.Aeson qualified as Aeson
-import Data.Aeson.Encode.Pretty qualified as Pretty
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
-import Data.Function ((&))
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Network.HTTP.Client qualified as HC
-import Network.Wai.Handler.Warp qualified as Warp
+import Network.HTTP.Types qualified as HTTP
 import Okapi
-import System.Exit (exitFailure)
+import Okapi.HTTP.Request.Body (json)
+import Okapi.HTTP.Headers (MediaType(..))
+import Okapi.Record.Tree (Request (..))
+import Network.HTTP.Client qualified as HC
+import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Okapi.Record.Data qualified as Data
 
-data Address = Address
-    { street :: Text
-    , city   :: Text
-    , zip    :: Text
-    } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
+data Message = Message
+    { temperature :: Integer
+    , model :: Text
+    , messages :: [InnerMessage]
+    , max_tokens :: Integer
+    }
+    deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-data UserReqBody = UserReqBody
-    { name    :: Text
-    , email   :: Text
-    , age     :: Int
-    , address :: Address
-    } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
+data InnerMessage = InnerMessage
+    { content :: Text
+    , role :: Text
+    }
+    deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-data UserResBody = UserResBody
-    { userId :: Text
-    , name   :: Text
-    , email  :: Text
-    , age    :: Int
-    , active :: Bool
-    } deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
+createMessageReq = requestPOST
+        { path = do
+            segment_ text "v1"
+            segment_ text "messages"
+            pure ()
+        , headers = do
+            const () =. field_ "X-Api-Key" ""
+            const () =. contentType JSON
+            const () =. field_ "anthropic-version" "2023-06-01"
+            maybeUserProfileId <- field' "anthropic-user-profile-id" text
+            pure maybeUserProfileId
+        , body = json @Message
+        }
 
-data UserRes f
-    = FoundUser (Response f S200 Text UserResBody)
-    | NoUser (Response f S404 Text LBS.ByteString)
+data CreateMessageResponses f
+    = Created (f (KnownStatus 201) HTTP.ResponseHeaders (IO LBS.ByteString))
+    | Any (f HTTP.Status HTTP.ResponseHeaders (IO LBS.ByteString))
     deriving (Generic, Cases)
 
-userRequest
-    = mPost
-    & path do
-        seg_ @Text "users"
-        uid <- seg @Text "id"
-        pure uid
-    & query do
-        param' @Text "format"
-    & headers do
-        cookie @Text "session"
-    & body (json @UserReqBody)
+createMessageRes = response201
 
-foundUser
-    = s200
-    & headers (header @Text "location")
-    & body (json @UserResBody)
+createMessageEndpoint = createMessageReq :-< cases @CreateMessageResponses
+    response201
+    response
 
-noUser
-    = s404
-    & headers do
-        header @Text "x-error"
+-- | Renders 'createMessageEndpoint' as an OpenAPI document — only needs the
+--   'Forest' itself, no handler, so this is callable straight from the
+--   repl: @cabal repl okapi@, @:load test\/Ex1.hs@, then @printSchema@.
+printSchema :: IO ()
+printSchema = LBS8.putStrLn (Aeson.encode (endpointToOpenApi createMessageEndpoint))
 
-userResponses = cases @UserRes
-    foundUser
-    noUser
+anthropicSettings :: IO ClientSettings
+anthropicSettings = do
+    mgr <- HC.newManager tlsManagerSettings
+    pure ClientSettings { manager = mgr, baseUrl = "https://api.anthropic.com" }
 
-userEndpoint = userRequest :-> userResponses
+-- | Callable from the repl once you have a request value built:
+--   @cabal repl okapi-ex1@, @:load test\/Ex1.hs@, then
+--   @createMessage someRequestValue@.
+createMessage reqVal = do
+    settings <- anthropicSettings
+    case clientFor settings createMessageEndpoint of
+        Fn f -> f reqVal
 
-userHandler = fn \(req, _) -> do
-    reqBody <- req.body.value
-    pure
-        if req.path.value == ("alice" :: Text)
-        then
-            let
-                userId = req.path.value
-                name   = reqBody.name
-                email  = reqBody.email
-                age    = reqBody.age
-                active = True
-            in
-                FoundUser $ response S200 "/users/alice" (pure UserResBody{..})
-        else NoUser $ response S404 "user not found" (pure "")
+lookAtResult :: Either ClientError (CreateMessageResponses Data.Response) -> IO ()
+lookAtResult cmr = case cmr of
+    Left _ -> print "errored"
+    Right aResp -> case aResp of
+        Created _ -> print 201
+        Any resData -> do
+            print resData.status
+            print resData.headers
+            bodyResult <- resData.body
+            print bodyResult
 
-userApp = serve id userEndpoint userHandler
-
-printSchema = LBS8.putStrLn (Pretty.encodePretty (endpointToOpenApi userEndpoint))
-
-aliceReq = request POST "alice" (Just "json") "tok" $ pure
-    UserReqBody
-        { name    = "Alice"
-        , email   = "alice@example.com"
-        , age     = 30
-        , address = Address "123 Main St" "Wonderland" "12345"
-        }
-
-bobReq = request POST "bob" Nothing "tok" $ pure
-    UserReqBody
-        { name    = "Bob"
-        , email   = "bob@example.com"
-        , age     = 25
-        , address = Address "456 Elm St" "Nowhere" "67890"
-        }
-
-main = do
-    mgr <- HC.newManager HC.defaultManagerSettings
-    Warp.testWithApplication (pure userApp) \port -> do
-        let go = fetch mgr ("http://localhost:" ++ show port) userEndpoint
-
-        found <- go aliceReq
-        case found of
-            Left e              -> putStrLn ("FAIL: " ++ show e) >> exitFailure
-            Right (FoundUser r) -> do
-                resBody <- r.body.value
-                check "FoundUser: status"  (r.status.value  == S200)
-                check "FoundUser: headers" (r.headers.value == "/users/alice")
-                check "FoundUser: userId"  (resBody.userId   == "alice")
-                check "FoundUser: name"    (resBody.name     == "Alice")
-                check "FoundUser: email"   (resBody.email    == "alice@example.com")
-                check "FoundUser: age"     (resBody.age      == 30)
-                check "FoundUser: active"  (resBody.active   == True)
-            Right (NoUser _)    -> putStrLn "FAIL: expected FoundUser" >> exitFailure
-
-        miss <- go bobReq
-        case miss of
-            Left e              -> putStrLn ("FAIL: " ++ show e) >> exitFailure
-            Right (NoUser r)    -> do
-                bod <- r.body.value
-                check "NoUser: status"  (r.status.value  == S404)
-                check "NoUser: headers" (r.headers.value == "user not found")
-                check "NoUser: body"    (bod              == "")
-            Right (FoundUser _) -> putStrLn "FAIL: expected NoUser" >> exitFailure
-
-check name True  = putStrLn ("PASS: " ++ name)
-check name False = putStrLn ("FAIL: " ++ name) >> exitFailure
+testRequest = (Data.Request POST () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))

@@ -17,22 +17,22 @@ type DeleteRoute  = Shape DELETE Int HTTP.Query HTTP.RequestHeaders (IO LBS.Byte
 type PostIntRoute = Shape POST   Int HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString) (Data.Response S201 HTTP.ResponseHeaders (IO LBS.ByteString))
 
 list_      :: Canopy ListRoute
-list_       = (methodGET  & path (segment_ text "r")) :-> status200
+list_       = (requestGET  & path (segment_ text "r")) :-> response200
 
 get_       :: Canopy GetRoute
-get_        = (methodGET & path (segment "id" int)) :-> status200
+get_        = (requestGET & path (segment "id" int)) :-> response200
 
 create_    :: Canopy PostRoute
-create_     = (methodPOST & path (segment_ text "r")) :-> status201
+create_     = (requestPOST & path (segment_ text "r")) :-> response201
 
 update_    :: Canopy PutRoute
-update_     = (methodPUT & path (segment "id" int)) :-> status200
+update_     = (requestPUT & path (segment "id" int)) :-> response200
 
 delete_    :: Canopy DeleteRoute
-delete_     = (methodDELETE & path (segment "id" int)) :-> status204
+delete_     = (requestDELETE & path (segment "id" int)) :-> response204
 
 subCreate_ :: Canopy PostIntRoute
-subCreate_  = (methodPOST & path (segment "id" int)) :-> status201
+subCreate_  = (requestPOST & path (segment "id" int)) :-> response201
 
 listH, getH, postH, putH, deleteH, postIntH :: Handle
 listH    = handle id (list_      := fn \_ -> undefined)

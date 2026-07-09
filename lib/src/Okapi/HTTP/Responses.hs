@@ -25,6 +25,19 @@ import Okapi.Record.Result   qualified as Result
 import Okapi.Record.Data    qualified as Data
 import Okapi.HTTP.Response qualified as Res
 
+-- $setup
+-- >>> :set -XTypeApplications
+-- >>> import Network.HTTP.Types qualified as HTTP
+-- >>> import Network.Wai qualified as Wai
+-- >>> import Data.ByteString.Lazy qualified as LBS
+-- >>> import GHC.Generics (Generic)
+-- >>> import Okapi.HTTP.Response qualified as Res
+-- >>> import Okapi.HTTP.Response.Status qualified as Status
+-- >>> import Okapi.Record.Tree qualified as Tree
+-- >>> import Okapi.Record.Data qualified as Data
+-- >>> data ExampleResponses f = ExOk (f (Status.KnownStatus 200) HTTP.ResponseHeaders (IO LBS.ByteString)) | ExNotFound (f (Status.KnownStatus 404) HTTP.ResponseHeaders (IO LBS.ByteString)) deriving Generic
+-- >>> instance Cases ExampleResponses
+
 newtype Responses
     (f         :: Type -> Type -> Type -> Type)
     (responses :: (Type -> Type -> Type -> Type) -> Type)
@@ -73,7 +86,7 @@ instance {-# OVERLAPPABLE #-}
     TypeError
         ( 'Text "Cannot traverse this `responses` type — its shape isn't supported."
         ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
-        ':$$: 'Text "Example: data MyResponses f = Ok (f S200 () Body) | NotFound (f S404 () ())"
+        ':$$: 'Text "Example: data MyResponses f = Ok (f 200 () Body) | NotFound (f 404 () ())"
         )
     => GTraverse f g fi fg where
     gtraverse _ = error "unreachable: resolved via TypeError instance"
@@ -119,7 +132,7 @@ instance {-# OVERLAPPABLE #-}
     TypeError
         ( 'Text "Cannot zip this `responses` type — its shape isn't supported."
         ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
-        ':$$: 'Text "Example: data MyResponses f = Ok (f S200 () Body) | NotFound (f S404 () ())"
+        ':$$: 'Text "Example: data MyResponses f = Ok (f 200 () Body) | NotFound (f 404 () ())"
         )
     => GZip f g fi fg where
     gzip _ = error "unreachable: resolved via TypeError instance"
@@ -161,7 +174,7 @@ instance {-# OVERLAPPABLE #-}
     TypeError
         ( 'Text "Cannot build `cases` for this `responses` type — its shape isn't supported."
         ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
-        ':$$: 'Text "Example: data MyResponses f = Ok (f S200 () Body) | NotFound (f S404 () ())"
+        ':$$: 'Text "Example: data MyResponses f = Ok (f 200 () Body) | NotFound (f 404 () ())"
         )
     => GConstruct rep where
     gConstruct = error "unreachable: resolved via TypeError instance"
@@ -210,12 +223,31 @@ parseResponses (Responses cs) waiRes = do
         []      -> Left (Responses (fmap toErrors rs))
   where
     parseBranch :: responses Tree.Response -> IO (responses Result.Response)
-    parseBranch = traverseResponses (\codec -> Res.parseResponseResult codec waiRes)
+    parseBranch = traverseResponses (\codec -> Res.parser' codec waiRes)
     toValue :: responses Result.Response -> Maybe (responses Data.Response)
     toValue = traverseResponses Res.resultToValue
     toErrors :: responses Result.Response -> responses Error.Response
     toErrors = runIdentity . traverseResponses (Identity . Res.resultToError)
 
+-- | 'Responses'' constructor isn't exported, so 'cases' is the only way to
+--   build one — and 'GConstruct'\'s @(':+:')@ instance always combines
+--   @ls <> rs@, never drops a branch, so the result is guaranteed to carry
+--   exactly one codec per constructor of @responses@. Any @responses
+--   Data.Response@ value handed to 'printResponses' was necessarily built
+--   through one of those same (finitely many) constructors, and 'zipResponses'
+--   only ever returns 'Just' when the codec and the value share a
+--   constructor — so a match always exists and the @error@ branch below is
+--   unreachable for any 'Responses' actually produced by 'cases'. Confirmed
+--   here across every constructor of a small example type sharing one
+--   'cases'-built value, not just one:
+--
+-- >>> let cs = cases @ExampleResponses Res.response200 Res.response404
+-- >>> r1 <- printResponses cs (ExOk (Data.Response { status = 200, headers = [], body = pure "hi" }))
+-- >>> HTTP.statusCode (Wai.responseStatus r1)
+-- 200
+-- >>> r2 <- printResponses cs (ExNotFound (Data.Response { status = 404, headers = [], body = pure "nope" }))
+-- >>> HTTP.statusCode (Wai.responseStatus r2)
+-- 404
 printResponses ::
     forall responses.
     Cases responses =>
@@ -223,6 +255,6 @@ printResponses ::
     responses Data.Response ->
     IO Wai.Response
 printResponses (Responses cs) rv =
-    case [io | c <- NE.toList cs, Just io <- [zipResponses Res.printResponse c rv]] of
+    case [io | c <- NE.toList cs, Just io <- [zipResponses Res.printer c rv]] of
         (io : _) -> io
         []       -> error "printResponses: no matching response constructor"

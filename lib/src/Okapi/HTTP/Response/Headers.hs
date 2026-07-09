@@ -11,6 +11,7 @@ module Okapi.HTTP.Response.Headers (
     field',
     field_,
     fieldRFC9651,
+    parseExact,
     fieldBareItem,
     fieldItem,
     fieldList,
@@ -20,7 +21,7 @@ module Okapi.HTTP.Response.Headers (
     MediaType (..),
     ConstF (..),
     GHeaders (..),
-    headersCodec,
+    derived,
 ) where
 
 import Data.Bifunctor (first)
@@ -55,12 +56,21 @@ import Okapi.HTTP.RFC9651.Dictionary (Dictionary)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (printParse, printStable, int, (=.))
+-- >>> import Okapi.Tree (Leaf, printParse, int, integer, (=.))
+-- >>> import Okapi.HTTP.Headers (MediaType (..))
+-- >>> import Okapi.HTTP.RFC9651.BareItem (BareItem)
+-- >>> import Okapi.HTTP.RFC9651.Dictionary qualified as Dictionary
+-- >>> import Okapi.HTTP.RFC9651.Item qualified as Item
+-- >>> import GHC.Generics (Generic)
 -- >>> :{
 -- let twoFields = do
 --       a <- fst =. field "x-a" int
 --       b <- snd =. field "x-b" int
 --       pure (a, b)
+-- :}
+--
+-- >>> :{
+-- data Page = Page { x_a :: Int, x_b :: Int } deriving (Generic, Eq, Show)
 -- :}
 
 type Headers :: Type -> Type
@@ -103,9 +113,11 @@ parser = Tree.parser alg
     alg (FieldRFC9651 name c) hs =
         case partition (\(k, _) -> k == name) hs of
             ([], _)            -> (Left ParseError, hs)
-            ((_, v) : _, rest) -> case fst (RFC9651.parser c v) of
-                Left _  -> (Left ParseError, hs)
-                Right x -> (Right x, rest)
+            ((_, v) : _, rest) -> case RFC9651.parser c v of
+                (Left _, _)              -> (Left ParseError, hs)
+                (Right x, leftover)
+                    | BS.null leftover  -> (Right x, rest)
+                    | otherwise         -> (Right x, (name, leftover) : rest)
     alg (SetCookie cookieName vLeaf attrsC) hs =
         let tok v = let (n, r1) = BS.break (== 61) v
                         (val, attrs) = BS.break (== 59) (BS.drop 1 r1)
@@ -134,13 +146,25 @@ printer = Tree.printer alg
     alg (SetCookie name vLeaf attrsC) (x, p)   =
         [("set-cookie", name <> "=" <> vLeaf.encode x <> Attributes.printer attrsC p)]
 
+-- | Require full consumption — 'Left' with the leftover headers (which may
+--   include partially-consumed RFC 9651 values still under their original
+--   header name, see 'fieldRFC9651') if any remain, 'Left' with the
+--   underlying error if parsing itself failed.
+parseExact :: Tree Headers i o -> [HTTP.Header] -> Either (Either ParseError [HTTP.Header]) o
+parseExact = Tree.parseExact parser
+
+-- | Pass all headers straight through, unconstrained.
+--
+-- >>> parser raw [("x-a", "1"), ("x-b", "2")]
+-- (Right [("x-a","1"),("x-b","2")],[])
+-- >>> printer raw [("x-a", "1"), ("x-b", "2")]
+-- [("x-a","1"),("x-b","2")]
 raw :: Tree Headers HTTP.RequestHeaders HTTP.RequestHeaders
 raw = Node Raw
 
 -- | Parse and print a required response header field.
 --
 -- prop> printParse parser printer (field "x-foo" int) (x :: Int)
--- prop> printStable parser printer (field "x-foo" int) (x :: Int)
 field :: HTTP.HeaderName -> Leaf Headers a -> Tree Headers a a
 field key vLeaf = Node (Field key vLeaf)
 
@@ -150,12 +174,50 @@ field key vLeaf = Node (Field key vLeaf)
 field' :: HTTP.HeaderName -> Leaf Headers a -> Tree Headers (Maybe a) (Maybe a)
 field' key vLeaf = Node (Field' key vLeaf)
 
-field_ :: HTTP.HeaderName -> ByteString -> Tree Headers h h -> Tree Headers h h
-field_ k v c = Apply (LMap (const ()) (FMap (const id) (Node (Field_ k v)))) c
+-- | A required header field matched against a fixed literal value — same
+--   shape as 'Okapi.HTTP.Request.Path.segment_': a complete, standalone
+--   value contributing @()@, composed with siblings via ordinary
+--   'Applicative'\/@do@-block sequencing (not a wrapping combinator that
+--   takes "the rest of your headers" as an explicit argument).
+--
+-- >>> parser (field_ "x-version" "2") [("x-version", "2")]
+-- (Right (),[])
+-- >>> parser (field_ "x-version" "2") [("x-version", "1")]
+-- (Left ParseError,[("x-version","1")])
+-- >>> printer (field_ "x-version" "2") ()
+-- [("x-version","2")]
+field_ :: HTTP.HeaderName -> ByteString -> Tree Headers () ()
+field_ k v = Node (Field_ k v)
 
+-- | A header field whose entire value must be consumed by @c@ — any
+--   unrecognized trailing content in the header is a parse error, not
+--   silently dropped.
+-- | A header field whose value is parsed\/printed via an RFC 9651 codec.
+--   If @c@ doesn't consume the entire header value, the unrecognized
+--   remainder is left in the context under the /same/ header name — same
+--   discipline as 'field'\/'segment' leaving whatever they don't consume
+--   for later combinators, just at the granularity of one header's value
+--   instead of the whole context. A later combinator sharing that name
+--   can continue parsing from exactly where this one left off (see
+--   'fieldDictionary' for the motivating use case); use 'parseExact' if
+--   you need to assert nothing was left over anywhere.
 fieldRFC9651 :: HTTP.HeaderName -> Tree RFC9651 a a -> Tree Headers a a
 fieldRFC9651 name c = Node (FieldRFC9651 name c)
 
+-- | A header field whose value is parsed\/printed as an RFC 9651
+--   Structured Field Value Item wrapping a single bare value. Trailing
+--   content in the header value that @i@ doesn't recognize is left under
+--   the same header name (see 'fieldRFC9651') rather than erroring —
+--   'parseExact' catches it if that's not wanted:
+--
+-- >>> parser (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) [("x-count", "5")]
+-- (Right 5,[])
+-- >>> parser (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) [("x-count", "5;bogus")]
+-- (Right 5,[("x-count",";bogus")])
+-- >>> parseExact (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) [("x-count", "5;bogus")]
+-- Left (Right [("x-count",";bogus")])
+-- >>> printer (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) 5
+-- [("x-count","5")]
 fieldBareItem :: HTTP.HeaderName -> Leaf BareItem a -> Tree Headers a a
 fieldBareItem name i = fieldRFC9651 name (RFC9651.item (bareItem i))
 
@@ -165,10 +227,28 @@ fieldItem name c = fieldRFC9651 name (RFC9651.item c)
 fieldList :: HTTP.HeaderName -> Tree List a a -> Tree Headers a a
 fieldList name c = fieldRFC9651 name (RFC9651.list c)
 
+-- | A header field whose value is parsed\/printed as an RFC 9651
+--   Dictionary. Since 'fieldRFC9651' only consumes what @c@ recognizes,
+--   two 'fieldDictionary's sharing the same header name — each matching a
+--   different member — correctly split a single multi-member value across
+--   two differently-typed record fields, combined via 'Okapi.Tree.Apply':
+--
+-- >>> :{
+-- let two = (,) <$> (fst =. fieldDictionary "x" (Dictionary.member "a" (Item.bareItem (integer :: Leaf BareItem Integer))))
+--               <*> (snd =. fieldDictionary "x" (Dictionary.member "b" (Item.bareItem (integer :: Leaf BareItem Integer))))
+-- :}
+--
+-- >>> parser two [("x", "a=1, b=2")]
+-- (Right (1,2),[])
 fieldDictionary :: HTTP.HeaderName -> Tree Dictionary a a -> Tree Headers a a
 fieldDictionary name c = fieldRFC9651 name (RFC9651.dictionary c)
 
-contentType :: MediaType -> Tree Headers h h -> Tree Headers h h
+-- | Asserts the @content-type@ header matches exactly — same shape as
+--   'field_', see there.
+--
+-- >>> parser (contentType JSON) [("content-type", "application/json")]
+-- (Right (),[])
+contentType :: MediaType -> Tree Headers () ()
 contentType mt = field_ "content-type" (mediaTypeBytes mt)
 
 setCookie :: ByteString -> Leaf SetCookie a -> Tree Attributes p p -> Tree Headers (a, p) (a, p)
@@ -238,12 +318,19 @@ instance {-# OVERLAPPING #-} (Selector s, KnownSymbol val) => GHeaders (S1 s (Re
             v = encodeUtf8 (Text.pack (symbolVal (Proxy @val)))
          in FMap (\() -> M1 (K1 ConstF)) $ LMap (const ()) $ Node (Field_ k v)
 
-headersCodec :: forall a. (Generic a, GHeaders (Rep a)) => Tree Headers a a
-headersCodec = FMap (to @a) $ LMap (from @a) gHeadersCodec
+-- | Generically derive a 'Headers' codec from a record's field names and
+--   'HasLeaf' instances (underscores become hyphens, e.g. field @x_a@
+--   becomes header @x-a@).
+--
+-- >>> parser (derived @Page) [("x-a", "1"), ("x-b", "2")]
+-- (Right (Page {x_a = 1, x_b = 2}),[])
+-- >>> printer (derived @Page) (Page 1 2)
+-- [("x-a","1"),("x-b","2")]
+derived :: forall a. (Generic a, GHeaders (Rep a)) => Tree Headers a a
+derived = FMap (to @a) $ LMap (from @a) gHeadersCodec
 
 -- $combined
 -- >>> parser twoFields [("x-a", "1"), ("x-b", "2"), ("x-c", "3")]
 -- (Right (1,2),[("x-c","3")])
 --
 -- prop> printParse parser printer twoFields (xy :: (Int, Int))
--- prop> printStable parser printer twoFields (xy :: (Int, Int))

@@ -41,4 +41,4 @@ main = do
     Concurrent.forkIO $ tick source
     Warp.run 8003
         . withDefault (ticker source)
-        $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+        $ \_ resp -> resp $ Wai.responseLBS HTTP.response404 [] "Not Found..."

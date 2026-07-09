@@ -21,12 +21,12 @@ data Request method path query headers body = Request
     , path    :: SymTree Path path
     , query   :: SymTree Query query
     , headers :: SymTree Request.Headers headers
-    , body    :: SymTree Request.Body body
+    , body    :: Request.Body body
     }
 
 -- | Codecs for every part of an HTTP response.
 data Response status headers body = Response
     { status  :: Status status
     , headers :: SymTree Response.Headers headers
-    , body    :: SymTree Response.Body body
+    , body    :: Response.Body body
     }

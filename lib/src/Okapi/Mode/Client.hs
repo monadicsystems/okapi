@@ -1,12 +1,15 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.Mode.Client (
     ClientError (..),
     ClientSettings (..),
-    Client (..),
+    Client,
+    pattern Fn,
     fetch,
+    clientFor,
     GClient,
     client,
 ) where
@@ -23,7 +26,7 @@ import GHC.Generics
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as HTTP
 import Network.Wai qualified as Wai
-import Okapi.Mode.Forest (Forest (..), Shape)
+import Okapi.Mode.Forest (Forest (..), Shape, stripTags)
 import Okapi.Record.Data qualified as Data
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
@@ -37,9 +40,14 @@ data ClientSettings = ClientSettings
     }
 
 data Client shape where
-    Interface ::
+    Function ::
         (Data.Request method path query headers body -> IO (Either ClientError result)) ->
         Client (Shape method path query headers body result)
+
+pattern Fn ::
+    (Data.Request method path query headers body -> IO (Either ClientError result)) ->
+    Client (Shape method path query headers body result)
+pattern Fn f <- Function f
 
 fetch ::
     HC.Manager ->
@@ -47,19 +55,34 @@ fetch ::
     Forest (Shape method path query headers body result) ->
     Data.Request method path query headers body ->
     IO (Either ClientError result)
-fetch mgr baseUrl endpoint reqVal = case endpoint of
+fetch mgr baseUrl endpoint reqVal = case stripTags endpoint of
     (req :-> singleRes) -> do
-        waiReq <- Req.printRequest req reqVal
+        waiReq <- Req.printer req reqVal
         hcReq  <- toHCRequest baseUrl waiReq
         hcRes  <- HC.httpLbs hcReq mgr
         either (const (Left ClientError)) Right <$>
-            Res.parseResponse singleRes (fromHCResponse hcRes)
+            Res.parser singleRes (fromHCResponse hcRes)
     (req :-< resContracts) -> do
-        waiReq <- Req.printRequest req reqVal
+        waiReq <- Req.printer req reqVal
         hcReq  <- toHCRequest baseUrl waiReq
         hcRes  <- HC.httpLbs hcReq mgr
         either (const (Left ClientError)) Right <$>
             Resps.parseResponses resContracts (fromHCResponse hcRes)
+    Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
+
+-- | Build a single callable client function from one endpoint contract —
+--   the single-endpoint counterpart to 'client', which does exactly this
+--   per field for a whole record of endpoints via 'GClient' (see that
+--   instance's body: it's the same @Function \\reqVal -> fetch mgr url ep
+--   reqVal@ shape, just generalized over a whole record instead of one
+--   'Forest'). Unwrap the result with 'Fn' to get the plain function:
+--
+--   > case clientFor settings endpoint of Fn f -> f requestValue
+clientFor ::
+    ClientSettings ->
+    Forest (Shape method path query headers body result) ->
+    Client (Shape method path query headers body result)
+clientFor (ClientSettings mgr url) endpoint = Function (fetch mgr url endpoint)
 
 toHCRequest :: String -> Wai.Request -> IO HC.Request
 toHCRequest baseUrl waiReq = do
@@ -100,7 +123,7 @@ instance GClient
     (S1 sm  (Rec0 (Forest (Shape method path query headers body result))))
     (S1 sm' (Rec0 (Client (Shape method path query headers body result)))) where
     gClient (ClientSettings mgr url) (M1 (K1 ep)) =
-        M1 (K1 (Interface \reqVal -> fetch mgr url ep reqVal))
+        M1 (K1 (Function \reqVal -> fetch mgr url ep reqVal))
 
 client ::
     forall server.

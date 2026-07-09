@@ -7,6 +7,7 @@ module Okapi.HTTP.Request.Query (
     ParseError (..),
     parser,
     printer,
+    parseExact,
     raw,
     param,
     param',
@@ -16,7 +17,7 @@ module Okapi.HTTP.Request.Query (
     list,
     list',
     GQuery (..),
-    queryCodec,
+    derived,
 ) where
 
 import Data.Bifunctor (first)
@@ -41,13 +42,18 @@ import Web.HttpApiData (parseQueryParam, toQueryParam)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (printParse, printStable, int, integer, (=.))
+-- >>> import Okapi.Tree (printParse, int, integer, (=.))
 -- >>> import Data.List.NonEmpty (NonEmpty((:|)))
+-- >>> import GHC.Generics (Generic)
 -- >>> :{
 -- let twoParams = do
 --       x <- fst =. param "x" int
 --       y <- snd =. param "y" int
 --       pure (x, y)
+-- :}
+--
+-- >>> :{
+-- data Filt = Filt { qX :: Int, qY :: Int } deriving (Generic, Eq, Show)
 -- :}
 
 type Query :: Type -> Type
@@ -128,6 +134,11 @@ printer = Tree.printer alg
     alg (List style key vLeaf)  nel     = renderList style key vLeaf (NE.toList nel)
     alg (List' style key vLeaf) xs      = renderList style key vLeaf xs
 
+-- | Require full consumption — 'Left' with the leftover query params if
+--   any remain, 'Left' with the underlying error if parsing itself failed.
+parseExact :: Tree Query i o -> HTTP.Query -> Either (Either ParseError HTTP.Query) o
+parseExact = Tree.parseExact parser
+
 collectList :: ArrayStyle -> Text -> HTTP.Query -> ([ByteString], HTTP.Query)
 collectList Exploded key q =
     let k = encodeUtf8 key
@@ -156,23 +167,36 @@ delim SpaceDelimited = ' '
 delim PipeDelimited  = '|'
 delim Exploded       = ','
 
+-- | Pass the raw query straight through, unconstrained.
+--
+-- >>> parser raw [("a", Just "1")]
+-- (Right [("a",Just "1")],[])
+-- >>> printer raw [("a", Just "1")]
+-- [("a",Just "1")]
 raw :: Tree Query HTTP.Query HTTP.Query
 raw = Node Raw
 
 -- | Parse and print a required query parameter.
 --
 -- prop> printParse parser printer (param "k" int) (x :: Int)
--- prop> printStable parser printer (param "k" int) (x :: Int)
 param :: Text -> Leaf Query a -> Tree Query a a
 param key vLeaf = Node (Param key vLeaf)
 
 -- | Parse and print an optional query parameter.
 --
 -- prop> printParse parser printer (param' "k" int) (x :: Maybe Int)
--- prop> printStable parser printer (param' "k" int) (x :: Maybe Int)
 param' :: Text -> Leaf Query a -> Tree Query (Maybe a) (Maybe a)
 param' key vLeaf = Node (Param' key vLeaf)
 
+-- | A parameter constrained to one known value — parses only if present
+--   and equal to the fixed value, ignored on print (the value is baked in).
+--
+-- >>> parser (param_ "v" int 1) [("v", Just "1")]
+-- (Right (),[])
+-- >>> parser (param_ "v" int 1) [("v", Just "2")]
+-- (Left ParseError,[("v",Just "2")])
+-- >>> printer (param_ "v" int 1) ()
+-- [("v",Just "1")]
 param_ :: Text -> Leaf Query a -> a -> Tree Query () ()
 param_ key vLeaf x = Node (Param_ key vLeaf x)
 
@@ -180,7 +204,6 @@ param_ key vLeaf x = Node (Param_ key vLeaf x)
 --
 -- prop> printParse parser printer (flag "f") ()
 -- prop> printParse parser printer (flag' "f") (x :: Bool)
--- prop> printStable parser printer (flag' "f") (x :: Bool)
 flag :: Text -> Tree Query () ()
 flag key = Node (Flag key)
 
@@ -191,10 +214,20 @@ flag' key = Node (Flag' key)
 --
 -- prop> printParse parser printer (list Exploded "k" int) (x :| xs)
 -- prop> printParse parser printer (list CommaDelimited "k" int) (x :| xs)
--- prop> printStable parser printer (list Exploded "k" int) (x :| xs)
 list :: ArrayStyle -> Text -> Leaf Query a -> Tree Query (NonEmpty a) (NonEmpty a)
 list style key vLeaf = Node (List style key vLeaf)
 
+-- | Like 'list', but accepts an empty (possibly-empty) list instead of
+--   requiring at least one value.
+--
+-- >>> parser (list' Exploded "k" int) []
+-- (Right [],[])
+-- >>> printer (list' Exploded "k" int) []
+-- []
+-- >>> parser (list' Exploded "k" int) [("k", Just "1"), ("k", Just "2")]
+-- (Right [1,2],[])
+-- >>> printer (list' Exploded "k" int) [1, 2]
+-- [("k",Just "1"),("k",Just "2")]
 list' :: ArrayStyle -> Text -> Leaf Query a -> Tree Query [a] [a]
 list' style key vLeaf = Node (List' style key vLeaf)
 
@@ -246,12 +279,18 @@ instance {-# OVERLAPPING #-} (Selector s) => GQuery (S1 s (Rec0 Bool)) where
         let key = Text.pack (selName (undefined :: S1 s (Rec0 Bool) ()))
          in FMap (M1 . K1) $ LMap (unK1 . unM1) $ Node (Flag' key)
 
-queryCodec :: forall a. (Generic a, GQuery (Rep a)) => Tree Query a a
-queryCodec = FMap (to @a) $ LMap (from @a) gQueryCodec
+-- | Generically derive a 'Query' codec from a record's field names and
+--   'HasLeaf' instances.
+--
+-- >>> parser (derived @Filt) [("qX", Just "1"), ("qY", Just "2")]
+-- (Right (Filt {qX = 1, qY = 2}),[])
+-- >>> printer (derived @Filt) (Filt 1 2)
+-- [("qX",Just "1"),("qY",Just "2")]
+derived :: forall a. (Generic a, GQuery (Rep a)) => Tree Query a a
+derived = FMap (to @a) $ LMap (from @a) gQueryCodec
 
 -- $combined
 -- >>> parser twoParams [("x", Just "1"), ("y", Just "2"), ("z", Just "3")]
 -- (Right (1,2),[("z",Just "3")])
 --
 -- prop> printParse parser printer twoParams (xy :: (Int, Int))
--- prop> printStable parser printer twoParams (xy :: (Int, Int))

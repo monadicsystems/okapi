@@ -14,11 +14,24 @@ module Okapi.HTTP.Request.Body (
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
-import Okapi.Tree (Failure, Parser, Printer, Context, Tree (..))
-import Okapi.Tree qualified as Tree
+import Okapi.Tree (Failure, Context)
 import Okapi.HTTP.Body (IsoJson, jsonDecode)
 import Web.FormUrlEncoded (FromForm, ToForm, urlDecodeAsForm, urlEncodeAsForm)
 
+-- $setup
+-- >>> :set -XTypeApplications
+-- >>> import Web.FormUrlEncoded (Form)
+
+-- | Unlike the 'Okapi.Tree'-based DSLs, 'parser'\/'printer' here are
+--   IO-wrapped and monadic ('Context' itself is @IO LBS.ByteString@) —
+--   'parser' never synchronously fails (every case is a bare 'Right'; a
+--   real decode failure only surfaces later, as an IO exception, when the
+--   returned action is actually run), so the pure 'Okapi.Tree' round-trip
+--   law vocabulary (@printParse@\/@parsePrint@, which compare 'Either'
+--   results directly) doesn't apply here. Concrete, executed @>>>@
+--   examples stand in for @prop>@ properties on this module. Named
+--   @parser@\/@printer@, not @parse@\/@print@, specifically so doctests
+--   here (and any caller) never have to fight @Prelude.print@ ambiguity.
 type Body :: Type -> Type
 data Body a where
     Raw       :: Body (IO LBS.ByteString)
@@ -36,32 +49,56 @@ formDecode bs = case urlDecodeAsForm bs of
     Left err -> fail (show err)
     Right x  -> pure x
 
-parser :: Tree Body i o -> Parser Body o
-parser = Tree.parser alg
-  where
-    alg :: Body a -> Parser Body a
-    alg Raw       ioLbs = (Right ioLbs,                  pure mempty)
-    alg Json      ioLbs = (Right (ioLbs >>= jsonDecode), pure mempty)
-    alg Form      ioLbs = (Right (ioLbs >>= formDecode), pure mempty)
-    alg NoContent _     = (Right (pure ()),              pure mempty)
+parser :: Body a -> IO LBS.ByteString -> Either ParseError a
+parser Raw       ioLbs = Right ioLbs
+parser Json      ioLbs = Right (ioLbs >>= jsonDecode)
+parser Form      ioLbs = Right (ioLbs >>= formDecode)
+parser NoContent _     = Right (pure ())
 
-printer :: Tree Body i o -> Printer Body i
-printer = Tree.printer alg
-  where
-    alg :: Body a -> Printer Body a
-    alg Raw       ioLbs = ioLbs
-    alg Json      ioA   = Aeson.encode <$> ioA
-    alg Form      ioA   = urlEncodeAsForm <$> ioA
-    alg NoContent _     = pure mempty
+printer :: Body a -> a -> IO LBS.ByteString
+printer Raw       ioLbs = ioLbs
+printer Json      ioA   = Aeson.encode <$> ioA
+printer Form      ioA   = urlEncodeAsForm <$> ioA
+printer NoContent _     = pure mempty
 
-raw :: Tree Body (IO LBS.ByteString) (IO LBS.ByteString)
-raw = Node Raw
+-- | Pass the raw body bytes straight through, unconstrained.
+--
+-- >>> r1 <- either (error . show) id (parser raw (pure "hello"))
+-- >>> r1
+-- "hello"
+-- >>> r2 <- printer raw (pure "hello")
+-- >>> r2
+-- "hello"
+raw :: Body (IO LBS.ByteString)
+raw = Raw
 
-json :: IsoJson a => Tree Body (IO a) (IO a)
-json = Node Json
+-- | Decode\/encode the body as JSON.
+--
+-- >>> r3 <- either (error . show) id (parser (json @Int) (pure "42"))
+-- >>> r3
+-- 42
+-- >>> r4 <- printer (json @Int) (pure 42)
+-- >>> r4
+-- "42"
+json :: IsoJson a => Body (IO a)
+json = Json
 
-form :: (ToForm a, FromForm a) => Tree Body (IO a) (IO a)
-form = Node Form
+-- | Decode\/encode the body as @application\/x-www-form-urlencoded@.
+--
+-- >>> r5 <- either (error . show) id (parser (form @Form) (pure "a=1&b=2"))
+-- >>> r5
+-- fromList [("a","1"),("b","2")]
+-- >>> r6 <- printer (form @Form) (pure r5)
+-- >>> r6
+-- "a=1&b=2"
+form :: (ToForm a, FromForm a) => Body (IO a)
+form = Form
 
-noContent :: Tree Body (IO ()) (IO ())
-noContent = Node NoContent
+-- | No body at all — parsing ignores the input, printing produces nothing.
+--
+-- >>> either (error . show) id (parser noContent (pure "")) :: IO ()
+-- >>> r7 <- printer noContent (pure ())
+-- >>> r7
+-- ""
+noContent :: Body (IO ())
+noContent = NoContent

@@ -13,7 +13,7 @@ module Okapi.HTTP.Request.Path (
     raw,
     LitF (..),
     GPath (..),
-    pathCodec,
+    derived,
 ) where
 
 import Data.Bifunctor (first)
@@ -37,13 +37,18 @@ import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (printParse, printStable, int, integer, (=.))
+-- >>> import Okapi.Tree (printParse, int, integer, (=.))
 -- >>> import Data.List.NonEmpty (NonEmpty((:|)))
+-- >>> import GHC.Generics (Generic)
 -- >>> :{
 -- let twoSegs = do
 --       n <- fst =. segment "n" int
 --       m <- snd =. segment "m" int
 --       pure (n, m)
+-- :}
+--
+-- >>> :{
+-- data Coords = Coords { coordX :: Int, coordY :: Int } deriving (Generic, Eq, Show)
 -- :}
 
 data Path a where
@@ -88,11 +93,18 @@ printer = Tree.printer alg
     alg (Segs vLeaf) nel = map vLeaf.encode (NEL.toList nel)
     alg Raw ts = ts
 
+-- | Parse a full path, requiring every segment be consumed — 'Left' with
+--   the leftover segments if any remain, 'Left' with the underlying error
+--   if parsing itself failed.
+--
+-- >>> parseExact (segment "id" int) ["42"]
+-- Right 42
+-- >>> parseExact (segment "id" int) ["42", "extra"]
+-- Left (Right ["extra"])
+-- >>> parseExact (segment "id" int) ["nope"]
+-- Left (Left ParseError)
 parseExact :: Tree Path i o -> [Text] -> Either (Either ParseError [Text]) o
-parseExact c ts = case parser c ts of
-    (Left e, _)        -> Left (Left e)
-    (Right a, [])      -> Right a
-    (Right _, ts')     -> Left (Right ts')
+parseExact = Tree.parseExact parser
 
 -- | Match a fixed literal segment.
 --
@@ -118,17 +130,21 @@ segment_ vLeaf x = LMap (const ()) (Node (Seg_ vLeaf x))
 --
 -- prop> printParse parser printer (segment "n" int) (x :: Int)
 -- prop> printParse parser printer (segment "n" integer) x
--- prop> printStable parser printer (segment "n" int) (x :: Int)
 segment :: Text -> Leaf Path a -> Tree Path a a
 segment name vLeaf = Node (Seg name vLeaf)
 
 -- | Parse and print all remaining path segments as a non-empty list.
 --
 -- prop> printParse parser printer (segments int) (x :| xs)
--- prop> printStable parser printer (segments int) (x :| xs)
 segments :: Leaf Path a -> Tree Path (NonEmpty a) (NonEmpty a)
 segments vLeaf = Node (Segs vLeaf)
 
+-- | Pass all remaining path segments straight through, unconstrained.
+--
+-- >>> parser raw ["a", "b", "c"]
+-- (Right ["a","b","c"],[])
+-- >>> printer raw ["a", "b", "c"]
+-- ["a","b","c"]
 raw :: Tree Path [Text] [Text]
 raw = Node Raw
 
@@ -167,12 +183,18 @@ instance (Selector meta, HasLeaf Path a) => GPath (S1 meta (Rec0 a)) where
         let name = Text.pack (selName (undefined :: S1 meta (Rec0 a) ()))
          in FMap (M1 . K1) $ LMap (unK1 . unM1) $ Node (Seg name (leaf @Path @a))
 
-pathCodec :: forall a. (Generic a, GPath (Rep a)) => Tree Path a a
-pathCodec = FMap (to @a) $ LMap (from @a) gPathCodec
+-- | Generically derive a 'Path' codec from a record's field names and
+--   'HasLeaf' instances.
+--
+-- >>> parser (derived @Coords) ["3", "4"]
+-- (Right (Coords {coordX = 3, coordY = 4}),[])
+-- >>> printer (derived @Coords) (Coords 3 4)
+-- ["3","4"]
+derived :: forall a. (Generic a, GPath (Rep a)) => Tree Path a a
+derived = FMap (to @a) $ LMap (from @a) gPathCodec
 
 -- $combined
 -- >>> parser twoSegs ["42", "99", "extra"]
 -- (Right (42,99),["extra"])
 --
 -- prop> printParse parser printer twoSegs (xy :: (Int, Int))
--- prop> printStable parser printer twoSegs (xy :: (Int, Int))
