@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE NoFieldSelectors #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.Mode.Link (
     URI (..),
@@ -7,6 +8,8 @@ module Okapi.Mode.Link (
     build,
     GLink,
     links,
+    GLinkVia,
+    linksVia,
 ) where
 
 import Data.Kind (Type)
@@ -25,11 +28,12 @@ import GHC.Generics (
     (:*:) (..),
  )
 import GHC.Records (HasField (..))
-import Network.HTTP.Types qualified as HTTP
+import Network.HTTP.Types qualified as Types
 import Okapi.HTTP.Request.Path qualified as Path
 import Okapi.HTTP.Request.Query qualified as Query
-import Okapi.Mode.Forest (Forest (..), Shape, stripTags)
-import Okapi.Record.Tree qualified as Tree
+import Okapi.Mode.Contract (Contract (..), Shape, stripTags)
+import Okapi.Mode.Morph (Morph (..))
+import Okapi.HTTP.Request qualified as HTTP
 
 data URI = URI
     { path :: Text
@@ -45,50 +49,121 @@ data Link shape where
         Link (Shape method path query headers body result)
 
 build ::
-    Tree.Request method path query headers body ->
+    HTTP.Request method path query headers body ->
     path ->
     query ->
     URI
 build req pathVal queryVal =
     URI
         { path = "/" <> T.intercalate "/" (Path.printer req.path pathVal)
-        , query = decodeUtf8 (HTTP.renderQuery True (Query.printer req.query queryVal))
+        , query = decodeUtf8 (Types.renderQuery True (Query.printer req.query queryVal))
         }
 
-class GLink (epF :: Type -> Type) (lnF :: Type -> Type) where
-    gLink :: epF () -> lnF ()
+class GLink (ctF :: Type -> Type) (lnF :: Type -> Type) where
+    gLink :: ctF () -> lnF ()
 
-instance (GLink epF lnF) => GLink (D1 dm epF) (D1 dm' lnF) where
-    gLink (M1 ep) = M1 (gLink @epF @lnF ep)
+instance (GLink ctF lnF) => GLink (D1 dm ctF) (D1 dm' lnF) where
+    gLink (M1 ct) = M1 (gLink @ctF @lnF ct)
 
-instance (GLink epF lnF) => GLink (C1 cm epF) (C1 cm' lnF) where
-    gLink (M1 ep) = M1 (gLink @epF @lnF ep)
+instance (GLink ctF lnF) => GLink (C1 cm ctF) (C1 cm' lnF) where
+    gLink (M1 ct) = M1 (gLink @ctF @lnF ct)
 
-instance (GLink epL lnL, GLink epR lnR) => GLink (epL :*: epR) (lnL :*: lnR) where
-    gLink (epL :*: epR) = gLink @epL @lnL epL :*: gLink @epR @lnR epR
+instance (GLink ctL lnL, GLink ctR lnR) => GLink (ctL :*: ctR) (lnL :*: lnR) where
+    gLink (ctL :*: ctR) = gLink @ctL @lnL ctL :*: gLink @ctR @lnR ctR
 
 instance
     GLink
-        (S1 sm (Rec0 (Forest (Shape method path query headers body result))))
+        (S1 sm (Rec0 (Contract (Shape method path query headers body result))))
         (S1 sm' (Rec0 (Link (Shape method path query headers body result))))
     where
-    gLink (M1 (K1 ep)) =
+    gLink (M1 (K1 ct)) =
         M1
             ( K1
-                ( case stripTags ep of
+                ( case stripTags ct of
                     (req :-> _) -> Builder (build req)
                     (req :-< _) -> Builder (build req)
                     Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
                 )
             )
 
-links ::
-    forall server.
-    ( Generic (server Forest)
-    , Generic (server Link)
-    , GLink (Rep (server Forest)) (Rep (server Link))
+-- | Lets a field be a nested record of the same shape instead of a
+--   concrete 'Contract'\/'Link' — recurses via 'links' itself. Same
+--   non-overlap argument as the nested instances in "Okapi.Mode.Endpoint".
+instance
+    ( Generic (nested Contract)
+    , Generic (nested Link)
+    , GLink (Rep (nested Contract)) (Rep (nested Link))
     ) =>
-    server Forest ->
-    server Link
-links endpoints =
-    to (gLink @(Rep (server Forest)) @(Rep (server Link)) (from endpoints))
+    GLink (S1 sm (Rec0 (nested Contract))) (S1 sm' (Rec0 (nested Link)))
+    where
+    gLink (M1 (K1 ctVal)) = M1 (K1 (links ctVal))
+
+links ::
+    forall record.
+    ( Generic (record Contract)
+    , Generic (record Link)
+    , GLink (Rep (record Contract)) (Rep (record Link))
+    ) =>
+    record Contract ->
+    record Link
+links contracts =
+    to (gLink @(Rep (record Contract)) @(Rep (record Link)) (from contracts))
+
+class GLinkVia (ctF :: Type -> Type) (lnF :: Type -> Type) where
+    gLinkVia :: ctF () -> lnF ()
+
+instance (GLinkVia ctF lnF) => GLinkVia (D1 dm ctF) (D1 dm' lnF) where
+    gLinkVia (M1 ct) = M1 (gLinkVia @ctF @lnF ct)
+
+instance (GLinkVia ctF lnF) => GLinkVia (C1 cm ctF) (C1 cm' lnF) where
+    gLinkVia (M1 ct) = M1 (gLinkVia @ctF @lnF ct)
+
+instance (GLinkVia ctL lnL, GLinkVia ctR lnR) => GLinkVia (ctL :*: ctR) (lnL :*: lnR) where
+    gLinkVia (ctL :*: ctR) = gLinkVia @ctL @lnL ctL :*: gLinkVia @ctR @lnR ctR
+
+instance
+    GLinkVia
+        (S1 sm (Rec0 (Morph Contract n (Shape method path query headers body result))))
+        (S1 sm' (Rec0 (Morph Link n (Shape method path query headers body result))))
+    where
+    gLinkVia (M1 (K1 (Morph ct))) =
+        M1
+            ( K1
+                ( Morph
+                    ( case stripTags ct of
+                        (req :-> _) -> Builder (build req)
+                        (req :-< _) -> Builder (build req)
+                        Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
+                    )
+                )
+            )
+
+-- | Lets a field be a nested record of the same shape instead of a
+--   concrete @Morph Contract@\/@Morph Link@ pair — recurses via
+--   'linksVia' itself.
+instance
+    ( Generic (nested (Morph Contract))
+    , Generic (nested (Morph Link))
+    , GLinkVia (Rep (nested (Morph Contract))) (Rep (nested (Morph Link)))
+    ) =>
+    GLinkVia (S1 sm (Rec0 (nested (Morph Contract)))) (S1 sm' (Rec0 (nested (Morph Link))))
+    where
+    gLinkVia (M1 (K1 ctVal)) = M1 (K1 (linksVia ctVal))
+
+{- | Heterogeneous-@n@ counterpart to 'links' — takes a record built with
+  'Okapi.Mode.Morph.Morph' (see 'Okapi.Mode.Endpoint.endpointsVia'). Output
+  is @record (Morph Link)@, not plain @record Link@ — each field's @n@ is
+  baked into the record's own field declarations, so the output has to stay
+  2-arg-shaped to match; unwrap each field's 'Morph' to get the plain
+  'Link' underneath, which is all link generation ever actually uses.
+-}
+linksVia ::
+    forall record.
+    ( Generic (record (Morph Contract))
+    , Generic (record (Morph Link))
+    , GLinkVia (Rep (record (Morph Contract))) (Rep (record (Morph Link)))
+    ) =>
+    record (Morph Contract) ->
+    record (Morph Link)
+linksVia contracts =
+    to (gLinkVia @(Rep (record (Morph Contract))) @(Rep (record (Morph Link))) (from contracts))

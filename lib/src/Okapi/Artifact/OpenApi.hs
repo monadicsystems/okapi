@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Artifact.OpenApi (endpointToOpenApi, GenericOAPI, openApi) where
+module Okapi.Artifact.OpenApi (contractToOpenApi, GenericOAPI, openApi, GenericOAPIVia, openApiVia) where
 
 import Control.Applicative ((<|>))
 import Data.ByteString (ByteString)
@@ -27,20 +27,22 @@ import Data.Functor.Const (Const (..), getConst)
 import Data.List.NonEmpty qualified as NE
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:*:) (..))
 import Network.HTTP.Media (MediaType)
-import Network.HTTP.Types qualified as HTTP
-import Okapi.Mode.Forest (Forest ((:->), (:-<)), Shape, stripTags, collectTags)
-import Okapi.Mode.Forest qualified as Forest
+import Network.HTTP.Types qualified as Types
+import Okapi.Mode.Contract (Contract ((:->), (:-<)), Shape, stripTags, collectTags)
+import Okapi.Mode.Contract qualified as Contract
+import Okapi.Mode.Morph (Morph (..))
 import Okapi.Tree (Info (..), Leaf (..), Tag (..))
-import Okapi.Record.Tree qualified as Tree
+import Okapi.HTTP.Request qualified as HTTP
+import Okapi.HTTP.Response qualified as HTTP
 import Okapi.HTTP.Request.Method qualified as Method
 import Okapi.HTTP.Request.Path (Path)
 import Okapi.HTTP.Request.Path qualified as Path
 import Okapi.HTTP.Request.Query (Query)
 import Okapi.HTTP.Request.Query qualified as Query
+import Okapi.HTTP.Headers qualified as Headers
 import Okapi.HTTP.Request.Headers qualified as ReqH
 import Okapi.HTTP.Request.Body qualified as ReqBody
-import Okapi.HTTP.Response.Headers qualified as ResH
-import Okapi.HTTP.Response.Body qualified as ResBody
+import Okapi.HTTP.Body qualified as Body
 import Okapi.HTTP.Response.Status qualified as Status
 import Okapi.HTTP.Responses (Cases, Responses)
 import Okapi.HTTP.Responses qualified as Resps
@@ -70,7 +72,7 @@ applyTagsToParam tags p = foldl' applyOne p tags
     applyOne pr (Group _)       = pr
     applyOne pr (Extension _ _) = pr
 
--- | Fold 'Tag's onto an 'Operation' — the contract-level (whole endpoint)
+-- | Fold 'Tag's onto an 'Operation' — the contract-level (whole contract)
 --   case. 'Example' has no target here (OpenAPI has no per-operation
 --   example; examples live on 'Param'\/'OA.Schema'\/'Response').
 applyTagsToOperation :: [Tag] -> Operation -> Operation
@@ -88,7 +90,7 @@ data PathPiece = PLit Text | PParam Text OA.Schema
 --   layers) down to each leaf, folding it into that leaf's 'OA.Schema'
 --   right there — not accumulated bottom-up and merged after, which would
 --   get nested 'annotate' calls' merge order backwards (see
---   'Okapi.Mode.Forest.collectTags').
+--   'Okapi.Mode.Contract.collectTags').
 walkPath :: [Tag] -> Tree Path i o -> [PathPiece]
 walkPath _    (Node (Path.Seg_ vLeaf x)) = [PLit (vLeaf.encode x)]
 walkPath tags (Node (Path.Seg n vLeaf))  = [PParam n (applyTagsToSchema tags (infoSchema vLeaf.info))]
@@ -137,111 +139,85 @@ infoSchema (Info ty fmt) = withFmt (mempty & #type ?~ oaType ty)
     oaType _         = OA.OpenApiString
     withFmt s = maybe s (\f -> s & #format ?~ f) fmt
 
-extractReqHeaderParams :: [Tag] -> Tree ReqH.Headers i o -> [Param]
-extractReqHeaderParams tags (Node hdr) = map (applyTagsToParam tags) $ case hdr of
-    ReqH.Field  key vLeaf    -> [mkParamWithSchema (hdrName key) ParamHeader True  (infoSchema vLeaf.info)]
-    ReqH.Field' key vLeaf    -> [mkParamWithSchema (hdrName key) ParamHeader False (infoSchema vLeaf.info)]
-    ReqH.Raw                 -> []
-    ReqH.Field_ _ _          -> []
-    ReqH.FieldRFC9651 n _    -> [mkParamWithSchema (hdrName n) ParamHeader True (mempty & #type ?~ OA.OpenApiString)]
-    ReqH.Cookie  _ _         -> []
-    ReqH.Cookie' _ _         -> []
-extractReqHeaderParams tags (FMap _ c)     = extractReqHeaderParams tags c
-extractReqHeaderParams tags (LMap _ c)     = extractReqHeaderParams tags c
-extractReqHeaderParams tags (Apply cf cx)  = extractReqHeaderParams tags cf ++ extractReqHeaderParams tags cx
-extractReqHeaderParams _    (Pure _)       = []
-extractReqHeaderParams tags (Annotate ts c) = extractReqHeaderParams (tags <> ts) c
-
-extractResHeaders :: [Tag] -> Tree ResH.Headers i o -> [(Text, Bool, OA.Schema)]
-extractResHeaders tags (Node hdr) = map applyTags $ case hdr of
-    ResH.Field  key vLeaf    -> [(hdrName key, True,  infoSchema vLeaf.info)]
-    ResH.Field' key vLeaf    -> [(hdrName key, False, infoSchema vLeaf.info)]
-    ResH.Raw                 -> []
-    ResH.Field_ _ _          -> []
-    ResH.FieldRFC9651 n _    -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
-    ResH.SetCookie _ _ _     -> []
+-- | Core traversal shared by both sides — extracts @(name, required?,
+--   schema)@ triples for every header-shaped node. 'Headers.Cookie'\/
+--   'Headers.Cookie''\/'Headers.SetCookie' have no OpenAPI header
+--   representation (cookies are documented separately, if at all), so
+--   they contribute nothing here.
+extractHeaderInfo :: [Tag] -> Tree (Headers.Headers ctx) i o -> [(Text, Bool, OA.Schema)]
+extractHeaderInfo tags (Node hdr) = map applyTags $ case hdr of
+    Headers.Field  key vLeaf     -> [(hdrName key, True,  infoSchema vLeaf.info)]
+    Headers.Field' key vLeaf     -> [(hdrName key, False, infoSchema vLeaf.info)]
+    Headers.Raw                  -> []
+    Headers.Field_ _ _           -> []
+    Headers.FieldStructured n _  -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
+    Headers.Cookie  _ _          -> []
+    Headers.Cookie' _ _          -> []
+    Headers.SetCookie _ _ _      -> []
   where
     applyTags (name, req_, sc) = (name, req_, applyTagsToSchema tags sc)
-extractResHeaders tags (FMap _ c)     = extractResHeaders tags c
-extractResHeaders tags (LMap _ c)     = extractResHeaders tags c
-extractResHeaders tags (Apply cf cx)  = extractResHeaders tags cf ++ extractResHeaders tags cx
-extractResHeaders _    (Pure _)       = []
-extractResHeaders tags (Annotate ts c) = extractResHeaders (tags <> ts) c
+extractHeaderInfo tags (FMap _ c)      = extractHeaderInfo tags c
+extractHeaderInfo tags (LMap _ c)      = extractHeaderInfo tags c
+extractHeaderInfo tags (Apply cf cx)   = extractHeaderInfo tags cf ++ extractHeaderInfo tags cx
+extractHeaderInfo _    (Pure _)        = []
+extractHeaderInfo tags (Annotate ts c) = extractHeaderInfo (tags <> ts) c
 
-extractReqContentType :: Tree ReqH.Headers i o -> Maybe ByteString
-extractReqContentType (Node (ReqH.Field_ k v)) | k == "content-type" = Just v
-extractReqContentType (FMap _ c)    = extractReqContentType c
-extractReqContentType (LMap _ c)    = extractReqContentType c
-extractReqContentType (Apply cf cx) = extractReqContentType cf <|> extractReqContentType cx
-extractReqContentType (Annotate _ c) = extractReqContentType c
-extractReqContentType _             = Nothing
+extractContentType :: Tree (Headers.Headers ctx) i o -> Maybe ByteString
+extractContentType (Node (Headers.Field_ k v)) | k == "content-type" = Just v
+extractContentType (FMap _ c)    = extractContentType c
+extractContentType (LMap _ c)    = extractContentType c
+extractContentType (Apply cf cx) = extractContentType cf <|> extractContentType cx
+extractContentType (Annotate _ c) = extractContentType c
+extractContentType _             = Nothing
 
-extractResContentType :: Tree ResH.Headers i o -> Maybe ByteString
-extractResContentType (Node (ResH.Field_ k v)) | k == "content-type" = Just v
-extractResContentType (FMap _ c)    = extractResContentType c
-extractResContentType (LMap _ c)    = extractResContentType c
-extractResContentType (Apply cf cx) = extractResContentType cf <|> extractResContentType cx
-extractResContentType (Annotate _ c) = extractResContentType c
-extractResContentType _             = Nothing
-
-bodySchemaOf :: forall (b :: Type -> Type) a. ReqBody.IsoJson a => b (IO a) -> OA.Schema
+bodySchemaOf :: forall (b :: Type -> Type) a. Body.IsoJson a => b (IO a) -> OA.Schema
 bodySchemaOf _ = toSchema (Proxy @a)
 
-bodyDefsOf :: forall (b :: Type -> Type) a. ReqBody.IsoJson a => b (IO a) -> OA.Definitions OA.Schema
+bodyDefsOf :: forall (b :: Type -> Type) a. Body.IsoJson a => b (IO a) -> OA.Definitions OA.Schema
 bodyDefsOf _ = execDeclare (declareSchemaRef (Proxy @a)) mempty
 
-extractReqBodySchema :: ReqBody.Body a -> Maybe OA.Schema
-extractReqBodySchema body = case body of
-    ReqBody.Json -> Just (bodySchemaOf body)
-    _            -> Nothing
+extractBodySchema :: Body.Body ctx a -> Maybe OA.Schema
+extractBodySchema b = case b of
+    Body.Json -> Just (bodySchemaOf b)
+    _         -> Nothing
 
-extractReqBodyDefs :: ReqBody.Body a -> OA.Definitions OA.Schema
-extractReqBodyDefs body = case body of
-    ReqBody.Json -> bodyDefsOf body
-    _            -> mempty
-
-extractResBodySchema :: ResBody.Body a -> Maybe OA.Schema
-extractResBodySchema body = case body of
-    ResBody.Json -> Just (bodySchemaOf body)
-    _            -> Nothing
-
-extractResBodyDefs :: ResBody.Body a -> OA.Definitions OA.Schema
-extractResBodyDefs body = case body of
-    ResBody.Json -> bodyDefsOf body
-    _            -> mempty
+extractBodyDefs :: Body.Body ctx a -> OA.Definitions OA.Schema
+extractBodyDefs b = case b of
+    Body.Json -> bodyDefsOf b
+    _         -> mempty
 
 data ResInfo = ResInfo
-    { resStatus     :: HTTP.Status
+    { resStatus     :: Types.Status
     , resMediaType  :: Maybe ByteString
     , resBodySchema :: Maybe OA.Schema
     , resBodyDefs   :: OA.Definitions OA.Schema
     , resHdrNames   :: [(Text, Bool, OA.Schema)]
     }
 
-resStatusOf :: Status.Status s -> HTTP.Status
-resStatusOf Status.Raw        = HTTP.status200
+resStatusOf :: Status.Status s -> Types.Status
+resStatusOf Status.Raw        = Types.status200
 resStatusOf (Status.Status ks) = Status.knownStatusToHTTP ks
 
-resInfoOf :: Tree.Response s h b -> ResInfo
+resInfoOf :: HTTP.Response s h b -> ResInfo
 resInfoOf res = ResInfo
     { resStatus     = resStatusOf res.status
-    , resMediaType  = extractResContentType res.headers
-    , resBodySchema = extractResBodySchema res.body
-    , resBodyDefs   = extractResBodyDefs res.body
-    , resHdrNames   = extractResHeaders [] res.headers
+    , resMediaType  = extractContentType res.headers
+    , resBodySchema = extractBodySchema res.body
+    , resBodyDefs   = extractBodyDefs res.body
+    , resHdrNames   = extractHeaderInfo [] res.headers
     }
 
-extractResInfos :: Cases responses => Responses Tree.Response responses -> [ResInfo]
+extractResInfos :: Cases responses => Responses HTTP.Response responses -> [ResInfo]
 extractResInfos rs =
     map
-        (getConst . Resps.traverseResponses @Tree.Response @Tree.Response (\c -> Const (resInfoOf c)))
+        (getConst . Resps.traverseResponses @HTTP.Response @HTTP.Response (\c -> Const (resInfoOf c)))
         (NE.toList (Resps.getResponses rs))
 
-methodStdOf :: Method.Method m -> Maybe HTTP.StdMethod
+methodStdOf :: Method.Method m -> Maybe Types.StdMethod
 methodStdOf Method.Raw        = Nothing
 methodStdOf (Method.Method km) = Just (Method.knownMethodToStd km)
 
-hdrName :: HTTP.HeaderName -> Text
+hdrName :: Types.HeaderName -> Text
 hdrName = T.pack . BS8.unpack . CI.original
 
 mkParam :: Text -> ParamLocation -> Bool -> Param
@@ -282,7 +258,7 @@ mkArrayParam n req_ style =
 mkResResponse :: ResInfo -> Response
 mkResResponse ri =
     mempty
-        & #description .~ T.pack (show (HTTP.statusCode (resStatus ri)))
+        & #description .~ T.pack (show (Types.statusCode (resStatus ri)))
         & applyResBodySchema (resMediaType ri) (resBodySchema ri)
         & applyResHeaders (resHdrNames ri)
 
@@ -308,18 +284,18 @@ applyReqBodySchema mt (Just sc) op =
 mediaKey :: Maybe ByteString -> MediaType
 mediaKey = maybe "application/json" (fromString . BS8.unpack)
 
-setMethod :: HTTP.StdMethod -> Operation -> PathItem -> PathItem
-setMethod HTTP.GET    op pi_ = pi_{_pathItemGet    = Just op}
-setMethod HTTP.POST   op pi_ = pi_{_pathItemPost   = Just op}
-setMethod HTTP.PUT    op pi_ = pi_{_pathItemPut    = Just op}
-setMethod HTTP.DELETE op pi_ = pi_{_pathItemDelete = Just op}
+setMethod :: Types.StdMethod -> Operation -> PathItem -> PathItem
+setMethod Types.GET    op pi_ = pi_{_pathItemGet    = Just op}
+setMethod Types.POST   op pi_ = pi_{_pathItemPost   = Just op}
+setMethod Types.PUT    op pi_ = pi_{_pathItemPut    = Just op}
+setMethod Types.DELETE op pi_ = pi_{_pathItemDelete = Just op}
 setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 
 -- $setup
 -- >>> :set -XOverloadedLabels
--- >>> import Okapi.Mode.Forest qualified as Forest
--- >>> import Okapi.Record.Tree qualified as Tree
--- >>> import Okapi.HTTP.Request.Path (Path, segment)
+-- >>> import Okapi.Mode.Contract qualified as Contract
+-- >>> import Okapi.HTTP.Request qualified as HTTP
+-- >>> import Okapi.HTTP.Request.Path (Path, seg)
 -- >>> import Okapi.HTTP.Request.Query qualified as Query
 -- >>> import Okapi.HTTP.Request.Headers qualified as ReqH
 -- >>> import Okapi.HTTP.Request.Body qualified as ReqBody
@@ -329,13 +305,13 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> import Data.HashMap.Strict.InsOrd qualified as IHM
 -- >>> import Data.OpenApi (Referenced (..))
 -- >>> import Optics.Core ((^.))
--- >>> let reqTree = Tree.Request { Tree.method = Method.method Method.GET, Tree.path = annotate [Description "the user id"] (segment "userId" (integer :: Leaf Path Integer)), Tree.query = Query.raw, Tree.headers = ReqH.raw, Tree.body = ReqBody.raw }
--- >>> let endpoint = Forest.annotate [Description "Get a user", Group "users"] (reqTree Forest.:-> Res.response200)
--- >>> let oa = endpointToOpenApi endpoint
+-- >>> let reqTree = HTTP.Request { HTTP.method = Method.method Method.GET, HTTP.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), HTTP.query = Query.raw, HTTP.headers = ReqH.raw, HTTP.body = ReqBody.raw }
+-- >>> let contract = Contract.annotate [Description "Get a user", Group "users"] (reqTree Contract.:-> Res.res200)
+-- >>> let oa = contractToOpenApi contract
 -- >>> let Just pi_ = IHM.lookup "/{userId}" (oa ^. #paths)
 -- >>> let Just op = pi_ ^. #get
 
--- | 'annotate' works at both levels of an endpoint — one wrapping a single
+-- | 'annotate' works at both levels of a contract — one wrapping a single
 --   path segment (lands on that parameter's nested 'OA.Schema'), one
 --   wrapping the whole @req :-> res@ contract (lands on the 'Operation'
 --   itself, including OpenAPI's own operation-grouping @tags@ via 'Group'):
@@ -348,35 +324,38 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> let Just (Inline sc) = p ^. #schema
 -- >>> sc ^. #description
 -- Just "the user id"
-endpointToOpenApi :: Forest (Shape method path query headers body result) -> OpenApi
-endpointToOpenApi endpoint = case stripTags endpoint of
-    (req :-> singleRes) -> toOpenApi (collectTags endpoint) req [resInfoOf singleRes]
-    (req :-< resAlt)    -> toOpenApi (collectTags endpoint) req (extractResInfos resAlt)
-    Forest.Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
+contractToOpenApi :: Contract shape -> OpenApi
+contractToOpenApi contract = case stripTags contract of
+    (req :-> singleRes) -> toOpenApi (collectTags contract) req [resInfoOf singleRes]
+    (req :-< resAlt)    -> toOpenApi (collectTags contract) req (extractResInfos resAlt)
+    Contract.Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
   where
     toOpenApi tags req resInfos =
         let
-            stdMeth = fromMaybe HTTP.GET (methodStdOf req.method)
+            stdMeth = fromMaybe Types.GET (methodStdOf req.method)
             pieces  = walkPath [] req.path
             qParams = extractQueryParams [] req.query
-            hParams = extractReqHeaderParams [] req.headers
+            hParams =
+                [ mkParamWithSchema name ParamHeader req_ sc
+                | (name, req_, sc) <- extractHeaderInfo [] req.headers
+                ]
             reqBody =
-                if stdMeth `notElem` [HTTP.GET, HTTP.HEAD]
-                    then extractReqBodySchema req.body
+                if stdMeth `notElem` [Types.GET, Types.HEAD]
+                    then extractBodySchema req.body
                     else Nothing
             allDefs =
-                extractReqBodyDefs req.body
+                extractBodyDefs req.body
                     <> foldMap resBodyDefs resInfos
             op =
                 mempty
                     & #parameters .~ map Inline (pathOAParams pieces ++ qParams ++ hParams)
                     & #responses .~ OA.Responses Nothing
                         ( IHM.fromList
-                            [ (HTTP.statusCode (resStatus ri), Inline (mkResResponse ri))
+                            [ (Types.statusCode (resStatus ri), Inline (mkResResponse ri))
                             | ri <- resInfos
                             ]
                         )
-                    & applyReqBodySchema (extractReqContentType req.headers) reqBody
+                    & applyReqBodySchema (extractContentType req.headers) reqBody
                     & applyTagsToOperation tags
          in
             mempty
@@ -385,26 +364,74 @@ endpointToOpenApi endpoint = case stripTags endpoint of
                 & #components % #schemas .~ allDefs
                 & #paths .~ IHM.singleton (pathTemplate pieces) (setMethod stdMeth op mempty)
 
-class GenericOAPI (epF :: Type -> Type) where
-    gOpenApi :: epF () -> OpenApi
+class GenericOAPI (ctF :: Type -> Type) where
+    gOpenApi :: ctF () -> OpenApi
 
-instance GenericOAPI epF => GenericOAPI (D1 dm epF) where
-    gOpenApi (M1 ep) = gOpenApi @epF ep
+instance GenericOAPI ctF => GenericOAPI (D1 dm ctF) where
+    gOpenApi (M1 ct) = gOpenApi @ctF ct
 
-instance GenericOAPI epF => GenericOAPI (C1 cm epF) where
-    gOpenApi (M1 ep) = gOpenApi @epF ep
+instance GenericOAPI ctF => GenericOAPI (C1 cm ctF) where
+    gOpenApi (M1 ct) = gOpenApi @ctF ct
 
-instance (GenericOAPI epL, GenericOAPI epR) => GenericOAPI (epL :*: epR) where
-    gOpenApi (epL :*: epR) = gOpenApi @epL epL <> gOpenApi @epR epR
+instance (GenericOAPI ctL, GenericOAPI ctR) => GenericOAPI (ctL :*: ctR) where
+    gOpenApi (ctL :*: ctR) = gOpenApi @ctL ctL <> gOpenApi @ctR ctR
 
-instance GenericOAPI (S1 sm (Rec0 (Forest (Shape method path query headers body result)))) where
-    gOpenApi (M1 (K1 ep)) = endpointToOpenApi ep
+instance GenericOAPI (S1 sm (Rec0 (Contract (Shape method path query headers body result)))) where
+    gOpenApi (M1 (K1 ct)) = contractToOpenApi ct
+
+-- | Lets a field be a nested record of contracts instead of a concrete
+--   'Contract' — recurses via 'openApi' itself. Same non-overlap argument
+--   as the nested instances in "Okapi.Mode.Endpoint".
+instance
+    ( Generic (nested Contract)
+    , GenericOAPI (Rep (nested Contract))
+    ) =>
+    GenericOAPI (S1 sm (Rec0 (nested Contract)))
+    where
+    gOpenApi (M1 (K1 ctVal)) = openApi ctVal
 
 openApi ::
-    forall server.
-    ( Generic (server Forest)
-    , GenericOAPI (Rep (server Forest))
+    forall record.
+    ( Generic (record Contract)
+    , GenericOAPI (Rep (record Contract))
     ) =>
-    server Forest ->
+    record Contract ->
     OpenApi
-openApi = gOpenApi @(Rep (server Forest)) . from
+openApi = gOpenApi @(Rep (record Contract)) . from
+
+class GenericOAPIVia (ctF :: Type -> Type) where
+    gOpenApiVia :: ctF () -> OpenApi
+
+instance GenericOAPIVia ctF => GenericOAPIVia (D1 dm ctF) where
+    gOpenApiVia (M1 ct) = gOpenApiVia @ctF ct
+
+instance GenericOAPIVia ctF => GenericOAPIVia (C1 cm ctF) where
+    gOpenApiVia (M1 ct) = gOpenApiVia @ctF ct
+
+instance (GenericOAPIVia ctL, GenericOAPIVia ctR) => GenericOAPIVia (ctL :*: ctR) where
+    gOpenApiVia (ctL :*: ctR) = gOpenApiVia @ctL ctL <> gOpenApiVia @ctR ctR
+
+instance GenericOAPIVia (S1 sm (Rec0 (Morph Contract n (Shape method path query headers body result)))) where
+    gOpenApiVia (M1 (K1 (Morph ct))) = contractToOpenApi ct
+
+-- | Lets a field be a nested record of contracts instead of a concrete
+--   @Morph Contract@ — recurses via 'openApiVia' itself.
+instance
+    ( Generic (nested (Morph Contract))
+    , GenericOAPIVia (Rep (nested (Morph Contract)))
+    ) =>
+    GenericOAPIVia (S1 sm (Rec0 (nested (Morph Contract))))
+    where
+    gOpenApiVia (M1 (K1 ctVal)) = openApiVia ctVal
+
+-- | Heterogeneous-@n@ counterpart to 'openApi' — takes a record built with
+--   'Okapi.Mode.Morph.Morph' (see 'Okapi.Mode.Endpoint.endpointsVia')
+--   instead of a plain @record Contract@.
+openApiVia ::
+    forall record.
+    ( Generic (record (Morph Contract))
+    , GenericOAPIVia (Rep (record (Morph Contract)))
+    ) =>
+    record (Morph Contract) ->
+    OpenApi
+openApiVia = gOpenApiVia @(Rep (record (Morph Contract))) . from

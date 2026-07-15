@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Request.Cookies (
+module Okapi.HTTP.Headers.Cookie (
     Cookie,
     ParseError (..),
 ) where
@@ -14,8 +14,8 @@ import Data.UUID (UUID)
 import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
 import Web.HttpApiData (parseHeader, toHeader)
 
-type Cookie :: Type -> Type
-data Cookie a
+type Cookie :: Type -> Type -> Type
+data Cookie i o
 
 data ParseError = ParseError deriving (Eq, Show)
 

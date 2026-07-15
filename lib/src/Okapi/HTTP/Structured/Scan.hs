@@ -1,10 +1,10 @@
 
--- | Shared delimiter-scanning helpers for the RFC9651 structured-field-value
+-- | Shared delimiter-scanning helpers for the Structured structured-field-value
 --   codecs (@BareItem@, @Item@, @Parameters@, @List@, @Dictionary@), all of
 --   which need to find top-level separators (@;@, @=@, @,@, @(@\/@)@) in a
 --   single 'ByteString' while correctly skipping over separators that
 --   appear inside a quoted @sf-string@ or a parenthesized inner list.
-module Okapi.HTTP.RFC9651.Scan (
+module Okapi.HTTP.Structured.Scan (
     strip,
     firstTop,
     firstAndRest,
@@ -24,7 +24,7 @@ strip = BS.dropWhileEnd isSp . BS.dropWhile isSp
 
 -- | Find the index of the first top-level (not inside quotes, not inside
 --   parentheses) occurrence of @sep@. Correctly skips backslash-escaped
---   bytes inside quotes (@\\"@, @\\\\@ per 'Okapi.HTTP.RFC9651.BareItem'\'s
+--   bytes inside quotes (@\\"@, @\\\\@ per 'Okapi.HTTP.Structured.BareItem'\'s
 --   @escapeSfString@) — an escaped quote must not toggle quote-state, or a
 --   real separator immediately after would be wrongly treated as still
 --   inside the string.

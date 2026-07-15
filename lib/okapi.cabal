@@ -36,17 +36,18 @@ library
     exposed-modules:
         Okapi
         Okapi.Tree
-        Okapi.Mode.Forest
-        Okapi.Mode.Server
+        Okapi.Mode.Contract
+        Okapi.Mode.Shape
+        Okapi.Mode.Morph
+        Okapi.Mode.Function
         Okapi.Mode.Client
-        Okapi.Mode.Route
-        Okapi.Handle
+        Okapi.Mode.Endpoint
         Okapi.Mode.Link
         Okapi.Artifact.OpenApi
-        Okapi.Record.Tree
         Okapi.Record.Failure
         Okapi.Record.Result
         Okapi.Record.Data
+        Okapi.HTTP.Side
         Okapi.HTTP.Headers
         Okapi.HTTP.Body
         Okapi.HTTP.Request
@@ -60,16 +61,16 @@ library
         Okapi.HTTP.Response.Headers
         Okapi.HTTP.Response.Body
         Okapi.HTTP.Responses
-        Okapi.HTTP.Request.Cookies
-        Okapi.HTTP.Response.SetCookies
-        Okapi.HTTP.Response.Attributes
-        Okapi.HTTP.RFC9651
-        Okapi.HTTP.RFC9651.Scan
-        Okapi.HTTP.RFC9651.BareItem
-        Okapi.HTTP.RFC9651.Parameters
-        Okapi.HTTP.RFC9651.Item
-        Okapi.HTTP.RFC9651.List
-        Okapi.HTTP.RFC9651.Dictionary
+        Okapi.HTTP.Headers.Cookie
+        Okapi.HTTP.Headers.SetCookie
+        Okapi.HTTP.Headers.Attributes
+        Okapi.HTTP.Structured
+        Okapi.HTTP.Structured.Scan
+        Okapi.HTTP.Structured.BareItem
+        Okapi.HTTP.Structured.Parameters
+        Okapi.HTTP.Structured.Item
+        Okapi.HTTP.Structured.List
+        Okapi.HTTP.Structured.Dictionary
     build-depends:
         base                     ^>=4.20.0.0,
         aeson                    ^>=2.2,

@@ -35,8 +35,8 @@ import Data.Text.Encoding (decodeUtf8Lenient, encodeUtf8)
 import Data.Time (Day, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
-import Network.HTTP.Types qualified as HTTP
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), widen)
+import Network.HTTP.Types qualified as Types
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
 import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseQueryParam, toQueryParam)
 
@@ -50,35 +50,39 @@ import Web.HttpApiData (parseQueryParam, toQueryParam)
 --       x <- fst =. param "x" int
 --       y <- snd =. param "y" int
 --       pure (x, y)
+--     verboseCount = do
+--       flag "verbose"
+--       x <- param "n" int
+--       pure x
 -- :}
 --
 -- >>> :{
 -- data Filt = Filt { qX :: Int, qY :: Int } deriving (Generic, Eq, Show)
 -- :}
 
-type Query :: Type -> Type
-data Query a where
-    Raw    :: Query HTTP.Query
-    Param  :: Text -> Leaf Query a -> Query a
-    Param' :: Text -> Leaf Query a -> Query (Maybe a)
-    Param_ :: Text -> Leaf Query a -> a -> Query ()
-    Flag   :: Text -> Query ()
-    Flag'  :: Text -> Query Bool
-    List   :: ArrayStyle -> Text -> Leaf Query a -> Query (NonEmpty a)
-    List'  :: ArrayStyle -> Text -> Leaf Query a -> Query [a]
+type Query :: Type -> Type -> Type
+data Query i o where
+    Raw    :: Query Types.Query Types.Query
+    Param  :: Text -> Leaf Query a -> Query a a
+    Param' :: Text -> Leaf Query a -> Query (Maybe a) (Maybe a)
+    Param_ :: Text -> Leaf Query a -> a -> Query i ()
+    Flag   :: Text -> Query i ()
+    Flag'  :: Text -> Query Bool Bool
+    List   :: ArrayStyle -> Text -> Leaf Query a -> Query (NonEmpty a) (NonEmpty a)
+    List'  :: ArrayStyle -> Text -> Leaf Query a -> Query [a] [a]
 
 data ArrayStyle = Exploded | CommaDelimited | SpaceDelimited | PipeDelimited deriving (Eq, Show)
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance Context Query = HTTP.Query
+type instance Context Query = Types.Query
 type instance Failure Query = ParseError
 type instance Piece Query = Text
 
 parser :: Tree Query i o -> Parser Query o
 parser = Tree.parser alg
   where
-    alg :: Query a -> Parser Query a
+    alg :: Query i o -> Parser Query o
     alg Raw q = (Right q, [])
     alg (Param key vLeaf) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
@@ -122,13 +126,13 @@ parser = Tree.parser alg
 printer :: Tree Query i o -> Printer Query i
 printer = Tree.printer alg
   where
-    alg :: Query a -> Printer Query a
+    alg :: Query i o -> Printer Query i
     alg Raw                    q        = q
     alg (Param key vLeaf)      x        = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
     alg (Param' _ _)           Nothing  = []
     alg (Param' key vLeaf)     (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
-    alg (Param_ key vLeaf x)   ()       = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
-    alg (Flag key)             ()       = [(encodeUtf8 key, Nothing)]
+    alg (Param_ key vLeaf x)   _        = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
+    alg (Flag key)             _        = [(encodeUtf8 key, Nothing)]
     alg (Flag' key)            True     = [(encodeUtf8 key, Nothing)]
     alg (Flag' _)              False    = []
     alg (List style key vLeaf)  nel     = renderList style key vLeaf (NE.toList nel)
@@ -136,10 +140,10 @@ printer = Tree.printer alg
 
 -- | Require full consumption — 'Left' with the leftover query params if
 --   any remain, 'Left' with the underlying error if parsing itself failed.
-parseExact :: Tree Query i o -> HTTP.Query -> Either (Either ParseError HTTP.Query) o
+parseExact :: Tree Query i o -> Types.Query -> Either (Either ParseError Types.Query) o
 parseExact = Tree.parseExact parser
 
-collectList :: ArrayStyle -> Text -> HTTP.Query -> ([ByteString], HTTP.Query)
+collectList :: ArrayStyle -> Text -> Types.Query -> ([ByteString], Types.Query)
 collectList Exploded key q =
     let k = encodeUtf8 key
         (matched, rest) = partition (\(ik, _) -> ik == k) q
@@ -151,7 +155,7 @@ collectList style key q =
             ((_, Nothing) : _, rest) -> ([], rest)
             ((_, Just v) : _, rest) -> (filter (not . BS.null) (BS8.split (delim style) v), rest)
 
-renderList :: ArrayStyle -> Text -> Leaf Query a -> [a] -> HTTP.Query
+renderList :: ArrayStyle -> Text -> Leaf Query a -> [a] -> Types.Query
 renderList Exploded key vLeaf xs = [(encodeUtf8 key, Just (enc x)) | x <- xs]
   where
     enc = encodeUtf8 . vLeaf.encode
@@ -173,7 +177,7 @@ delim Exploded       = ','
 -- (Right [("a",Just "1")],[])
 -- >>> printer raw [("a", Just "1")]
 -- [("a",Just "1")]
-raw :: Tree Query HTTP.Query HTTP.Query
+raw :: Tree Query Types.Query Types.Query
 raw = Node Raw
 
 -- | Parse and print a required query parameter.
@@ -198,13 +202,24 @@ param' key vLeaf = Node (Param' key vLeaf)
 -- >>> printer (param_ "v" int 1) ()
 -- [("v",Just "1")]
 param_ :: Text -> Leaf Query a -> a -> Tree Query i ()
-param_ key vLeaf x = widen (Node (Param_ key vLeaf x))
+param_ key vLeaf x = Node (Param_ key vLeaf x)
 
 -- | Parse and print a boolean flag (presence = True).
 --
 -- prop> printParse parser printer (flag "f") ()
 -- prop> printParse parser printer (flag' "f") (x :: Bool)
-flag :: Text -> Tree Query () ()
+--
+-- Composes directly with a value-producing sibling in the same @do@\/
+-- 'Applicative' block — no explicit alignment needed, since its own input
+-- is unconstrained (see 'verboseCount' in "$setup"):
+--
+-- >>> parser verboseCount [("verbose", Nothing), ("n", Just "5")]
+-- (Right 5,[])
+-- >>> printer verboseCount 5
+-- [("verbose",Nothing),("n",Just "5")]
+--
+-- prop> printParse parser printer verboseCount (x :: Int)
+flag :: Text -> Tree Query i ()
 flag key = Node (Flag key)
 
 flag' :: Text -> Tree Query Bool Bool

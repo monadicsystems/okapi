@@ -12,6 +12,8 @@ module Okapi.Mode.Client (
     clientFor,
     GClient,
     client,
+    GClientVia,
+    clientVia,
 ) where
 
 import Data.ByteString qualified as BS
@@ -24,9 +26,10 @@ import GHC.Generics
     , (:*:) (..)
     )
 import Network.HTTP.Client qualified as HC
-import Network.HTTP.Types qualified as HTTP
+import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
-import Okapi.Mode.Forest (Forest (..), Shape, stripTags)
+import Okapi.Mode.Contract (Contract (..), Shape, stripTags)
+import Okapi.Mode.Morph (Morph (..))
 import Okapi.Record.Data qualified as Data
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
@@ -52,10 +55,10 @@ pattern Fn f <- Function f
 fetch ::
     HC.Manager ->
     String ->
-    Forest (Shape method path query headers body result) ->
+    Contract (Shape method path query headers body result) ->
     Data.Request method path query headers body ->
     IO (Either ClientError result)
-fetch mgr baseUrl endpoint reqVal = case stripTags endpoint of
+fetch mgr baseUrl contract reqVal = case stripTags contract of
     (req :-> singleRes) -> do
         waiReq <- Req.printer req reqVal
         hcReq  <- toHCRequest baseUrl waiReq
@@ -70,26 +73,26 @@ fetch mgr baseUrl endpoint reqVal = case stripTags endpoint of
             Resps.parseResponses resContracts (fromHCResponse hcRes)
     Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
 
--- | Build a single callable client function from one endpoint contract —
---   the single-endpoint counterpart to 'client', which does exactly this
---   per field for a whole record of endpoints via 'GClient' (see that
---   instance's body: it's the same @Function \\reqVal -> fetch mgr url ep
+-- | Build a single callable client function from one contract —
+--   the single-contract counterpart to 'client', which does exactly this
+--   per field for a whole record of contracts via 'GClient' (see that
+--   instance's body: it's the same @Function \\reqVal -> fetch mgr url ct
 --   reqVal@ shape, just generalized over a whole record instead of one
---   'Forest'). Unwrap the result with 'Fn' to get the plain function:
+--   'Contract'). Unwrap the result with 'Fn' to get the plain function:
 --
---   > case clientFor settings endpoint of Fn f -> f requestValue
+--   > case clientFor settings contract of Fn f -> f requestValue
 clientFor ::
     ClientSettings ->
-    Forest (Shape method path query headers body result) ->
+    Contract (Shape method path query headers body result) ->
     Client (Shape method path query headers body result)
-clientFor (ClientSettings mgr url) endpoint = Function (fetch mgr url endpoint)
+clientFor (ClientSettings mgr url) contract = Function (fetch mgr url contract)
 
 toHCRequest :: String -> Wai.Request -> IO HC.Request
 toHCRequest baseUrl waiReq = do
     body <- Wai.strictRequestBody waiReq
     base <- HC.parseUrlThrow baseUrl
     let pathBS = "/" <> BS.intercalate "/" (map encodeUtf8 (Wai.pathInfo waiReq))
-        qs     = HTTP.renderQuery True (Wai.queryString waiReq)
+        qs     = Types.renderQuery True (Wai.queryString waiReq)
     pure base
         { HC.method         = Wai.requestMethod  waiReq
         , HC.path           = pathBS
@@ -105,34 +108,98 @@ fromHCResponse hcRes = Wai.responseLBS
     (HC.responseHeaders hcRes)
     (HC.responseBody    hcRes)
 
-class GClient (epF :: Type -> Type) (clF :: Type -> Type) where
-    gClient :: ClientSettings -> epF () -> clF ()
+class GClient (ctF :: Type -> Type) (clF :: Type -> Type) where
+    gClient :: ClientSettings -> ctF () -> clF ()
 
-instance GClient epF clF => GClient (D1 dm epF) (D1 dm' clF) where
-    gClient s (M1 ep) = M1 (gClient @epF @clF s ep)
+instance GClient ctF clF => GClient (D1 dm ctF) (D1 dm' clF) where
+    gClient s (M1 ct) = M1 (gClient @ctF @clF s ct)
 
-instance GClient epF clF => GClient (C1 cm epF) (C1 cm' clF) where
-    gClient s (M1 ep) = M1 (gClient @epF @clF s ep)
+instance GClient ctF clF => GClient (C1 cm ctF) (C1 cm' clF) where
+    gClient s (M1 ct) = M1 (gClient @ctF @clF s ct)
 
-instance (GClient epL clL, GClient epR clR)
-    => GClient (epL :*: epR) (clL :*: clR) where
-    gClient s (epL :*: epR) =
-        gClient @epL @clL s epL :*: gClient @epR @clR s epR
+instance (GClient ctL clL, GClient ctR clR)
+    => GClient (ctL :*: ctR) (clL :*: clR) where
+    gClient s (ctL :*: ctR) =
+        gClient @ctL @clL s ctL :*: gClient @ctR @clR s ctR
 
 instance GClient
-    (S1 sm  (Rec0 (Forest (Shape method path query headers body result))))
+    (S1 sm  (Rec0 (Contract (Shape method path query headers body result))))
     (S1 sm' (Rec0 (Client (Shape method path query headers body result)))) where
-    gClient (ClientSettings mgr url) (M1 (K1 ep)) =
-        M1 (K1 (Function \reqVal -> fetch mgr url ep reqVal))
+    gClient (ClientSettings mgr url) (M1 (K1 ct)) =
+        M1 (K1 (Function \reqVal -> fetch mgr url ct reqVal))
+
+-- | Lets a field be a nested record of the same shape instead of a
+--   concrete 'Contract'\/'Client' — recurses via 'client' itself. Same
+--   non-overlap argument as the nested instances in "Okapi.Mode.Endpoint".
+instance
+    ( Generic (nested Contract)
+    , Generic (nested Client)
+    , GClient (Rep (nested Contract)) (Rep (nested Client))
+    ) =>
+    GClient (S1 sm (Rec0 (nested Contract))) (S1 sm' (Rec0 (nested Client)))
+    where
+    gClient settings (M1 (K1 ctVal)) = M1 (K1 (client ctVal settings))
 
 client ::
-    forall server.
-    ( Generic (server Forest)
-    , Generic (server Client)
-    , GClient (Rep (server Forest)) (Rep (server Client))
+    forall record.
+    ( Generic (record Contract)
+    , Generic (record Client)
+    , GClient (Rep (record Contract)) (Rep (record Client))
     ) =>
-    server Forest ->
+    record Contract ->
     ClientSettings ->
-    server Client
-client endpoints settings =
-    to (gClient @(Rep (server Forest)) @(Rep (server Client)) settings (from endpoints))
+    record Client
+client contracts settings =
+    to (gClient @(Rep (record Contract)) @(Rep (record Client)) settings (from contracts))
+
+class GClientVia (ctF :: Type -> Type) (clF :: Type -> Type) where
+    gClientVia :: ClientSettings -> ctF () -> clF ()
+
+instance GClientVia ctF clF => GClientVia (D1 dm ctF) (D1 dm' clF) where
+    gClientVia s (M1 ct) = M1 (gClientVia @ctF @clF s ct)
+
+instance GClientVia ctF clF => GClientVia (C1 cm ctF) (C1 cm' clF) where
+    gClientVia s (M1 ct) = M1 (gClientVia @ctF @clF s ct)
+
+instance (GClientVia ctL clL, GClientVia ctR clR)
+    => GClientVia (ctL :*: ctR) (clL :*: clR) where
+    gClientVia s (ctL :*: ctR) =
+        gClientVia @ctL @clL s ctL :*: gClientVia @ctR @clR s ctR
+
+instance GClientVia
+    (S1 sm  (Rec0 (Morph Contract n (Shape method path query headers body result))))
+    (S1 sm' (Rec0 (Morph Client n (Shape method path query headers body result)))) where
+    gClientVia (ClientSettings mgr url) (M1 (K1 (Morph ct))) =
+        M1 (K1 (Morph (Function \reqVal -> fetch mgr url ct reqVal)))
+
+-- | Lets a field be a nested record of the same shape instead of a
+--   concrete @Morph Contract@\/@Morph Client@ pair — recurses via
+--   'clientVia' itself.
+instance
+    ( Generic (nested (Morph Contract))
+    , Generic (nested (Morph Client))
+    , GClientVia (Rep (nested (Morph Contract))) (Rep (nested (Morph Client)))
+    ) =>
+    GClientVia (S1 sm (Rec0 (nested (Morph Contract)))) (S1 sm' (Rec0 (nested (Morph Client))))
+    where
+    gClientVia settings (M1 (K1 ctVal)) = M1 (K1 (clientVia ctVal settings))
+
+{- | Heterogeneous-@n@ counterpart to 'client' — takes a record built with
+  'Okapi.Mode.Morph.Morph' (see 'Okapi.Mode.Endpoint.endpointsVia') instead
+  of a plain @record Contract@. Output is @record (Morph Client)@, not
+  plain @record Client@ — same reasoning as 'Okapi.Mode.Link.linksVia':
+  each field's @n@ is baked into the record's own field declarations, so
+  the output has to stay 2-arg-shaped to match, even though 'Client' itself
+  no more cares about @n@ than 'Link' does.
+-}
+clientVia ::
+    forall record.
+    ( Generic (record (Morph Contract))
+    , Generic (record (Morph Client))
+    , GClientVia (Rep (record (Morph Contract))) (Rep (record (Morph Client)))
+    ) =>
+    record (Morph Contract) ->
+    ClientSettings ->
+    record (Morph Client)
+clientVia contracts settings =
+    to (gClientVia @(Rep (record (Morph Contract))) @(Rep (record (Morph Client))) settings (from contracts))

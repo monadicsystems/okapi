@@ -3,16 +3,17 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Okapi.HTTP.Request (
-    request,
-    requestGET,
-    requestPOST,
-    requestPUT,
-    requestDELETE,
-    requestPATCH,
-    requestHEAD,
-    requestOPTIONS,
-    requestCONNECT,
-    requestTRACE,
+    Request (..),
+    req,
+    reqGET,
+    reqPOST,
+    reqPUT,
+    reqDELETE,
+    reqPATCH,
+    reqHEAD,
+    reqOPTIONS,
+    reqCONNECT,
+    reqTRACE,
     method,
     path,
     query,
@@ -21,18 +22,45 @@ module Okapi.HTTP.Request (
     parser,
     parser',
     printer,
+
+    -- * Header combinators (re-exported from "Okapi.HTTP.Headers")
+    field,
+    field',
+    field_,
+    contentType,
+    cookie,
+    cookie',
+    fieldStruct,
+    fieldBareItem,
+    fieldItem,
+    fieldList,
+    fieldDict,
+    MediaType (..),
+
+    -- * Body combinators (re-exported from "Okapi.HTTP.Body")
+    json,
+    jsonValue,
+    form,
+    noContent,
+    None (..),
 ) where
 
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Text (Text)
-import Network.HTTP.Types qualified as HTTP
+import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
-import Okapi.HTTP.Request.Body (Body)
-import Okapi.HTTP.Request.Body qualified as Body
-import Okapi.HTTP.Request.Headers (Headers)
-import Okapi.HTTP.Request.Headers qualified as Headers
+import Okapi.HTTP.Headers (MediaType (..))
+import Okapi.HTTP.Headers qualified as Headers
+import Okapi.HTTP.Headers
+    ( field, field', field_, contentType
+    , fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
+    )
+import Okapi.HTTP.Body qualified as Body
+import Okapi.HTTP.Body (json, jsonValue, noContent, None (..))
+import Okapi.HTTP.Request.Body (RequestBody, form)
+import Okapi.HTTP.Request.Headers (RequestHeaders, cookie, cookie', coalesceCookies)
 import Okapi.HTTP.Request.Method (CONNECT, DELETE, GET, HEAD, KnownMethod (..), OPTIONS, PATCH, POST, PUT, TRACE)
 import Okapi.HTTP.Request.Method qualified as Method
 import Okapi.HTTP.Request.Path (Path)
@@ -42,12 +70,19 @@ import Okapi.HTTP.Request.Query qualified as Query
 import Okapi.Record.Data qualified as Data
 import Okapi.Record.Failure qualified as Error
 import Okapi.Record.Result qualified as Result
-import Okapi.Record.Tree (Request (..))
-import Okapi.Record.Tree qualified as Tree
 import Okapi.Tree (SymTree)
 
-request :: Tree.Request HTTP.Method [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-request =
+-- | Codecs for every part of an HTTP request.
+data Request method path query headers body = Request
+    { method  :: Method.Method method
+    , path    :: SymTree Path path
+    , query   :: SymTree Query query
+    , headers :: SymTree RequestHeaders headers
+    , body    :: RequestBody body
+    }
+
+req :: Request Types.Method [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+req =
     Request
         { method = Method.raw
         , path = Path.raw
@@ -56,65 +91,65 @@ request =
         , body = Body.raw
         }
 
-requestGET :: Tree.Request GET [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestGET = request{method = Method.method GET}
+reqGET :: Request GET [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqGET = req{method = Method.method GET}
 
-requestPOST :: Tree.Request POST [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestPOST = request{method = Method.method POST}
+reqPOST :: Request POST [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqPOST = req{method = Method.method POST}
 
-requestPUT :: Tree.Request PUT [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestPUT = request{method = Method.method PUT}
+reqPUT :: Request PUT [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqPUT = req{method = Method.method PUT}
 
-requestDELETE :: Tree.Request DELETE [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestDELETE = request{method = Method.method DELETE}
+reqDELETE :: Request DELETE [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqDELETE = req{method = Method.method DELETE}
 
-requestPATCH :: Tree.Request PATCH [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestPATCH = request{method = Method.method PATCH}
+reqPATCH :: Request PATCH [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqPATCH = req{method = Method.method PATCH}
 
-requestHEAD :: Tree.Request HEAD [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestHEAD = request{method = Method.method HEAD}
+reqHEAD :: Request HEAD [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqHEAD = req{method = Method.method HEAD}
 
-requestOPTIONS :: Tree.Request OPTIONS [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestOPTIONS = request{method = Method.method OPTIONS}
+reqOPTIONS :: Request OPTIONS [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqOPTIONS = req{method = Method.method OPTIONS}
 
-requestCONNECT :: Tree.Request CONNECT [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestCONNECT = request{method = Method.method CONNECT}
+reqCONNECT :: Request CONNECT [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqCONNECT = req{method = Method.method CONNECT}
 
-requestTRACE :: Tree.Request TRACE [Text] HTTP.Query HTTP.RequestHeaders (IO LBS.ByteString)
-requestTRACE = request{method = Method.method TRACE}
+reqTRACE :: Request TRACE [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+reqTRACE = req{method = Method.method TRACE}
 
 method ::
     KnownMethod m ->
-    Tree.Request HTTP.Method path query headers body ->
-    Tree.Request (KnownMethod m) path query headers body
+    Request Types.Method path query headers body ->
+    Request (KnownMethod m) path query headers body
 method km r = r{method = Method.method km}
 
 path ::
     SymTree Path path ->
-    Tree.Request method [Text] query headers body ->
-    Tree.Request method path query headers body
+    Request method [Text] query headers body ->
+    Request method path query headers body
 path c r = r{path = c}
 
 query ::
     SymTree Query query ->
-    Tree.Request method path HTTP.Query headers body ->
-    Tree.Request method path query headers body
+    Request method path Types.Query headers body ->
+    Request method path query headers body
 query c r = r{query = c}
 
 headers ::
-    SymTree Headers headers ->
-    Tree.Request method path query HTTP.RequestHeaders body ->
-    Tree.Request method path query headers body
+    SymTree RequestHeaders headers ->
+    Request method path query Types.RequestHeaders body ->
+    Request method path query headers body
 headers c r = r{headers = c}
 
 body ::
-    Body body ->
-    Tree.Request method path query headers (IO LBS.ByteString) ->
-    Tree.Request method path query headers body
+    RequestBody body ->
+    Request method path query headers (IO LBS.ByteString) ->
+    Request method path query headers body
 body c r = r{body = c}
 
 parser ::
-    Tree.Request method path query headers body ->
+    Request method path query headers body ->
     Wai.Request ->
     IO (Either (Error.Request method path query headers body) (Data.Request method path query headers body))
 parser req waiReq = do
@@ -138,7 +173,7 @@ parser req waiReq = do
                     }
 
 parser' ::
-    Tree.Request method path query headers body ->
+    Request method path query headers body ->
     Wai.Request ->
     IO (Result.Request method path query headers body)
 parser' req waiReq = do
@@ -158,7 +193,7 @@ parser' req waiReq = do
             }
 
 printer ::
-    Tree.Request method path query headers body ->
+    Request method path query headers body ->
     Data.Request method path query headers body ->
     IO Wai.Request
 printer req rv = do
@@ -174,6 +209,6 @@ printer req rv = do
                 { Wai.requestMethod = Method.print req.method rv.method
                 , Wai.pathInfo = Path.printer req.path rv.path
                 , Wai.queryString = Query.printer req.query rv.query
-                , Wai.requestHeaders = Headers.coalesceCookies (Headers.printer req.headers rv.headers)
+                , Wai.requestHeaders = coalesceCookies (Headers.printer req.headers rv.headers)
                 }
     pure (Wai.setRequestBodyChunks streamBody baseReq)

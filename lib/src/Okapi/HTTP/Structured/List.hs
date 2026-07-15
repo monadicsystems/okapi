@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.RFC9651.List (
+module Okapi.HTTP.Structured.List (
     List,
     parser,
     printer,
@@ -22,31 +22,31 @@ import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
 import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Okapi.HTTP.RFC9651.BareItem (BareItem, parseInnerToList, renderInner)
-import Okapi.HTTP.RFC9651.Item (Item)
-import Okapi.HTTP.RFC9651.Item qualified as Item
-import Okapi.HTTP.RFC9651.Parameters (Parameters)
-import Okapi.HTTP.RFC9651.Parameters qualified as Parameters
-import Okapi.HTTP.RFC9651.Scan (strip, firstAndTail, firstTop, splitTop)
+import Okapi.HTTP.Structured.BareItem (BareItem, parseInnerToList, renderInner)
+import Okapi.HTTP.Structured.Item (Item)
+import Okapi.HTTP.Structured.Item qualified as Item
+import Okapi.HTTP.Structured.Parameters (Parameters)
+import Okapi.HTTP.Structured.Parameters qualified as Parameters
+import Okapi.HTTP.Structured.Scan (strip, firstAndTail, firstTop, splitTop)
 
 -- $setup
 -- >>> import Okapi.Tree (Leaf, printParse, integer, text, (=.))
--- >>> import Okapi.HTTP.RFC9651.Item qualified as Item
--- >>> import Okapi.HTTP.RFC9651.Parameters qualified as Parameters
--- >>> import Okapi.HTTP.RFC9651.BareItem (BareItem)
+-- >>> import Okapi.HTTP.Structured.Item qualified as Item
+-- >>> import Okapi.HTTP.Structured.Parameters qualified as Parameters
+-- >>> import Okapi.HTTP.Structured.BareItem (BareItem)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Data.Text (Text)
 -- >>> import Test.QuickCheck.Instances ()
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type List :: Type -> Type
-data List a where
-    ListItem    :: Tree Item a a -> List a
-    InnerList   :: Leaf BareItem a -> List [a]
-    InnerListOf :: Tree InnerItems a a -> Tree Parameters p p -> List (a, p)
-    Items       :: Tree Item a a -> List [a]
-    Raw         :: List ByteString
+type List :: Type -> Type -> Type
+data List i o where
+    ListItem    :: Tree Item a a -> List a a
+    InnerList   :: Leaf BareItem a -> List [a] [a]
+    InnerListOf :: Tree InnerItems a a -> Tree Parameters p p -> List (a, p) (a, p)
+    Items       :: Tree Item a a -> List [a] [a]
+    Raw         :: List ByteString ByteString
 
 type instance Context List = ByteString
 type instance Failure List = ParseError
@@ -56,15 +56,15 @@ type instance Failure List = ParseError
 --   /plus/ optional parameters), space-separated, and — per the grammar —
 --   never another inner list: there's no constructor for that here, so an
 --   inner list can't nest inside an inner list by construction, the same
---   way 'Okapi.HTTP.RFC9651.Item.Item' has no \"I am an inner list\" case
+--   way 'Okapi.HTTP.Structured.Item.Item' has no \"I am an inner list\" case
 --   either. Two shapes, mirroring 'item'\/'items' at the outer 'List'
 --   level exactly: 'innerItem' (heterogeneous, one hand-composable element
 --   at a time, for use with 'Okapi.Tree.Apply') and 'innerItems'
 --   (homogeneous, a whole run of same-typed items in one pass).
-type InnerItems :: Type -> Type
-data InnerItems a where
-    InnerListItem  :: Tree Item a a -> InnerItems a
-    InnerListItems :: Tree Item a a -> InnerItems [a]
+type InnerItems :: Type -> Type -> Type
+data InnerItems i o where
+    InnerListItem  :: Tree Item a a -> InnerItems a a
+    InnerListItems :: Tree Item a a -> InnerItems [a] [a]
 
 type instance Context InnerItems = ByteString
 type instance Failure InnerItems = ParseError
@@ -135,15 +135,15 @@ innerItems = Node . InnerListItems
 --   (parameters-capable, and\/or heterogeneous), rather than 'innerList''s
 --   bare-leaf-only shorthand — /and/, per RFC 9651 §3.1.1's @*parameters@
 --   after the closing paren, parameters on the inner list itself, exactly
---   like 'Okapi.HTTP.RFC9651.Item.item' takes a bare value /plus/ a
+--   like 'Okapi.HTTP.Structured.Item.item' takes a bare value /plus/ a
 --   parameters tree. Pass @pure ()@ for no list-level parameters. There's
 --   no way to nest an inner list inside this — 'InnerItems' only ever
---   holds 'Okapi.HTTP.RFC9651.Item.Item's, by construction, matching RFC
+--   holds 'Okapi.HTTP.Structured.Item.Item's, by construction, matching RFC
 --   9651 §3.1.1's restriction that inner lists can't nest. Requires the
 --   wrapped 'InnerItems' tree to fully consume the parenthesized content
 --   (too few or too many space-separated elements for what was asked for
 --   is a parse error, not silently ignored) — unrecognized trailing
---   parameters, like 'Okapi.HTTP.RFC9651.Item.item', become leftover
+--   parameters, like 'Okapi.HTTP.Structured.Item.item', become leftover
 --   rather than a hard error.
 --
 -- RFC 9651 §3.1.2 allows optional whitespace after each @;@ (@; a=1@ and
@@ -199,7 +199,7 @@ raw = Node Raw
 parser :: Tree List i o -> Parser List o
 parser = Tree.parser alg
   where
-    alg :: List a -> Parser List a
+    alg :: List i o -> Parser List o
     alg t s = case t of
         ListItem c      -> let (m, rest) = firstAndTail 44 (stripLeadingSep s)
                            in case fst (Item.parser c (strip m)) of
@@ -250,8 +250,8 @@ parser = Tree.parser alg
         -- empty segment is a stray, doubled, or trailing @,@ and is
         -- 'Nothing' (a real parse error) — except wholly empty input,
         -- which is the valid zero-item list. Mirrors
-        -- 'Okapi.HTTP.RFC9651.Parameters' and
-        -- 'Okapi.HTTP.RFC9651.Dictionary''s strict-separator treatment.
+        -- 'Okapi.HTTP.Structured.Parameters' and
+        -- 'Okapi.HTTP.Structured.Dictionary''s strict-separator treatment.
         members bs = case BS.stripPrefix ", " bs of
             Just rest -> checkSegs (splitTop 44 rest)
             Nothing
@@ -267,7 +267,7 @@ parser = Tree.parser alg
 printer :: Tree List i o -> Printer List i
 printer = Tree.printer alg
   where
-    alg :: List a -> Printer List a
+    alg :: List i o -> Printer List i
     alg (ListItem c)      a  = ", " <> Item.printer c a
     alg (InnerList vLeaf) xs = ", " <> renderInner vLeaf xs
     alg (InnerListOf c ps) (a, p) = ", (" <> fromMaybe content (BS.stripPrefix " " content) <> ")" <> Parameters.printer ps p
@@ -287,7 +287,7 @@ parseExact = Tree.parseExact parser
 innerParser :: Tree InnerItems i o -> Parser InnerItems o
 innerParser = Tree.parser alg
   where
-    alg :: InnerItems a -> Parser InnerItems a
+    alg :: InnerItems i o -> Parser InnerItems o
     alg t s = case t of
         InnerListItem c  -> case nextItem s of
             Nothing         -> (Left ParseError, s)
@@ -355,6 +355,6 @@ innerParser = Tree.parser alg
 innerPrinter :: Tree InnerItems i o -> Printer InnerItems i
 innerPrinter = Tree.printer alg
   where
-    alg :: InnerItems a -> Printer InnerItems a
+    alg :: InnerItems i o -> Printer InnerItems i
     alg (InnerListItem c)  a  = " " <> Item.printer c a
     alg (InnerListItems c) xs = BS.concat [" " <> Item.printer c x | x <- xs]

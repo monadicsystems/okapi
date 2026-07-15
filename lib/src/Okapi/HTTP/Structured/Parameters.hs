@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.RFC9651.Parameters (
+module Okapi.HTTP.Structured.Parameters (
     Parameters,
     parser,
     printer,
@@ -14,20 +14,27 @@ module Okapi.HTTP.RFC9651.Parameters (
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
-import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..), widen)
+import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Okapi.HTTP.RFC9651.BareItem (BareItem)
-import Okapi.HTTP.RFC9651.Scan (strip, firstTop, splitTop)
+import Okapi.HTTP.Structured.BareItem (BareItem)
+import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
 
 -- $setup
+-- >>> :set -XApplicativeDo
 -- >>> import Okapi.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
--- >>> import Okapi.HTTP.RFC9651.BareItem (BareItem, hasNonCanonicalInteger)
+-- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Test.QuickCheck.Instances ()
 -- >>> import Test.QuickCheck (Gen, (==>), arbitrary, discard, forAll, frequency)
 -- >>> let mixedParamInteger = frequency [(1, arbitrary), (3, printer (param "a" (integer :: Leaf BareItem Integer)) <$> (arbitrary :: Gen Integer))] :: Gen ByteString
 -- >>> let mixedFixedInteger = frequency [(1, arbitrary), (3, pure (printer (param_ "a" (integer :: Leaf BareItem Integer) 1) ()))] :: Gen ByteString
 -- >>> let mixedFlag = frequency [(1, arbitrary), (3, pure (printer (flag "a") ()))] :: Gen ByteString
+-- >>> :{
+-- let onCount = do
+--       flag "on"
+--       x <- param "n" (integer :: Leaf BareItem Integer)
+--       pure x
+-- :}
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -62,14 +69,14 @@ lookAndRemove bs k = case break ((== k) . fst) (paramEntries bs) of
     (_, [])              -> Nothing
     (before, e : after)  -> Just (snd e, reserialize (before ++ after))
 
-type Parameters :: Type -> Type
-data Parameters a where
-    Param  :: Key -> Leaf BareItem a -> Parameters a
-    Param' :: Key -> Leaf BareItem a -> Parameters (Maybe a)
-    Param_ :: Key -> Leaf BareItem a -> a -> Parameters ()
-    Flag   :: Key -> Parameters ()
-    Flag'  :: Key -> Parameters Bool
-    Raw    :: Parameters ByteString
+type Parameters :: Type -> Type -> Type
+data Parameters i o where
+    Param  :: Key -> Leaf BareItem a -> Parameters a a
+    Param' :: Key -> Leaf BareItem a -> Parameters (Maybe a) (Maybe a)
+    Param_ :: Key -> Leaf BareItem a -> a -> Parameters i ()
+    Flag   :: Key -> Parameters i ()
+    Flag'  :: Key -> Parameters Bool Bool
+    Raw    :: Parameters ByteString ByteString
 
 type instance Context Parameters = ByteString
 type instance Failure Parameters = ParseError
@@ -118,7 +125,7 @@ param' k vLeaf = Node (Param' k vLeaf)
 -- prop> printParse parser printer (param_ "a" (integer :: Leaf BareItem Integer) 1) ()
 -- prop> forAll mixedFixedInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (param_ "a" (integer :: Leaf BareItem Integer) 1) bs)
 param_ :: Key -> Leaf BareItem a -> a -> Tree Parameters i ()
-param_ k vLeaf x = widen (Node (Param_ k vLeaf x))
+param_ k vLeaf x = Node (Param_ k vLeaf x)
 
 -- | A boolean-valued parameter present with no value (bare @;a@) or absent
 --   entirely — either is accepted, and printing always emits the bare form.
@@ -130,7 +137,18 @@ param_ k vLeaf x = widen (Node (Param_ k vLeaf x))
 --
 -- prop> printParse parser printer (flag "a") ()
 -- prop> forAll mixedFlag (\bs -> parsePrintOr discard parser printer (flag "a") bs)
-flag :: Key -> Tree Parameters () ()
+--
+-- Composes directly with a value-producing sibling in the same @do@\/
+-- 'Applicative' block — no explicit alignment needed, since its own input
+-- is unconstrained (see 'onCount' in "$setup"):
+--
+-- >>> parser onCount ";on;n=5"
+-- (Right 5,"")
+-- >>> printer onCount 5
+-- ";on;n=5"
+--
+-- prop> printParse parser printer onCount (n :: Integer)
+flag :: Key -> Tree Parameters i ()
 flag = Node . Flag
 
 -- | Like 'flag', but observes whether the parameter was present as a 'Bool'
@@ -165,7 +183,7 @@ raw = Node Raw
 parser :: Tree Parameters i o -> Parser Parameters o
 parser = Tree.parser alg
   where
-    alg :: Parameters a -> Parser Parameters a
+    alg :: Parameters i o -> Parser Parameters o
     alg (Param key vLeaf) s = case lookAndRemove s key of
         Just (Just v, rest) -> case vLeaf.decode v of
             Left _  -> (Left ParseError, s)
@@ -193,12 +211,12 @@ parser = Tree.parser alg
 printer :: Tree Parameters i o -> Printer Parameters i
 printer = Tree.printer alg
   where
-    alg :: Parameters a -> Printer Parameters a
+    alg :: Parameters i o -> Printer Parameters i
     alg (Param key vLeaf)    v        = ";" <> key <> "=" <> vLeaf.encode v
     alg (Param' key vLeaf)   (Just v) = ";" <> key <> "=" <> vLeaf.encode v
     alg (Param' _ _)         Nothing  = ""
-    alg (Param_ key vLeaf x) ()       = ";" <> key <> "=" <> vLeaf.encode x
-    alg (Flag key)           ()       = ";" <> key
+    alg (Param_ key vLeaf x) _        = ";" <> key <> "=" <> vLeaf.encode x
+    alg (Flag key)           _        = ";" <> key
     alg (Flag' key)          True     = ";" <> key
     alg (Flag' _)            False    = ""
     alg Raw                  bs       = bs

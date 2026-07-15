@@ -1,10 +1,10 @@
 
-module Okapi.HTTP.Response.Attributes (
+module Okapi.HTTP.Headers.Attributes (
     Attributes,
     parser,
     printer,
-    attribute,
-    attribute',
+    attr,
+    attr',
     flag,
     flag',
     raw,
@@ -26,18 +26,25 @@ import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseHeader, toHeader)
 
 -- $setup
+-- >>> :set -XApplicativeDo
 -- >>> import Okapi.Tree ((=.), HasLeaf (..), printParse, parsePrint)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Data.ByteString qualified as BS
 -- >>> import Test.QuickCheck.Instances ()
+-- >>> :{
+-- let secureMaxAge = do
+--       flag "Secure"
+--       x <- maxAge
+--       pure x
+-- :}
 
-type Attributes :: Type -> Type
-data Attributes a where
-    Attr  :: ByteString -> Leaf Attributes a -> Attributes a
-    Attr' :: ByteString -> Leaf Attributes a -> Attributes (Maybe a)
-    Flag  :: ByteString -> Attributes ()
-    Flag' :: ByteString -> Attributes Bool
-    Raw   :: Attributes ByteString
+type Attributes :: Type -> Type -> Type
+data Attributes i o where
+    Attr  :: ByteString -> Leaf Attributes a -> Attributes a a
+    Attr' :: ByteString -> Leaf Attributes a -> Attributes (Maybe a) (Maybe a)
+    Flag  :: ByteString -> Attributes i ()
+    Flag' :: ByteString -> Attributes Bool Bool
+    Raw   :: Attributes ByteString ByteString
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -53,18 +60,18 @@ instance HasLeaf Attributes ByteString where leaf = Leaf Right id (Info "string"
 --   match removes the matched entry and re-serializes the rest as
 --   leftover — combining several attributes via 'Okapi.Tree.Apply'
 --   correctly shrinks leftover step by step, entry by entry.
-attribute :: ByteString -> Leaf Attributes a -> Tree Attributes a a
-attribute key vLeaf = Node (Attr key vLeaf)
+attr :: ByteString -> Leaf Attributes a -> Tree Attributes a a
+attr key vLeaf = Node (Attr key vLeaf)
 
 -- | An optional attribute — 'Nothing' when absent, printed as nothing.
 --
--- >>> parser (attribute' "Domain" (leaf @Attributes @ByteString)) "; Domain=example.com"
+-- >>> parser (attr' "Domain" (leaf @Attributes @ByteString)) "; Domain=example.com"
 -- (Right (Just "example.com"),"")
--- >>> parser (attribute' "Domain" (leaf @Attributes @ByteString)) ""
+-- >>> parser (attr' "Domain" (leaf @Attributes @ByteString)) ""
 -- (Right Nothing,"")
--- >>> printer (attribute' "Domain" (leaf @Attributes @ByteString)) (Just "example.com")
+-- >>> printer (attr' "Domain" (leaf @Attributes @ByteString)) (Just "example.com")
 -- "; Domain=example.com"
--- >>> printer (attribute' "Domain" (leaf @Attributes @ByteString)) Nothing
+-- >>> printer (attr' "Domain" (leaf @Attributes @ByteString)) Nothing
 -- ""
 --
 -- The @Attributes@ 'HasLeaf' instance for 'ByteString' is a raw, unescaped
@@ -75,9 +82,9 @@ attribute key vLeaf = Node (Attr key vLeaf)
 -- a new attribute boundary), so the law only holds for values that avoid
 -- those bytes:
 --
--- prop> \mbs -> printParse parser printer (attribute' "Domain" (leaf @Attributes @ByteString)) (fmap (BS.filter (\w -> w /= 9 && w /= 32 && w /= 59)) mbs)
-attribute' :: ByteString -> Leaf Attributes a -> Tree Attributes (Maybe a) (Maybe a)
-attribute' key vLeaf = Node (Attr' key vLeaf)
+-- prop> \mbs -> printParse parser printer (attr' "Domain" (leaf @Attributes @ByteString)) (fmap (BS.filter (\w -> w /= 9 && w /= 32 && w /= 59)) mbs)
+attr' :: ByteString -> Leaf Attributes a -> Tree Attributes (Maybe a) (Maybe a)
+attr' key vLeaf = Node (Attr' key vLeaf)
 
 -- | A boolean-valued attribute present with no value (bare @; a@) or
 --   absent entirely — either is accepted, and printing always emits the
@@ -89,7 +96,18 @@ attribute' key vLeaf = Node (Attr' key vLeaf)
 -- "; Secure"
 --
 -- prop> printParse parser printer (flag "Secure") ()
-flag :: ByteString -> Tree Attributes () ()
+--
+-- Composes directly with a value-producing sibling in the same @do@\/
+-- 'Applicative' block — no explicit alignment needed, since its own input
+-- is unconstrained (see 'secureMaxAge' in "$setup"):
+--
+-- >>> parser secureMaxAge "; Secure; Max-Age=100"
+-- (Right 100,"")
+-- >>> printer secureMaxAge 100
+-- "; Secure; Max-Age=100"
+--
+-- prop> printParse parser printer secureMaxAge (n :: Int)
+flag :: ByteString -> Tree Attributes i ()
 flag = Node . Flag
 
 -- | Like 'flag', but observes whether the attribute was present as a
@@ -127,7 +145,7 @@ raw = Node Raw
 --
 -- prop> printParse parser printer maxAge (n :: Int)
 maxAge :: Tree Attributes Int Int
-maxAge = attribute "Max-Age" (leaf @Attributes @Int)
+maxAge = attr "Max-Age" (leaf @Attributes @Int)
 
 -- |
 -- >>> parser domain "; Domain=example.com"
@@ -144,17 +162,17 @@ maxAge = attribute "Max-Age" (leaf @Attributes @Int)
 -- >>> printer both (100, "example.com")
 -- "; Max-Age=100; Domain=example.com"
 --
--- Same unescaped-value caveat as 'attribute'' — see there.
+-- Same unescaped-value caveat as 'attr'' — see there.
 --
 -- prop> \bs -> printParse parser printer domain (BS.filter (\w -> w /= 9 && w /= 32 && w /= 59) bs)
 domain :: Tree Attributes ByteString ByteString
-domain = attribute "Domain" (leaf @Attributes @ByteString)
+domain = attr "Domain" (leaf @Attributes @ByteString)
 
--- | Same unescaped-value caveat as 'attribute'' — see there.
+-- | Same unescaped-value caveat as 'attr'' — see there.
 --
 -- prop> \bs -> printParse parser printer path (BS.filter (\w -> w /= 9 && w /= 32 && w /= 59) bs)
 path :: Tree Attributes ByteString ByteString
-path = attribute "Path" (leaf @Attributes @ByteString)
+path = attr "Path" (leaf @Attributes @ByteString)
 
 -- |
 -- prop> printParse parser printer secure ()
@@ -169,7 +187,7 @@ httpOnly = flag "HttpOnly"
 parser :: Tree Attributes i o -> Parser Attributes o
 parser = Tree.parser alg
   where
-    alg :: Attributes a -> Parser Attributes a
+    alg :: Attributes i o -> Parser Attributes o
     alg (Attr key vLeaf) s = case lookAndRemove key s of
         Just (Just v, rest) -> case vLeaf.decode v of
             Left _  -> (Left ParseError, s)
@@ -192,11 +210,11 @@ parser = Tree.parser alg
 printer :: Tree Attributes i o -> Printer Attributes i
 printer = Tree.printer alg
   where
-    alg :: Attributes a -> Printer Attributes a
+    alg :: Attributes i o -> Printer Attributes i
     alg (Attr key vLeaf)  v        = "; " <> key <> "=" <> vLeaf.encode v
     alg (Attr' key vLeaf) (Just v) = "; " <> key <> "=" <> vLeaf.encode v
     alg (Attr' _ _)       Nothing  = ""
-    alg (Flag key)        ()       = "; " <> key
+    alg (Flag key)        _        = "; " <> key
     alg (Flag' key)       True     = "; " <> key
     alg (Flag' _)         False    = ""
     alg Raw               bs       = bs
@@ -204,7 +222,7 @@ printer = Tree.printer alg
 -- | Every well-formed 'Attributes' context is either empty or starts with
 --   the literal @"; "@ ('printer' always prefixes exactly that) — checked
 --   as a byte-for-byte prefix, not just a leading @;@, for the same reason
---   'Okapi.HTTP.RFC9651.Dictionary.memberEntries' does: a bare @;@ with no
+--   'Okapi.HTTP.Structured.Dictionary.memberEntries' does: a bare @;@ with no
 --   following space is never actually produced by 'printer', so accepting
 --   it here would let parsing succeed on bytes that don't reprint back to
 --   themselves. A match removes the matched entry and re-serializes the
@@ -221,7 +239,7 @@ lookAndRemove key bs = case BS.stripPrefix "; " bs of
   where
     -- Any empty segment (a stray, doubled, or trailing @;@) is a real
     -- parse error, not silently collapsed — mirrors
-    -- 'Okapi.HTTP.RFC9651.List' and 'Okapi.HTTP.RFC9651.Dictionary''s
+    -- 'Okapi.HTTP.Structured.List' and 'Okapi.HTTP.Structured.Dictionary''s
     -- strict-separator treatment. Original casing is kept here (only
     -- lowercased transiently for the 'break' comparison above) —
     -- reserializing a lowercased key would change the leftover's bytes

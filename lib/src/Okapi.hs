@@ -1,29 +1,49 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Okapi
     (
-      Forest (..)
+      Contract (..)
     , Shape
+    , Origin
+    , AnyResponse
+    , METHOD
+    , PATH
+    , QUERY
+    , HEADERS
+    , BODY
+    , RESPOND
+    , type (:&)
     , fn
-    , serve
-    , tryServe
-    , Server
+    , Function
     , Client
     , pattern Fn
 
-    , Route (..)
-    , Handle
-    , handle
+    , Endpoint (..)
+    , endpoint
+    , normalize
     , scope
-    , tryHandle
-    , dimapRoute
-    , routes
+    , route
+    , catchAll
+    , Handle (..)
+    , handle
+    , mount
+    , run
+    , toOpenApi
+    , endpoints
+    , Transformer (..)
+    , endpointsVia
+    , handles
 
-    , server
+    , Morph (..)
+    , morph
+
     , client
+    , clientVia
 
     , openApi
-    , endpointToOpenApi
+    , contractToOpenApi
+    , openApiVia
 
     , type (~>)
     , fetch
@@ -34,6 +54,7 @@ module Okapi
     , URI (..)
     , Link (..)
     , links
+    , linksVia
 
     , KnownMethod (..)
     , GET
@@ -41,7 +62,12 @@ module Okapi
     , PUT
     , DELETE
 
-    , KnownStatus
+    , KnownStatus (..)
+    , S200
+    , S201
+    , S204
+    , S404
+    , S500
 
     , ArrayStyle (..)
 
@@ -64,27 +90,45 @@ module Okapi
 
     , IsoJson
 
-    , request, requestGET, requestPOST, requestPUT, requestDELETE
-    , method, path, query, headers, body
+    , Request (..)
+    , req, reqGET, reqPOST, reqPUT, reqDELETE
+    , method, path, query
 
-    , response, response200, response201, response204, response404, response500
+    , Response (..)
+    , res, res200, res201, res204, res404, res500
 
-    , segment, segment_, segments
+    , seg, seg_, lit, segs
     , param, param', param_, flag, flag', list, list'
 
-    , field, field', field_, contentType, cookie, cookie'
-    , fieldRFC9651, fieldBareItem, fieldItem, fieldList, fieldDictionary
+    , attr, attr', secure, httpOnly
 
-    , attribute, attribute', secure, httpOnly
+    -- Header combinators. field/field'/field_/contentType/fieldStruct/
+    -- fieldBareItem/fieldItem/fieldList/fieldDict are one shared definition
+    -- (free in the phantom ForRequest/ForResponse tag from "Okapi.HTTP.Side")
+    -- -- they work unqualified in either a Request or a Response headers
+    -- block, resolved by ordinary type inference from context. cookie/
+    -- cookie' and setCookie are genuinely side-pinned (different names, no
+    -- collision either way), so they ride along here too.
+    , field, field', field_, contentType
+    , fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
+    , cookie, cookie'
+    , setCookie
+    , MediaType (..)
+
+    -- Body combinators. json/jsonValue/noContent are shared the same way;
+    -- form is request-only (pinned to Body ForRequest at its constructor).
+    , json, jsonValue, form, noContent
+    , None (..)
     ) where
 
-import Okapi.Mode.Forest (Forest (..), Shape)
-import Okapi.Mode.Server (Server, fn, type (~>), serve, tryServe, server)
-import Okapi.Mode.Route (Route (..), dimapRoute, routes)
-import Okapi.Handle (Handle, handle, scope, tryHandle)
-import Okapi.Mode.Client (Client, pattern Fn, ClientError (..), ClientSettings (..), fetch, clientFor, client)
-import Okapi.Mode.Link (URI (..), Link (..), links)
-import Okapi.Artifact.OpenApi (endpointToOpenApi, openApi)
+import Okapi.Mode.Contract (Contract (..), Shape)
+import Okapi.Mode.Shape (Origin, AnyResponse, METHOD, PATH, QUERY, HEADERS, BODY, RESPOND, type (:&))
+import Okapi.Mode.Function (Function, fn)
+import Okapi.Mode.Morph (Morph (..), morph)
+import Okapi.Mode.Endpoint (Endpoint (..), endpoint, normalize, scope, type (~>), route, catchAll, Handle (..), handle, mount, run, toOpenApi, endpoints, Transformer (..), endpointsVia, handles)
+import Okapi.Mode.Client (Client, pattern Fn, ClientError (..), ClientSettings (..), fetch, clientFor, client, clientVia)
+import Okapi.Mode.Link (URI (..), Link (..), links, linksVia)
+import Okapi.Artifact.OpenApi (contractToOpenApi, openApi, openApiVia)
 import Okapi.Tree
     ( SymTree
     , Leaf (..), Info (..), HasLeaf (..)
@@ -94,20 +138,26 @@ import Okapi.Tree
     , (=.)
     )
 import Okapi.HTTP.Request
-    ( request, requestGET, requestPOST, requestPUT, requestDELETE
-    , method, path, query, headers, body
+    ( Request (..)
+    , req, reqGET, reqPOST, reqPUT, reqDELETE
+    , method, path, query
     )
-import Okapi.HTTP.Request.Body (IsoJson)
+import Okapi.HTTP.Body (IsoJson, json, jsonValue, noContent, None (..))
 import Okapi.HTTP.Request.Method (DELETE, GET, KnownMethod (..), POST, PUT)
-import Okapi.HTTP.Request.Path (segment, segment_, segments)
+import Okapi.HTTP.Request.Path (seg, seg_, lit, segs)
 import Okapi.HTTP.Request.Query (ArrayStyle (..), param, param', param_, flag, flag', list, list')
-import Okapi.HTTP.Request.Headers
-    ( field, field', field_, contentType, cookie, cookie'
-    , fieldRFC9651, fieldBareItem, fieldItem, fieldList, fieldDictionary
-    )
+import Okapi.HTTP.Request.Body (form)
+import Okapi.HTTP.Request.Headers (cookie, cookie')
 import Okapi.HTTP.Response
-    ( response, response200, response201, response204, response404, response500
+    ( Response (..)
+    , res, res200, res201, res204, res404, res500
     )
-import Okapi.HTTP.Response.Status (KnownStatus)
+import Okapi.HTTP.Response.Headers (setCookie)
+import Okapi.HTTP.Response.Status (KnownStatus (..), S200, S201, S204, S404, S500)
 import Okapi.HTTP.Responses (Cases, Responses, getResponses, cases, parseResponses, printResponses)
-import Okapi.HTTP.Response.Attributes (attribute, attribute', secure, httpOnly)
+import Okapi.HTTP.Headers
+    ( field, field', field_, contentType
+    , fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
+    , MediaType (..)
+    )
+import Okapi.HTTP.Headers.Attributes (attr, attr', secure, httpOnly)

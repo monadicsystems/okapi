@@ -1,6 +1,12 @@
 
 module Okapi.HTTP.Response.Status (
-    KnownStatus,
+    KnownStatus (..),
+    S100, S101, S200, S201, S202, S203, S204, S205, S206,
+    S300, S301, S302, S303, S304, S305, S307, S308,
+    S400, S401, S402, S403, S404, S405, S406, S407, S408, S409,
+    S410, S411, S412, S413, S414, S415, S416, S417, S418,
+    S422, S428, S429, S431,
+    S500, S501, S502, S503, S504, S505, S511,
     SomeKnownStatus (..),
     Status (..),
     ParseError (..),
@@ -16,23 +22,72 @@ module Okapi.HTTP.Response.Status (
 import Data.Kind (Type)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (Nat, KnownNat, natVal)
-import Network.HTTP.Types qualified as HTTP
-import Okapi.Tree (Failure, Context)
+import Network.HTTP.Types qualified as Types
 import Prelude hiding (print)
 
 -- $setup
 -- >>> import Okapi.HTTP.Response.Status qualified as Status
--- >>> import Network.HTTP.Types qualified as HTTP
+-- >>> import Network.HTTP.Types qualified as Types
 -- >>> import Okapi.Tree (leafPrintParse, leafParsePrint)
 -- >>> import Test.QuickCheck.Instances ()
 
--- | Evidence that @s@ is a known, valid HTTP status code (every @statusNNN@
---   @http-types@ ships — see 'statusTable', not the full IANA registry) —
---   carries no runtime data of its own, since the code lives entirely in
---   the type. Constructed via the numeral literal itself: @200 ::
---   KnownStatus 200@, through the 'Num' instance below — @status 200@ reads
---   the same way a plain status-code literal would anywhere else.
-data KnownStatus (s :: Nat) = KnownStatus
+{- | Evidence that @s@ is a known, valid HTTP status code (every @statusNNN@
+  @http-types@ ships — see 'statusTable', not the full IANA registry). One
+  named constructor per recognized code, mirroring
+  "Okapi.HTTP.Request.Method"'s @KnownMethod@ exactly — carries no runtime
+  data of its own beyond which constructor was used. Also constructible via
+  the numeral literal itself: @200 :: KnownStatus 200@, through the 'Num'
+  instance below — @status 200@ reads the same way a plain status-code
+  literal would anywhere else; both routes produce the same value.
+-}
+data KnownStatus (s :: Nat) where
+    S100 :: KnownStatus 100
+    S101 :: KnownStatus 101
+    S200 :: KnownStatus 200
+    S201 :: KnownStatus 201
+    S202 :: KnownStatus 202
+    S203 :: KnownStatus 203
+    S204 :: KnownStatus 204
+    S205 :: KnownStatus 205
+    S206 :: KnownStatus 206
+    S300 :: KnownStatus 300
+    S301 :: KnownStatus 301
+    S302 :: KnownStatus 302
+    S303 :: KnownStatus 303
+    S304 :: KnownStatus 304
+    S305 :: KnownStatus 305
+    S307 :: KnownStatus 307
+    S308 :: KnownStatus 308
+    S400 :: KnownStatus 400
+    S401 :: KnownStatus 401
+    S402 :: KnownStatus 402
+    S403 :: KnownStatus 403
+    S404 :: KnownStatus 404
+    S405 :: KnownStatus 405
+    S406 :: KnownStatus 406
+    S407 :: KnownStatus 407
+    S408 :: KnownStatus 408
+    S409 :: KnownStatus 409
+    S410 :: KnownStatus 410
+    S411 :: KnownStatus 411
+    S412 :: KnownStatus 412
+    S413 :: KnownStatus 413
+    S414 :: KnownStatus 414
+    S415 :: KnownStatus 415
+    S416 :: KnownStatus 416
+    S417 :: KnownStatus 417
+    S418 :: KnownStatus 418
+    S422 :: KnownStatus 422
+    S428 :: KnownStatus 428
+    S429 :: KnownStatus 429
+    S431 :: KnownStatus 431
+    S500 :: KnownStatus 500
+    S501 :: KnownStatus 501
+    S502 :: KnownStatus 502
+    S503 :: KnownStatus 503
+    S504 :: KnownStatus 504
+    S505 :: KnownStatus 505
+    S511 :: KnownStatus 511
 
 -- | Every value of @KnownStatus s@ (for a fixed @s@) is the same value —
 --   there's only one, so this is trivially always 'True'.
@@ -60,423 +115,470 @@ instance KnownNat s => Show (KnownStatus s) where
 --   exists — the same guarantee the old one-GADT-constructor-per-code
 --   design had, without the 47 named constructors.
 instance Num (KnownStatus 100) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S100
+    _ + _ = S100
+    _ * _ = S100
     abs = id
-    signum _ = KnownStatus
+    signum _ = S100
     negate = id
 
 instance Num (KnownStatus 101) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S101
+    _ + _ = S101
+    _ * _ = S101
     abs = id
-    signum _ = KnownStatus
+    signum _ = S101
     negate = id
 
 instance Num (KnownStatus 200) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S200
+    _ + _ = S200
+    _ * _ = S200
     abs = id
-    signum _ = KnownStatus
+    signum _ = S200
     negate = id
 
 instance Num (KnownStatus 201) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S201
+    _ + _ = S201
+    _ * _ = S201
     abs = id
-    signum _ = KnownStatus
+    signum _ = S201
     negate = id
 
 instance Num (KnownStatus 202) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S202
+    _ + _ = S202
+    _ * _ = S202
     abs = id
-    signum _ = KnownStatus
+    signum _ = S202
     negate = id
 
 instance Num (KnownStatus 203) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S203
+    _ + _ = S203
+    _ * _ = S203
     abs = id
-    signum _ = KnownStatus
+    signum _ = S203
     negate = id
 
 instance Num (KnownStatus 204) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S204
+    _ + _ = S204
+    _ * _ = S204
     abs = id
-    signum _ = KnownStatus
+    signum _ = S204
     negate = id
 
 instance Num (KnownStatus 205) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S205
+    _ + _ = S205
+    _ * _ = S205
     abs = id
-    signum _ = KnownStatus
+    signum _ = S205
     negate = id
 
 instance Num (KnownStatus 206) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S206
+    _ + _ = S206
+    _ * _ = S206
     abs = id
-    signum _ = KnownStatus
+    signum _ = S206
     negate = id
 
 instance Num (KnownStatus 300) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S300
+    _ + _ = S300
+    _ * _ = S300
     abs = id
-    signum _ = KnownStatus
+    signum _ = S300
     negate = id
 
 instance Num (KnownStatus 301) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S301
+    _ + _ = S301
+    _ * _ = S301
     abs = id
-    signum _ = KnownStatus
+    signum _ = S301
     negate = id
 
 instance Num (KnownStatus 302) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S302
+    _ + _ = S302
+    _ * _ = S302
     abs = id
-    signum _ = KnownStatus
+    signum _ = S302
     negate = id
 
 instance Num (KnownStatus 303) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S303
+    _ + _ = S303
+    _ * _ = S303
     abs = id
-    signum _ = KnownStatus
+    signum _ = S303
     negate = id
 
 instance Num (KnownStatus 304) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S304
+    _ + _ = S304
+    _ * _ = S304
     abs = id
-    signum _ = KnownStatus
+    signum _ = S304
     negate = id
 
 instance Num (KnownStatus 305) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S305
+    _ + _ = S305
+    _ * _ = S305
     abs = id
-    signum _ = KnownStatus
+    signum _ = S305
     negate = id
 
 instance Num (KnownStatus 307) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S307
+    _ + _ = S307
+    _ * _ = S307
     abs = id
-    signum _ = KnownStatus
+    signum _ = S307
     negate = id
 
 instance Num (KnownStatus 308) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S308
+    _ + _ = S308
+    _ * _ = S308
     abs = id
-    signum _ = KnownStatus
+    signum _ = S308
     negate = id
 
 instance Num (KnownStatus 400) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S400
+    _ + _ = S400
+    _ * _ = S400
     abs = id
-    signum _ = KnownStatus
+    signum _ = S400
     negate = id
 
 instance Num (KnownStatus 401) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S401
+    _ + _ = S401
+    _ * _ = S401
     abs = id
-    signum _ = KnownStatus
+    signum _ = S401
     negate = id
 
 instance Num (KnownStatus 402) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S402
+    _ + _ = S402
+    _ * _ = S402
     abs = id
-    signum _ = KnownStatus
+    signum _ = S402
     negate = id
 
 instance Num (KnownStatus 403) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S403
+    _ + _ = S403
+    _ * _ = S403
     abs = id
-    signum _ = KnownStatus
+    signum _ = S403
     negate = id
 
 instance Num (KnownStatus 404) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S404
+    _ + _ = S404
+    _ * _ = S404
     abs = id
-    signum _ = KnownStatus
+    signum _ = S404
     negate = id
 
 instance Num (KnownStatus 405) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S405
+    _ + _ = S405
+    _ * _ = S405
     abs = id
-    signum _ = KnownStatus
+    signum _ = S405
     negate = id
 
 instance Num (KnownStatus 406) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S406
+    _ + _ = S406
+    _ * _ = S406
     abs = id
-    signum _ = KnownStatus
+    signum _ = S406
     negate = id
 
 instance Num (KnownStatus 407) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S407
+    _ + _ = S407
+    _ * _ = S407
     abs = id
-    signum _ = KnownStatus
+    signum _ = S407
     negate = id
 
 instance Num (KnownStatus 408) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S408
+    _ + _ = S408
+    _ * _ = S408
     abs = id
-    signum _ = KnownStatus
+    signum _ = S408
     negate = id
 
 instance Num (KnownStatus 409) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S409
+    _ + _ = S409
+    _ * _ = S409
     abs = id
-    signum _ = KnownStatus
+    signum _ = S409
     negate = id
 
 instance Num (KnownStatus 410) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S410
+    _ + _ = S410
+    _ * _ = S410
     abs = id
-    signum _ = KnownStatus
+    signum _ = S410
     negate = id
 
 instance Num (KnownStatus 411) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S411
+    _ + _ = S411
+    _ * _ = S411
     abs = id
-    signum _ = KnownStatus
+    signum _ = S411
     negate = id
 
 instance Num (KnownStatus 412) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S412
+    _ + _ = S412
+    _ * _ = S412
     abs = id
-    signum _ = KnownStatus
+    signum _ = S412
     negate = id
 
 instance Num (KnownStatus 413) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S413
+    _ + _ = S413
+    _ * _ = S413
     abs = id
-    signum _ = KnownStatus
+    signum _ = S413
     negate = id
 
 instance Num (KnownStatus 414) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S414
+    _ + _ = S414
+    _ * _ = S414
     abs = id
-    signum _ = KnownStatus
+    signum _ = S414
     negate = id
 
 instance Num (KnownStatus 415) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S415
+    _ + _ = S415
+    _ * _ = S415
     abs = id
-    signum _ = KnownStatus
+    signum _ = S415
     negate = id
 
 instance Num (KnownStatus 416) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S416
+    _ + _ = S416
+    _ * _ = S416
     abs = id
-    signum _ = KnownStatus
+    signum _ = S416
     negate = id
 
 instance Num (KnownStatus 417) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S417
+    _ + _ = S417
+    _ * _ = S417
     abs = id
-    signum _ = KnownStatus
+    signum _ = S417
     negate = id
 
 instance Num (KnownStatus 418) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S418
+    _ + _ = S418
+    _ * _ = S418
     abs = id
-    signum _ = KnownStatus
+    signum _ = S418
     negate = id
 
 instance Num (KnownStatus 422) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S422
+    _ + _ = S422
+    _ * _ = S422
     abs = id
-    signum _ = KnownStatus
+    signum _ = S422
     negate = id
 
 instance Num (KnownStatus 428) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S428
+    _ + _ = S428
+    _ * _ = S428
     abs = id
-    signum _ = KnownStatus
+    signum _ = S428
     negate = id
 
 instance Num (KnownStatus 429) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S429
+    _ + _ = S429
+    _ * _ = S429
     abs = id
-    signum _ = KnownStatus
+    signum _ = S429
     negate = id
 
 instance Num (KnownStatus 431) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S431
+    _ + _ = S431
+    _ * _ = S431
     abs = id
-    signum _ = KnownStatus
+    signum _ = S431
     negate = id
 
 instance Num (KnownStatus 500) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S500
+    _ + _ = S500
+    _ * _ = S500
     abs = id
-    signum _ = KnownStatus
+    signum _ = S500
     negate = id
 
 instance Num (KnownStatus 501) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S501
+    _ + _ = S501
+    _ * _ = S501
     abs = id
-    signum _ = KnownStatus
+    signum _ = S501
     negate = id
 
 instance Num (KnownStatus 502) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S502
+    _ + _ = S502
+    _ * _ = S502
     abs = id
-    signum _ = KnownStatus
+    signum _ = S502
     negate = id
 
 instance Num (KnownStatus 503) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S503
+    _ + _ = S503
+    _ * _ = S503
     abs = id
-    signum _ = KnownStatus
+    signum _ = S503
     negate = id
 
 instance Num (KnownStatus 504) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S504
+    _ + _ = S504
+    _ * _ = S504
     abs = id
-    signum _ = KnownStatus
+    signum _ = S504
     negate = id
 
 instance Num (KnownStatus 505) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S505
+    _ + _ = S505
+    _ * _ = S505
     abs = id
-    signum _ = KnownStatus
+    signum _ = S505
     negate = id
 
 instance Num (KnownStatus 511) where
-    fromInteger _ = KnownStatus
-    _ + _ = KnownStatus
-    _ * _ = KnownStatus
+    fromInteger _ = S511
+    _ + _ = S511
+    _ * _ = S511
     abs = id
-    signum _ = KnownStatus
+    signum _ = S511
     negate = id
+
+-- | Short type-level names for each recognized status code, mirroring
+--   "Okapi.HTTP.Request.Method"'s @GET@\/@POST@\/etc. type synonyms.
+type S100 = KnownStatus 100
+type S101 = KnownStatus 101
+type S200 = KnownStatus 200
+type S201 = KnownStatus 201
+type S202 = KnownStatus 202
+type S203 = KnownStatus 203
+type S204 = KnownStatus 204
+type S205 = KnownStatus 205
+type S206 = KnownStatus 206
+type S300 = KnownStatus 300
+type S301 = KnownStatus 301
+type S302 = KnownStatus 302
+type S303 = KnownStatus 303
+type S304 = KnownStatus 304
+type S305 = KnownStatus 305
+type S307 = KnownStatus 307
+type S308 = KnownStatus 308
+type S400 = KnownStatus 400
+type S401 = KnownStatus 401
+type S402 = KnownStatus 402
+type S403 = KnownStatus 403
+type S404 = KnownStatus 404
+type S405 = KnownStatus 405
+type S406 = KnownStatus 406
+type S407 = KnownStatus 407
+type S408 = KnownStatus 408
+type S409 = KnownStatus 409
+type S410 = KnownStatus 410
+type S411 = KnownStatus 411
+type S412 = KnownStatus 412
+type S413 = KnownStatus 413
+type S414 = KnownStatus 414
+type S415 = KnownStatus 415
+type S416 = KnownStatus 416
+type S417 = KnownStatus 417
+type S418 = KnownStatus 418
+type S422 = KnownStatus 422
+type S428 = KnownStatus 428
+type S429 = KnownStatus 429
+type S431 = KnownStatus 431
+type S500 = KnownStatus 500
+type S501 = KnownStatus 501
+type S502 = KnownStatus 502
+type S503 = KnownStatus 503
+type S504 = KnownStatus 504
+type S505 = KnownStatus 505
+type S511 = KnownStatus 511
 
 type Status :: Type -> Type
 data Status a where
-    Raw    :: Status HTTP.Status
+    Raw    :: Status Types.Status
     Status :: KnownNat s => KnownStatus s -> Status (KnownStatus s)
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance Context Status = HTTP.Status
-type instance Failure Status = ParseError
-
-parse :: Status status -> HTTP.Status -> Either ParseError status
+parse :: Status status -> Types.Status -> Either ParseError status
 parse Raw         s = Right s
 parse (Status ks) s
     | s == knownStatusToHTTP ks = Right ks
     | otherwise                 = Left ParseError
 
-print :: Status status -> status -> HTTP.Status
+print :: Status status -> status -> Types.Status
 print Raw         s  = s
 print (Status ks) _  = knownStatusToHTTP ks
 
 -- | Pass the raw HTTP status straight through, unconstrained.
 --
--- >>> parse raw (HTTP.mkStatus 200 "OK")
+-- >>> parse raw (Types.mkStatus 200 "OK")
 -- Right (Status {statusCode = 200, statusMessage = "OK"})
--- >>> Status.print raw (HTTP.mkStatus 200 "OK")
+-- >>> Status.print raw (Types.mkStatus 200 "OK")
 -- Status {statusCode = 200, statusMessage = "OK"}
 --
--- prop> \code msg -> leafPrintParse (parse raw) (Status.print raw) (HTTP.mkStatus code msg)
--- prop> \code msg -> leafParsePrint (parse raw) (Status.print raw) (HTTP.mkStatus code msg)
-raw :: Status HTTP.Status
+-- prop> \code msg -> leafPrintParse (parse raw) (Status.print raw) (Types.mkStatus code msg)
+-- prop> \code msg -> leafParsePrint (parse raw) (Status.print raw) (Types.mkStatus code msg)
+raw :: Status Types.Status
 raw = Raw
 
 -- | Match against a statically known HTTP status code. Standalone uses
 --   (like these examples) need the numeral literal annotated with its own
 --   type, since nothing else pins it — but wherever @status 200@ appears
 --   inside a signature that already says @KnownStatus 200@ (e.g.
---   'Okapi.HTTP.Response.response200'), it just works, no annotation
+--   'Okapi.HTTP.Response.res200'), it just works, no annotation
 --   needed, because the surrounding type does that job instead.
 --
--- >>> parse (status (200 :: KnownStatus 200)) HTTP.status200
+-- >>> parse (status (200 :: KnownStatus 200)) Types.status200
 -- Right 200
--- >>> parse (status (200 :: KnownStatus 200)) HTTP.status404
+-- >>> parse (status (200 :: KnownStatus 200)) Types.status404
 -- Left ParseError
 -- >>> Status.print (status (200 :: KnownStatus 200)) 200
 -- Status {statusCode = 200, statusMessage = "OK"}
@@ -484,71 +586,71 @@ status :: KnownNat s => KnownStatus s -> Status (KnownStatus s)
 status = Status
 
 -- | Every status code recognized here, paired with @http-types@'s own
---   pre-built 'HTTP.Status' value (so the reason phrase, e.g. @"OK"@,
+--   pre-built 'Types.Status' value (so the reason phrase, e.g. @"OK"@,
 --   @"Not Found"@, always matches @http-types@ exactly).
-statusTable :: [(Integer, HTTP.Status)]
+statusTable :: [(Integer, Types.Status)]
 statusTable =
-    [ (100, HTTP.status100)
-    , (101, HTTP.status101)
-    , (200, HTTP.status200)
-    , (201, HTTP.status201)
-    , (202, HTTP.status202)
-    , (203, HTTP.status203)
-    , (204, HTTP.status204)
-    , (205, HTTP.status205)
-    , (206, HTTP.status206)
-    , (300, HTTP.status300)
-    , (301, HTTP.status301)
-    , (302, HTTP.status302)
-    , (303, HTTP.status303)
-    , (304, HTTP.status304)
-    , (305, HTTP.status305)
-    , (307, HTTP.status307)
-    , (308, HTTP.status308)
-    , (400, HTTP.status400)
-    , (401, HTTP.status401)
-    , (402, HTTP.status402)
-    , (403, HTTP.status403)
-    , (404, HTTP.status404)
-    , (405, HTTP.status405)
-    , (406, HTTP.status406)
-    , (407, HTTP.status407)
-    , (408, HTTP.status408)
-    , (409, HTTP.status409)
-    , (410, HTTP.status410)
-    , (411, HTTP.status411)
-    , (412, HTTP.status412)
-    , (413, HTTP.status413)
-    , (414, HTTP.status414)
-    , (415, HTTP.status415)
-    , (416, HTTP.status416)
-    , (417, HTTP.status417)
-    , (418, HTTP.status418)
-    , (422, HTTP.status422)
-    , (428, HTTP.status428)
-    , (429, HTTP.status429)
-    , (431, HTTP.status431)
-    , (500, HTTP.status500)
-    , (501, HTTP.status501)
-    , (502, HTTP.status502)
-    , (503, HTTP.status503)
-    , (504, HTTP.status504)
-    , (505, HTTP.status505)
-    , (511, HTTP.status511)
+    [ (100, Types.status100)
+    , (101, Types.status101)
+    , (200, Types.status200)
+    , (201, Types.status201)
+    , (202, Types.status202)
+    , (203, Types.status203)
+    , (204, Types.status204)
+    , (205, Types.status205)
+    , (206, Types.status206)
+    , (300, Types.status300)
+    , (301, Types.status301)
+    , (302, Types.status302)
+    , (303, Types.status303)
+    , (304, Types.status304)
+    , (305, Types.status305)
+    , (307, Types.status307)
+    , (308, Types.status308)
+    , (400, Types.status400)
+    , (401, Types.status401)
+    , (402, Types.status402)
+    , (403, Types.status403)
+    , (404, Types.status404)
+    , (405, Types.status405)
+    , (406, Types.status406)
+    , (407, Types.status407)
+    , (408, Types.status408)
+    , (409, Types.status409)
+    , (410, Types.status410)
+    , (411, Types.status411)
+    , (412, Types.status412)
+    , (413, Types.status413)
+    , (414, Types.status414)
+    , (415, Types.status415)
+    , (416, Types.status416)
+    , (417, Types.status417)
+    , (418, Types.status418)
+    , (422, Types.status422)
+    , (428, Types.status428)
+    , (429, Types.status429)
+    , (431, Types.status431)
+    , (500, Types.status500)
+    , (501, Types.status501)
+    , (502, Types.status502)
+    , (503, Types.status503)
+    , (504, Types.status504)
+    , (505, Types.status505)
+    , (511, Types.status511)
     ]
 
 -- | 'error's on a code outside 'statusTable' — every 'KnownStatus' actually
 --   constructed through ordinary use (a numeral literal matching a real
 --   status code) is always in range; this only matters for a
 --   deliberately-contrived mismatched literal\/type-annotation pair.
-knownStatusToHTTP :: forall s. KnownNat s => KnownStatus s -> HTTP.Status
+knownStatusToHTTP :: forall s. KnownNat s => KnownStatus s -> Types.Status
 knownStatusToHTTP _ = case lookup code statusTable of
     Just s  -> s
     Nothing -> error ("KnownStatus: " <> show code <> " is not a recognized status code")
   where
     code = natVal (Proxy @s)
 
-extractStatus :: KnownNat s => Status (KnownStatus s) -> HTTP.Status
+extractStatus :: KnownNat s => Status (KnownStatus s) -> Types.Status
 extractStatus (Status ks) = knownStatusToHTTP ks
 
 -- | A 'KnownStatus' with its code hidden — lets every known status be

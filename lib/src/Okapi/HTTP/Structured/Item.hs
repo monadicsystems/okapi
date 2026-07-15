@@ -1,11 +1,11 @@
 
-module Okapi.HTTP.RFC9651.Item (
+module Okapi.HTTP.Structured.Item (
     Item,
     parser,
     printer,
     parseExact,
     bareItem,
-    bareItemEq,
+    bareItem_,
     item,
     params,
     raw,
@@ -16,15 +16,16 @@ import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..), (=.))
 import Okapi.Tree qualified as Tree
-import Okapi.HTTP.RFC9651.BareItem (BareItem)
-import Okapi.HTTP.RFC9651.Parameters (Parameters)
-import Okapi.HTTP.RFC9651.Parameters qualified as Parameters
-import Okapi.HTTP.RFC9651.Scan (strip, firstAndTail)
+import Okapi.HTTP.Structured.BareItem (BareItem)
+import Okapi.HTTP.Structured.Parameters (Parameters)
+import Okapi.HTTP.Structured.Parameters qualified as Parameters
+import Okapi.HTTP.Structured.Scan (strip, firstAndTail)
 
 -- $setup
+-- >>> :set -XApplicativeDo
 -- >>> import Okapi.Tree (Leaf, printParse, parsePrintOr, integer, text, bool, (=.))
--- >>> import Okapi.HTTP.RFC9651.Parameters qualified as Parameters
--- >>> import Okapi.HTTP.RFC9651.BareItem (BareItem, hasNonCanonicalInteger)
+-- >>> import Okapi.HTTP.Structured.Parameters qualified as Parameters
+-- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
 -- >>> import Data.Text (Text)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Data.ByteString.Char8 qualified as BS8
@@ -33,15 +34,21 @@ import Okapi.HTTP.RFC9651.Scan (strip, firstAndTail)
 -- >>> let mixedInteger = frequency [(1, arbitrary), (3, BS8.pack . show <$> (arbitrary :: Gen Integer))] :: Gen ByteString
 -- >>> let mixedItemBytes = frequency [(1, arbitrary), (3, printer (item (integer :: Leaf BareItem Integer) (Parameters.param "foo" (text :: Leaf BareItem Text))) <$> (arbitrary :: Gen (Integer, Text)))] :: Gen ByteString
 -- >>> let mixedParamsBytes = frequency [(1, arbitrary), (3, printer (params (Parameters.param "a" (integer :: Leaf BareItem Integer))) <$> (arbitrary :: Gen Integer))] :: Gen ByteString
+-- >>> :{
+-- let taggedParam = do
+--       bareItem_ "42"
+--       x <- params (Parameters.param "a" (integer :: Leaf BareItem Integer))
+--       pure x
+-- :}
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type Item :: Type -> Type
-data Item a where
-    Bare   :: Leaf BareItem a -> Item a
-    BareEq :: ByteString -> Item ()
-    Params :: Tree Parameters p p -> Item p
-    Raw    :: Item ByteString
+type Item :: Type -> Type -> Type
+data Item i o where
+    Bare   :: Leaf BareItem a -> Item a a
+    BareEq :: ByteString -> Item i ()
+    Params :: Tree Parameters p p -> Item p p
+    Raw    :: Item ByteString ByteString
 
 type instance Context Item = ByteString
 type instance Failure Item = ParseError
@@ -59,14 +66,27 @@ bareItem :: Leaf BareItem a -> Tree Item a a
 bareItem = Node . Bare
 
 -- |
--- >>> parser (bareItemEq "42") "42"
+-- >>> parser (bareItem_ "42") "42"
 -- (Right (),"")
--- >>> parser (bareItemEq "42") "43"
+-- >>> parser (bareItem_ "42") "43"
 -- (Left ParseError,"43")
--- >>> printer (bareItemEq "42") ()
+-- >>> printer (bareItem_ "42") ()
 -- "42"
-bareItemEq :: ByteString -> Tree Item () ()
-bareItemEq = Node . BareEq
+--
+-- Composes directly with a value-producing sibling in the same @do@\/
+-- 'Applicative' block — no explicit alignment needed, since its own input
+-- is unconstrained. Its natural sibling is 'params' (the same shape
+-- 'item' itself is built from, just with the bare value fixed instead of
+-- decoded — see 'taggedParam' in "$setup"):
+--
+-- >>> parser taggedParam "42;a=1"
+-- (Right 1,"")
+-- >>> printer taggedParam 1
+-- "42;a=1"
+--
+-- prop> printParse parser printer taggedParam (n :: Integer)
+bareItem_ :: ByteString -> Tree Item i ()
+bareItem_ = Node . BareEq
 
 -- | A bare item followed by parameters, e.g. the RFC 9651 shape
 --   @bare-item *parameters@ (§3.1) — @5;foo=\"bar\"@ is a bare integer @5@
@@ -125,7 +145,7 @@ raw = Node Raw
 parser :: Tree Item i o -> Parser Item o
 parser = Tree.parser alg
   where
-    alg :: Item a -> Parser Item a
+    alg :: Item i o -> Parser Item o
     alg (Bare vLeaf) s =
         let (bare, tl) = firstAndTail 59 s
         in case vLeaf.decode (strip bare) of
@@ -142,9 +162,9 @@ parser = Tree.parser alg
 printer :: Tree Item i o -> Printer Item i
 printer = Tree.printer alg
   where
-    alg :: Item a -> Printer Item a
+    alg :: Item i o -> Printer Item i
     alg (Bare vLeaf) v  = vLeaf.encode v
-    alg (BareEq c)   () = c
+    alg (BareEq c)   _  = c
     alg (Params c)   p  = Parameters.printer c p
     alg Raw          bs = bs
 

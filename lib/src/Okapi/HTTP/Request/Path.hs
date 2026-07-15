@@ -7,9 +7,10 @@ module Okapi.HTTP.Request.Path (
     parser,
     printer,
     parseExact,
-    segment_,
-    segment,
-    segments,
+    seg_,
+    lit,
+    seg,
+    segs,
     raw,
     LitF (..),
     GPath (..),
@@ -31,7 +32,7 @@ import Data.Text qualified as Text
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), widen)
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), text)
 import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
@@ -42,8 +43,8 @@ import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 -- >>> import GHC.Generics (Generic)
 -- >>> :{
 -- let twoSegs = do
---       n <- fst =. segment "n" int
---       m <- snd =. segment "m" int
+--       n <- fst =. seg "n" int
+--       m <- snd =. seg "m" int
 --       pure (n, m)
 -- :}
 --
@@ -51,11 +52,11 @@ import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 -- data Coords = Coords { coordX :: Int, coordY :: Int } deriving (Generic, Eq, Show)
 -- :}
 
-data Path a where
-    Seg_ :: Leaf Path a -> a -> Path ()
-    Seg  :: Text -> Leaf Path a -> Path a
-    Segs :: Leaf Path a -> Path (NonEmpty a)
-    Raw  :: Path [Text]
+data Path i o where
+    Seg_ :: Leaf Path a -> a -> Path i ()
+    Seg  :: Text -> Leaf Path a -> Path a a
+    Segs :: Leaf Path a -> Path (NonEmpty a) (NonEmpty a)
+    Raw  :: Path [Text] [Text]
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -66,7 +67,7 @@ type instance Piece  Path = Text
 parser :: Tree Path i o -> Parser Path o
 parser = Tree.parser alg
   where
-    alg :: Path a -> Parser Path a
+    alg :: Path i o -> Parser Path o
     alg (Seg_ vLeaf x) (t : ts)
         | t == vLeaf.encode x = (Right (), ts)
         | otherwise            = (Left ParseError, t : ts)
@@ -87,8 +88,8 @@ parser = Tree.parser alg
 printer :: Tree Path i o -> Printer Path i
 printer = Tree.printer alg
   where
-    alg :: Path a -> Printer Path a
-    alg (Seg_ vLeaf x) () = [vLeaf.encode x]
+    alg :: Path i o -> Printer Path i
+    alg (Seg_ vLeaf x) _  = [vLeaf.encode x]
     alg (Seg _name vLeaf) v = [vLeaf.encode v]
     alg (Segs vLeaf) nel = map vLeaf.encode (NEL.toList nel)
     alg Raw ts = ts
@@ -97,47 +98,58 @@ printer = Tree.printer alg
 --   the leftover segments if any remain, 'Left' with the underlying error
 --   if parsing itself failed.
 --
--- >>> parseExact (segment "id" int) ["42"]
+-- >>> parseExact (seg "id" int) ["42"]
 -- Right 42
--- >>> parseExact (segment "id" int) ["42", "extra"]
+-- >>> parseExact (seg "id" int) ["42", "extra"]
 -- Left (Right ["extra"])
--- >>> parseExact (segment "id" int) ["nope"]
+-- >>> parseExact (seg "id" int) ["nope"]
 -- Left (Left ParseError)
 parseExact :: Tree Path i o -> [Text] -> Either (Either ParseError [Text]) o
 parseExact = Tree.parseExact parser
 
 -- | Match a fixed literal segment.
 --
--- >>> printer (segment_ int 42) ()
+-- >>> printer (seg_ int 42) ()
 -- ["42"]
--- >>> parser (segment_ int 42) ["42"]
+-- >>> parser (seg_ int 42) ["42"]
 -- (Right (),[])
--- >>> parser (segment_ int 42) ["99"]
+-- >>> parser (seg_ int 42) ["99"]
 -- (Left ParseError,["99"])
-segment_ :: Leaf Path a -> a -> Tree Path i ()
-segment_ vLeaf x = widen (Node (Seg_ vLeaf x))
+seg_ :: Leaf Path a -> a -> Tree Path i ()
+seg_ vLeaf x = Node (Seg_ vLeaf x)
+
+-- | Match a fixed literal text segment — the common case of 'seg_',
+--   specialized to 'Text' so callers don't have to spell out the leaf.
+--   @lit "user"@ is exactly @seg_ text "user"@.
+--
+-- >>> parser (lit "user") ["user"]
+-- (Right (),[])
+-- >>> printer (lit "user") ()
+-- ["user"]
+lit :: Text -> Tree Path i ()
+lit = seg_ text
 
 -- | Parse and print a single typed path segment.
 --
--- >>> printer (segment "id" int) (42 :: Int)
+-- >>> printer (seg "id" int) (42 :: Int)
 -- ["42"]
--- >>> parser (segment "id" int) ["42"]
+-- >>> parser (seg "id" int) ["42"]
 -- (Right 42,[])
--- >>> parser (segment "id" int) ["hello"]
+-- >>> parser (seg "id" int) ["hello"]
 -- (Left ParseError,["hello"])
--- >>> parser (segment "id" int) []
+-- >>> parser (seg "id" int) []
 -- (Left ParseError,[])
 --
--- prop> printParse parser printer (segment "n" int) (x :: Int)
--- prop> printParse parser printer (segment "n" integer) x
-segment :: Text -> Leaf Path a -> Tree Path a a
-segment name vLeaf = Node (Seg name vLeaf)
+-- prop> printParse parser printer (seg "n" int) (x :: Int)
+-- prop> printParse parser printer (seg "n" integer) x
+seg :: Text -> Leaf Path a -> Tree Path a a
+seg name vLeaf = Node (Seg name vLeaf)
 
 -- | Parse and print all remaining path segments as a non-empty list.
 --
--- prop> printParse parser printer (segments int) (x :| xs)
-segments :: Leaf Path a -> Tree Path (NonEmpty a) (NonEmpty a)
-segments vLeaf = Node (Segs vLeaf)
+-- prop> printParse parser printer (segs int) (x :| xs)
+segs :: Leaf Path a -> Tree Path (NonEmpty a) (NonEmpty a)
+segs vLeaf = Node (Segs vLeaf)
 
 -- | Pass all remaining path segments straight through, unconstrained.
 --

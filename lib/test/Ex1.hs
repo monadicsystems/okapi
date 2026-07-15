@@ -6,7 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Ex1 where
+module Main where
 
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
@@ -14,10 +14,7 @@ import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Network.HTTP.Types qualified as HTTP
-import Okapi.HTTP.Request.Body (json)
-import Okapi.HTTP.Headers (MediaType(..))
-import Okapi.Record.Tree (Request (..))
+import Network.HTTP.Types qualified as Types
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Okapi.Record.Data qualified as Data
@@ -38,10 +35,10 @@ data InnerMessage = InnerMessage
     }
     deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-createMessageReq = requestPOST
+createMessageReq = reqPOST
     { path = do
-        segment_ text "v1"
-        segment_ text "messages"
+        seg_ text "v1"
+        seg_ text "messages"
         pure ()
     , headers = do
         contentType JSON
@@ -53,21 +50,29 @@ createMessageReq = requestPOST
     }
 
 data CreateMessageResponses f
-    = Created (f (KnownStatus 201) HTTP.ResponseHeaders (IO LBS.ByteString))
-    | Any (f HTTP.Status HTTP.ResponseHeaders (IO LBS.ByteString))
+    = Created (f (KnownStatus 201) Types.ResponseHeaders (IO LBS.ByteString))
+    | Any (f Types.Status Types.ResponseHeaders (IO LBS.ByteString))
     deriving (Generic, Cases)
 
-createMessageRes = response201
+createMessageRes = res201
 
-createMessageEndpoint = createMessageReq :-< cases @CreateMessageResponses
-    response201
-    response
+createMessageContract = createMessageReq :-< cases @CreateMessageResponses
+    res201
+    res
 
--- | Renders 'createMessageEndpoint' as an OpenAPI document — only needs the
---   'Forest' itself, no handler, so this is callable straight from the
+-- | Renders 'createMessageContract' as an OpenAPI document — only needs the
+--   'Contract' itself, no handler, so this is callable straight from the
 --   repl: @cabal repl okapi@, @:load test\/Ex1.hs@, then @printSchema@.
 printSchema :: IO ()
-printSchema = LBS8.putStrLn (Aeson.encode (endpointToOpenApi createMessageEndpoint))
+printSchema = LBS8.putStrLn (Aeson.encode (contractToOpenApi createMessageContract))
+
+-- | Entry point for @cabal run okapi-ex1@ — deliberately just the safe,
+--   no-network 'printSchema', not 'createMessage' (which fires a real
+--   request against the live Anthropic API using whatever credential
+--   'createMessageReq' is holding). Load this module in the repl instead
+--   (see 'createMessage'\'s haddock) to call that by hand.
+main :: IO ()
+main = printSchema
 
 anthropicSettings :: IO ClientSettings
 anthropicSettings = do
@@ -79,7 +84,7 @@ anthropicSettings = do
 --   @createMessage someRequestValue@.
 createMessage reqVal = do
     settings <- anthropicSettings
-    case clientFor settings createMessageEndpoint of
+    case clientFor settings createMessageContract of
         Fn f -> f reqVal
 
 lookAtResult :: Either ClientError (CreateMessageResponses Data.Response) -> IO ()

@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.RFC9651.Dictionary (
+module Okapi.HTTP.Structured.Dictionary (
     Dictionary,
     parser,
     printer,
@@ -17,15 +17,15 @@ import Data.Kind (Type)
 import Data.Word (Word8)
 import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
 import Okapi.Tree qualified as Tree
-import Okapi.HTTP.RFC9651.BareItem (BareItem, parseInnerToList, renderInner)
-import Okapi.HTTP.RFC9651.Item (Item)
-import Okapi.HTTP.RFC9651.Item qualified as Item
-import Okapi.HTTP.RFC9651.Scan (strip, splitTop)
+import Okapi.HTTP.Structured.BareItem (BareItem, parseInnerToList, renderInner)
+import Okapi.HTTP.Structured.Item (Item)
+import Okapi.HTTP.Structured.Item qualified as Item
+import Okapi.HTTP.Structured.Scan (strip, splitTop)
 
 -- $setup
 -- >>> import Okapi.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
--- >>> import Okapi.HTTP.RFC9651.Item qualified as Item
--- >>> import Okapi.HTTP.RFC9651.BareItem (BareItem, hasNonCanonicalInteger)
+-- >>> import Okapi.HTTP.Structured.Item qualified as Item
+-- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Test.QuickCheck.Instances ()
 -- >>> import Test.QuickCheck (Gen, (==>), arbitrary, discard, forAll, frequency)
@@ -95,20 +95,20 @@ lookAndRemove bs k = case break ((== k) . fst) (memberEntries bs) of
     (_, [])              -> Nothing
     (before, e : after)  -> Just (snd e, reserialize (before ++ after))
 
-type Dictionary :: Type -> Type
-data Dictionary a where
-    Member  :: Key -> Tree Item a a  -> Dictionary a
-    Member' :: Key -> Tree Item a a  -> Dictionary (Maybe a)
-    List    :: Key -> Leaf BareItem a -> Dictionary [a]
-    List'   :: Key -> Leaf BareItem a -> Dictionary (Maybe [a])
-    Raw     :: Dictionary ByteString
+type Dictionary :: Type -> Type -> Type
+data Dictionary i o where
+    Member  :: Key -> Tree Item a a  -> Dictionary a a
+    Member' :: Key -> Tree Item a a  -> Dictionary (Maybe a) (Maybe a)
+    List    :: Key -> Leaf BareItem a -> Dictionary [a] [a]
+    List'   :: Key -> Leaf BareItem a -> Dictionary (Maybe [a]) (Maybe [a])
+    Raw     :: Dictionary ByteString ByteString
 
 type instance Context Dictionary = ByteString
 type instance Failure Dictionary = ParseError
 
 -- | A required, named entry, e.g. the RFC 9651 Dictionary (§3.2) member
 --   @a@ in @, a=1, b=2@ (the internal, always-leading-separator
---   representation — see 'Okapi.HTTP.RFC9651.dictionary' for the
+--   representation — see 'Okapi.HTTP.Structured.dict' for the
 --   stripped, canonical top-level header-value form). A bare key with no
 --   value is treated as the boolean shorthand @a=?1@. A match removes the
 --   matched entry and re-serializes the rest as leftover — combining
@@ -180,7 +180,7 @@ raw = Node Raw
 parser :: Tree Dictionary i o -> Parser Dictionary o
 parser = Tree.parser alg
   where
-    alg :: Dictionary a -> Parser Dictionary a
+    alg :: Dictionary i o -> Parser Dictionary o
     alg (Member key c) s = case lookAndRemove s key of
         Just (Explicit v, rest) -> case fst (Item.parser c v) of
             Left _  -> (Left ParseError, s)
@@ -212,7 +212,7 @@ parser = Tree.parser alg
 printer :: Tree Dictionary i o -> Printer Dictionary i
 printer = Tree.printer alg
   where
-    alg :: Dictionary a -> Printer Dictionary a
+    alg :: Dictionary i o -> Printer Dictionary i
     alg (Member key c)      a         = ", " <> key <> "=" <> Item.printer c a
     alg (Member' key c)     (Just a)  = ", " <> key <> "=" <> Item.printer c a
     alg (Member' _ _)       Nothing   = ""

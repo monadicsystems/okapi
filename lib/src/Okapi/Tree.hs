@@ -27,7 +27,6 @@ module Okapi.Tree (
     SymTree,
     Tag (..),
     annotate,
-    widen,
     (=.),
     cost,
     parser,
@@ -61,13 +60,13 @@ import Data.UUID (UUID)
 
 -- ── Leaf ─────────────────────────────────────────────────────────────────────
 
-type Context :: (Type -> Type) -> Type
+type Context :: (Type -> Type -> Type) -> Type
 type family Context t
 
-type Failure :: (Type -> Type) -> Type
+type Failure :: (Type -> Type -> Type) -> Type
 type family Failure t
 
-type Piece :: (Type -> Type) -> Type
+type Piece :: (Type -> Type -> Type) -> Type
 type family Piece t
 
 type Parser t a = Context t -> (Either (Failure t) a, Context t)
@@ -79,7 +78,7 @@ data Info = Info
     }
     deriving (Eq, Show)
 
-type Leaf :: (Type -> Type) -> Type -> Type
+type Leaf :: (Type -> Type -> Type) -> Type -> Type
 data Leaf t a = Leaf
     { decode :: Piece t -> Either (Failure t) a
     , encode :: a -> Piece t
@@ -136,13 +135,13 @@ uuid = leaf
 
 -- ── Tree ─────────────────────────────────────────────────────────────────────
 
-type Tree :: (Type -> Type) -> Type -> Type -> Type
+type Tree :: (Type -> Type -> Type) -> Type -> Type -> Type
 data Tree t i o where
     FMap     :: (o -> o') -> Tree t i o -> Tree t i o'
     LMap     :: (i -> i') -> Tree t i' o -> Tree t i o
     Pure     :: o -> Tree t i o
     Apply    :: Tree t i (o -> o') -> Tree t i o -> Tree t i o'
-    Node     :: t a -> Tree t a a
+    Node     :: t i o -> Tree t i o
     Annotate :: [Tag] -> Tree t i o -> Tree t i o
 
 -- | A symmetrical @Tree t i o@ where @i ~ o@.
@@ -154,7 +153,7 @@ type SymTree t a = Tree t a a
 --   allowed and merge order is left to whatever consumes them (last tag
 --   wins for singular fields, by convention — see
 --   'Okapi.Artifact.OpenApi'). 'Group' and 'Extension' are meaningful only
---   at the whole-contract level ('Okapi.Mode.Forest.annotate'), not here —
+--   at the whole-contract level ('Okapi.Mode.Contract.annotate'), not here —
 --   see there.
 data Tag
     = Description Text
@@ -170,7 +169,7 @@ data Tag
 --   instance (a single-context-cell integer leaf) — 'annotate'-wrapping a
 --   node changes neither direction of the round trip:
 --
--- >>> data ToyT a where TRaw :: ToyT Int
+-- >>> data ToyT i o where TRaw :: ToyT Int Int
 -- >>> type instance Context ToyT = [Int]
 -- >>> type instance Failure ToyT = ()
 -- >>> let toyParser = parser (\TRaw ctx -> case ctx of { (x : xs) -> (Right x, xs); [] -> (Left (), []) })
@@ -181,26 +180,11 @@ data Tag
 -- >>> parsePrint toyParser toyPrinter (annotate [Deprecated] toyTree) [5] == parsePrint toyParser toyPrinter toyTree [5]
 -- True
 --
--- (There's also 'Okapi.Mode.Forest.annotate', a separate function for
+-- (There's also 'Okapi.Mode.Contract.annotate', a separate function for
 -- annotating a whole @req :-> res@ contract rather than one 'Tree' node —
 -- qualify the import if both are needed in the same file.)
 annotate :: [Tag] -> Tree t i o -> Tree t i o
 annotate = Annotate
-
--- | A 'Tree' whose own input is already @()@ — i.e. it needs nothing from
---   the surrounding context, only ever checks something and contributes no
---   value of its own (e.g. a fixed-literal match) — can be widened to fit
---   /any/ context. Sound for exactly one reason: @()@ is terminal, so
---   @const ()@ is the only total function @i -> ()@ there is; nothing is
---   being invented or discarded that wasn't already unused. This is what
---   every @_@-suffixed \"matches a fixed value, contributes nothing\"
---   combinator (e.g. 'Okapi.HTTP.Request.Path.segment_',
---   'Okapi.HTTP.Request.Headers.field_') is built from, baked into the
---   combinator itself rather than applied at each call site — so two such
---   combinators (or one alongside an ordinary value-producing leaf) always
---   compose directly via 'Applicative'\/@do@, with no explicit alignment.
-widen :: Tree t () o -> Tree t i o
-widen = LMap (const ())
 
 instance Functor (Tree t i) where
     fmap = FMap
@@ -228,7 +212,7 @@ cost = \case
 
 parser ::
     forall t i o.
-    (forall a. t a -> Parser t a) ->
+    (forall i' o'. t i' o' -> Parser t o') ->
     Tree t i o ->
     Parser t o
 parser alg = go
@@ -263,7 +247,7 @@ parseExact p c ctx = case p c ctx of
 printer ::
     forall t i o.
     (Monoid (Context t)) =>
-    (forall a. t a -> Printer t a) ->
+    (forall i' o'. t i' o' -> Printer t i') ->
     Tree t i o ->
     Printer t i
 printer alg = go
@@ -290,7 +274,7 @@ printWith q c x extra = q c x <> extra
 --   parsing gives back the value with that trailing context untouched.
 --   Needs 'parseWith' to hold, which every parser in this codebase
 --   satisfies by construction (consume-a-prefix discipline) — and is the
---   same fact that makes 'Okapi.HTTP.Request.Headers.fieldRFC9651''s
+--   same fact that makes 'Okapi.HTTP.Request.Headers.fieldStruct''s
 --   "leave the unconsumed remainder under the same header name" trick safe.
 printParseWith ::
     (Eq a, Eq (Failure t), Eq (Context t), Monoid (Context t)) =>
@@ -368,7 +352,7 @@ parsePrint = parsePrintOr True
 --   families only diverge for a tree that actually contains 'Pure' —
 --   reachable by any consumer of this library via the public
 --   'Applicative' instance, not just code internal to this package.
-purify :: forall t i o. (forall a. t a -> a -> a) -> Tree t i o -> i -> o
+purify :: forall t i o. (forall i' o'. t i' o' -> i' -> o') -> Tree t i o -> i -> o
 purify witness = go
   where
     go :: forall i' o'. Tree t i' o' -> i' -> o'
@@ -387,7 +371,7 @@ purify witness = go
 --   tree: @purify witness c x == x@.
 printParseWeak ::
     (Eq o, Eq (Failure t), Eq (Context t), Monoid (Context t)) =>
-    (forall a. t a -> a -> a) ->
+    (forall i' o'. t i' o' -> i' -> o') ->
     (Tree t i o -> Parser t o) ->
     (Tree t i o -> Printer t i) ->
     Tree t i o -> i -> Bool
@@ -398,7 +382,7 @@ printParseWeak witness p q c i = p c (q c i) == (Right (purify witness c i), mem
 --   that @i@ (plus leftover) must reconstruct @ctx@.
 parsePrintWeak ::
     (Eq o, Eq (Context t), Monoid (Context t)) =>
-    (forall a. t a -> a -> a) ->
+    (forall i' o'. t i' o' -> i' -> o') ->
     (Tree t i o -> Parser t o) ->
     (Tree t i o -> Printer t i) ->
     Tree t i o -> i -> Context t -> Bool

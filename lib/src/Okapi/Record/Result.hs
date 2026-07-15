@@ -4,25 +4,25 @@
 module Okapi.Record.Result where
 
 import Okapi.Tree (Failure)
-import Okapi.HTTP.Request.Method (Method)
+import Okapi.HTTP.Request.Method qualified as Method
 import Okapi.HTTP.Request.Path (Path)
 import Okapi.HTTP.Request.Query (Query)
-import Okapi.HTTP.Request.Headers qualified as Request (Headers)
-import Okapi.HTTP.Request.Body qualified as Request (Body)
-import Okapi.HTTP.Response.Status (Status)
-import Okapi.HTTP.Response.Headers qualified as Response (Headers)
-import Okapi.HTTP.Response.Body qualified as Response (Body)
+import Okapi.HTTP.Request.Headers (RequestHeaders)
+import Okapi.HTTP.Request.Body qualified as ReqBody
+import Okapi.HTTP.Response.Status qualified as Status
+import Okapi.HTTP.Response.Headers (ResponseHeaders)
+import Okapi.HTTP.Response.Body qualified as ResBody
 
 data Request method path query headers body = Request
-    { method  :: Either (Failure Method) method
+    { method  :: Either Method.ParseError method
     , path    :: Either (Failure Path) path
     , query   :: Either (Failure Query) query
-    , headers :: Either (Failure Request.Headers) headers
-    , body    :: Either (Failure Request.Body) body
+    , headers :: Either (Failure RequestHeaders) headers
+    , body    :: Either ReqBody.ParseError body
     }
 
 data Response status headers body = Response
-    { status  :: Either (Failure Status) status
-    , headers :: Either (Failure Response.Headers) headers
-    , body    :: Either (Failure Response.Body) body
+    { status  :: Either Status.ParseError status
+    , headers :: Either (Failure ResponseHeaders) headers
+    , body    :: Either ResBody.ParseError body
     }

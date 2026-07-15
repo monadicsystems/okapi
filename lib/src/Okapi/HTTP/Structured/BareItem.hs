@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.RFC9651.BareItem (
+module Okapi.HTTP.Structured.BareItem (
     BareItem,
     hasNonCanonicalInteger,
     DisplayString (..),
@@ -18,6 +18,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.ByteString.Base64 qualified as B64
 import Data.ByteString.Char8 qualified as BS8
+import Data.Kind (Type)
 import Data.Scientific (FPFormat (Fixed), Scientific, formatScientific, toRealFloat)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8', decodeUtf8Lenient, encodeUtf8)
@@ -26,7 +27,7 @@ import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Word (Word8)
 import Numeric (showHex)
 import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
-import Okapi.HTTP.RFC9651.Scan (strip, firstTop, splitTop)
+import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
 
 -- $setup
 -- >>> import Okapi.Tree (Leaf (..), HasLeaf (..), leafPrintParse, leafParsePrint, leafParsePrintOr, leafPrintParsePrint, leafParsePrintParse, integer, bool, text, scientific, double, float, utcTime)
@@ -54,7 +55,8 @@ parseInnerBare m = case BS.uncons (strip m) of
         Nothing -> Nothing
     _ -> Nothing
 
-data BareItem a
+type BareItem :: Type -> Type -> Type
+data BareItem i o
 
 type instance Piece BareItem = ByteString
 type instance Failure BareItem = ParseError

@@ -21,13 +21,12 @@ module Okapi.HTTP.Request.Method (
 ) where
 
 import GHC.TypeLits (Symbol)
-import Network.HTTP.Types qualified as HTTP
-import Okapi.Tree (Failure, Context)
+import Network.HTTP.Types qualified as Types
 import Prelude hiding (print)
 
 -- $setup
 -- >>> import Okapi.HTTP.Request.Method qualified as Method
--- >>> import Network.HTTP.Types qualified as HTTP
+-- >>> import Network.HTTP.Types qualified as Types
 -- >>> import Okapi.Tree (leafPrintParse, leafParsePrint)
 -- >>> import Test.QuickCheck.Instances ()
 
@@ -56,23 +55,20 @@ type CONNECT = KnownMethod "CONNECT"
 type TRACE = KnownMethod "TRACE"
 
 data Method a where
-    Raw :: Method HTTP.Method
+    Raw :: Method Types.Method
     Method :: KnownMethod m -> Method (KnownMethod m)
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance Context Method = HTTP.Method
-type instance Failure Method = ParseError
-
-parse :: Method method -> HTTP.Method -> Either ParseError method
+parse :: Method method -> Types.Method -> Either ParseError method
 parse Raw m = Right m
 parse (Method km) m
-    | m == HTTP.renderStdMethod (knownMethodToStd km) = Right km
+    | m == Types.renderStdMethod (knownMethodToStd km) = Right km
     | otherwise = Left ParseError
 
-print :: Method method -> method -> HTTP.Method
+print :: Method method -> method -> Types.Method
 print Raw m = m
-print (Method km) _ = HTTP.renderStdMethod (knownMethodToStd km)
+print (Method km) _ = Types.renderStdMethod (knownMethodToStd km)
 
 -- | Pass the raw HTTP method straight through, unconstrained.
 --
@@ -81,9 +77,9 @@ print (Method km) _ = HTTP.renderStdMethod (knownMethodToStd km)
 -- >>> Method.print raw "PATCH"
 -- "PATCH"
 --
--- prop> leafPrintParse (parse raw) (Method.print raw) (m :: HTTP.Method)
--- prop> leafParsePrint (parse raw) (Method.print raw) (m :: HTTP.Method)
-raw :: Method HTTP.Method
+-- prop> leafPrintParse (parse raw) (Method.print raw) (m :: Types.Method)
+-- prop> leafParsePrint (parse raw) (Method.print raw) (m :: Types.Method)
+raw :: Method Types.Method
 raw = Raw
 
 -- | Match against a statically known HTTP method.
@@ -113,17 +109,17 @@ raw = Raw
 method :: KnownMethod m -> Method (KnownMethod m)
 method km = (Method km)
 
-knownMethodToStd :: KnownMethod m -> HTTP.StdMethod
-knownMethodToStd GET = HTTP.GET
-knownMethodToStd POST = HTTP.POST
-knownMethodToStd PUT = HTTP.PUT
-knownMethodToStd DELETE = HTTP.DELETE
-knownMethodToStd PATCH = HTTP.PATCH
-knownMethodToStd HEAD = HTTP.HEAD
-knownMethodToStd OPTIONS = HTTP.OPTIONS
-knownMethodToStd CONNECT = HTTP.CONNECT
-knownMethodToStd TRACE = HTTP.TRACE
+knownMethodToStd :: KnownMethod m -> Types.StdMethod
+knownMethodToStd GET = Types.GET
+knownMethodToStd POST = Types.POST
+knownMethodToStd PUT = Types.PUT
+knownMethodToStd DELETE = Types.DELETE
+knownMethodToStd PATCH = Types.PATCH
+knownMethodToStd HEAD = Types.HEAD
+knownMethodToStd OPTIONS = Types.OPTIONS
+knownMethodToStd CONNECT = Types.CONNECT
+knownMethodToStd TRACE = Types.TRACE
 
-extractMethod :: Method (KnownMethod m) -> HTTP.StdMethod
+extractMethod :: Method (KnownMethod m) -> Types.StdMethod
 extractMethod (Method km) = knownMethodToStd km
 

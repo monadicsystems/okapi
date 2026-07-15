@@ -19,7 +19,6 @@ import Data.Maybe (mapMaybe)
 import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Network.Wai qualified as Wai
-import Okapi.Record.Tree qualified as Tree
 import Okapi.Record.Failure    qualified as Error
 import Okapi.Record.Result   qualified as Result
 import Okapi.Record.Data    qualified as Data
@@ -27,15 +26,14 @@ import Okapi.HTTP.Response qualified as Res
 
 -- $setup
 -- >>> :set -XTypeApplications
--- >>> import Network.HTTP.Types qualified as HTTP
+-- >>> import Network.HTTP.Types qualified as Types
 -- >>> import Network.Wai qualified as Wai
 -- >>> import Data.ByteString.Lazy qualified as LBS
 -- >>> import GHC.Generics (Generic)
 -- >>> import Okapi.HTTP.Response qualified as Res
 -- >>> import Okapi.HTTP.Response.Status qualified as Status
--- >>> import Okapi.Record.Tree qualified as Tree
 -- >>> import Okapi.Record.Data qualified as Data
--- >>> data ExampleResponses f = ExOk (f (Status.KnownStatus 200) HTTP.ResponseHeaders (IO LBS.ByteString)) | ExNotFound (f (Status.KnownStatus 404) HTTP.ResponseHeaders (IO LBS.ByteString)) deriving Generic
+-- >>> data ExampleResponses f = ExOk (f (Status.KnownStatus 200) Types.ResponseHeaders (IO LBS.ByteString)) | ExNotFound (f (Status.KnownStatus 404) Types.ResponseHeaders (IO LBS.ByteString)) deriving Generic
 -- >>> instance Cases ExampleResponses
 
 newtype Responses
@@ -150,10 +148,10 @@ zipResponses k a b = gzip k (from a) (from b)
 class GConstruct (rep :: Type -> Type) where
     gConstruct ::
         forall (responses :: (Type -> Type -> Type -> Type) -> Type) res.
-        Generic (responses Tree.Response) =>
-        (rep () -> Rep (responses Tree.Response) ()) ->
-        (NonEmpty (responses Tree.Response) -> res) ->
-        GArgs Tree.Response rep res
+        Generic (responses Res.Response) =>
+        (rep () -> Rep (responses Res.Response) ()) ->
+        (NonEmpty (responses Res.Response) -> res) ->
+        GArgs Res.Response rep res
 
 instance GConstruct fi => GConstruct (D1 meta fi) where
     gConstruct inject cont = gConstruct (inject . M1) cont
@@ -161,7 +159,7 @@ instance GConstruct fi => GConstruct (D1 meta fi) where
 instance GConstruct fi => GConstruct (C1 meta fi) where
     gConstruct inject cont = gConstruct (inject . M1) cont
 
-instance GConstruct (S1 meta (Rec0 (Tree.Response status headers body))) where
+instance GConstruct (S1 meta (Rec0 (Res.Response status headers body))) where
     gConstruct inject cont codec = cont (to (inject (M1 (K1 codec))) :| [])
 
 instance (GConstruct fil, GConstruct fir) => GConstruct (fil :+: fir) where
@@ -180,21 +178,21 @@ instance {-# OVERLAPPABLE #-}
     gConstruct = error "unreachable: resolved via TypeError instance"
 
 class
-    ( Generic (responses Tree.Response)
+    ( Generic (responses Res.Response)
     , Generic (responses Result.Response)
     , Generic (responses Data.Response)
     , Generic (responses Error.Response)
-    , GConstruct (Rep (responses Tree.Response))
-    , GTraverse Tree.Response Result.Response
-        (Rep (responses Tree.Response)) (Rep (responses Result.Response))
+    , GConstruct (Rep (responses Res.Response))
+    , GTraverse Res.Response Result.Response
+        (Rep (responses Res.Response)) (Rep (responses Result.Response))
     , GTraverse Result.Response   Data.Response
         (Rep (responses Result.Response))   (Rep (responses Data.Response))
     , GTraverse Result.Response   Error.Response
         (Rep (responses Result.Response))   (Rep (responses Error.Response))
-    , GTraverse Tree.Response Tree.Response
-        (Rep (responses Tree.Response)) (Rep (responses Tree.Response))
-    , GZip Tree.Response Data.Response
-        (Rep (responses Tree.Response)) (Rep (responses Data.Response))
+    , GTraverse Res.Response Res.Response
+        (Rep (responses Res.Response)) (Rep (responses Res.Response))
+    , GZip Res.Response Data.Response
+        (Rep (responses Res.Response)) (Rep (responses Data.Response))
     ) =>
     Cases (responses :: (Type -> Type -> Type -> Type) -> Type)
 
@@ -202,18 +200,18 @@ cases ::
     forall (responses :: (Type -> Type -> Type -> Type) -> Type).
     Cases responses =>
     GArgs
-        Tree.Response
-        (Rep (responses Tree.Response))
-        (Responses Tree.Response responses)
+        Res.Response
+        (Rep (responses Res.Response))
+        (Responses Res.Response responses)
 cases =
     gConstruct
-        (id :: Rep (responses Tree.Response) () -> Rep (responses Tree.Response) ())
-        (Responses @Tree.Response @responses)
+        (id :: Rep (responses Res.Response) () -> Rep (responses Res.Response) ())
+        (Responses @Res.Response @responses)
 
 parseResponses ::
     forall responses.
     Cases responses =>
-    Responses Tree.Response responses ->
+    Responses Res.Response responses ->
     Wai.Response ->
     IO (Either (Responses Error.Response responses) (responses Data.Response))
 parseResponses (Responses cs) waiRes = do
@@ -222,7 +220,7 @@ parseResponses (Responses cs) waiRes = do
         (v : _) -> Right v
         []      -> Left (Responses (fmap toErrors rs))
   where
-    parseBranch :: responses Tree.Response -> IO (responses Result.Response)
+    parseBranch :: responses Res.Response -> IO (responses Result.Response)
     parseBranch = traverseResponses (\codec -> Res.parser' codec waiRes)
     toValue :: responses Result.Response -> Maybe (responses Data.Response)
     toValue = traverseResponses Res.resultToValue
@@ -241,17 +239,17 @@ parseResponses (Responses cs) waiRes = do
 --   here across every constructor of a small example type sharing one
 --   'cases'-built value, not just one:
 --
--- >>> let cs = cases @ExampleResponses Res.response200 Res.response404
+-- >>> let cs = cases @ExampleResponses Res.res200 Res.res404
 -- >>> r1 <- printResponses cs (ExOk (Data.Response { status = 200, headers = [], body = pure "hi" }))
--- >>> HTTP.statusCode (Wai.responseStatus r1)
+-- >>> Types.statusCode (Wai.responseStatus r1)
 -- 200
 -- >>> r2 <- printResponses cs (ExNotFound (Data.Response { status = 404, headers = [], body = pure "nope" }))
--- >>> HTTP.statusCode (Wai.responseStatus r2)
+-- >>> Types.statusCode (Wai.responseStatus r2)
 -- 404
 printResponses ::
     forall responses.
     Cases responses =>
-    Responses Tree.Response responses ->
+    Responses Res.Response responses ->
     responses Data.Response ->
     IO Wai.Response
 printResponses (Responses cs) rv =
