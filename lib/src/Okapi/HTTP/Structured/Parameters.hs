@@ -14,14 +14,14 @@ module Okapi.HTTP.Structured.Parameters (
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
-import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..))
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..))
+import Okapi.HTTP.Tree qualified as Tree
 import Okapi.HTTP.Structured.BareItem (BareItem)
 import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
+-- >>> import Okapi.HTTP.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
 -- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Test.QuickCheck.Instances ()
@@ -83,7 +83,7 @@ type instance Failure Parameters = ParseError
 
 -- | A required, named parameter, e.g. the @foo@ in @;foo=1@ (RFC 9651 §3.1.2).
 --   A match removes the matched entry and re-serializes the rest as
---   leftover — combining several 'param's via 'Okapi.Tree.Apply' correctly
+--   leftover — combining several 'param's via 'Okapi.HTTP.Tree.Apply' correctly
 --   shrinks leftover step by step, entry by entry.
 --
 -- >>> parser (param "a" (integer :: Leaf BareItem Integer)) ";a=1;b=2"

@@ -34,7 +34,7 @@ import Okapi.HTTP.Headers
     , field, field', field_, fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
     , contentType, cookie, cookie', derived
     )
-import Okapi.HTTP.Side (ForRequest)
+import Okapi.HTTP.Tree (ForRequest)
 
 type RequestHeaders = Headers ForRequest
 

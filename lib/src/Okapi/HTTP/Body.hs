@@ -2,8 +2,8 @@
 -- | The body codec shared by request and response bodies alike —
 --   'Okapi.HTTP.Request.Body.RequestBody' and
 --   'Okapi.HTTP.Response.Body.ResponseBody' are just type aliases for
---   @'Body' 'Okapi.HTTP.Side.ForRequest'@/@'Body' 'Okapi.HTTP.Side.ForResponse'@.
---   'json'\/'jsonValue'\/'noContent'\/'raw' are free in the phantom @ctx@ and
+--   @'Body' 'Okapi.HTTP.Tree.ForRequest'@/@'Body' 'Okapi.HTTP.Tree.ForResponse'@.
+--   'json'\/'jsonValue'\/'none'\/'raw' are free in the phantom @ctx@ and
 --   work unqualified for either side; only 'form' (request-only) is pinned
 --   to a specific side, right at its GADT constructor.
 module Okapi.HTTP.Body (
@@ -17,7 +17,7 @@ module Okapi.HTTP.Body (
     json,
     jsonValue,
     form,
-    noContent,
+    none,
 ) where
 
 import Data.Aeson qualified as Aeson
@@ -25,7 +25,7 @@ import Data.ByteString.Lazy qualified as LBS
 import Data.Kind (Type)
 import Data.OpenApi (ToSchema)
 import Web.FormUrlEncoded (FromForm, ToForm, urlDecodeAsForm, urlEncodeAsForm)
-import Okapi.HTTP.Side (ForRequest)
+import Okapi.HTTP.Tree (ForRequest)
 
 -- $setup
 -- >>> :set -XTypeApplications
@@ -33,16 +33,16 @@ import Okapi.HTTP.Side (ForRequest)
 
 type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 
--- | The value 'noContent' decodes\/encodes to — a dedicated singleton
+-- | The value 'none' decodes\/encodes to — a dedicated singleton
 --   rather than reusing @()@, so a no-body response reads as its own
 --   distinct thing rather than an incidental unit value.
 data None = None deriving (Eq, Show)
 
--- | Unlike the 'Okapi.Tree'-based DSLs, 'parser'\/'printer' here are
+-- | Unlike the 'Okapi.HTTP.Tree'-based DSLs, 'parser'\/'printer' here are
 --   IO-wrapped and monadic ('Context' itself is @IO LBS.ByteString@) —
 --   'parser' never synchronously fails (every case is a bare 'Right'; a
 --   real decode failure only surfaces later, as an IO exception, when the
---   returned action is actually run), so the pure 'Okapi.Tree' round-trip
+--   returned action is actually run), so the pure 'Okapi.HTTP.Tree' round-trip
 --   law vocabulary (@printParse@\/@parsePrint@, which compare 'Either'
 --   results directly) doesn't apply here. Concrete, executed @>>>@
 --   examples stand in for @prop>@ properties on this module. Named
@@ -136,11 +136,11 @@ form = Form
 
 -- | No body at all — parsing ignores the input, printing produces nothing.
 --
--- >>> r7 <- either (error . show) id (parser noContent (pure ""))
+-- >>> r7 <- either (error . show) id (parser none (pure ""))
 -- >>> r7
 -- None
--- >>> r8 <- printer noContent (pure None)
+-- >>> r8 <- printer none (pure None)
 -- >>> r8
 -- ""
-noContent :: Body ctx (IO None)
-noContent = NoContent
+none :: Body ctx (IO None)
+none = NoContent

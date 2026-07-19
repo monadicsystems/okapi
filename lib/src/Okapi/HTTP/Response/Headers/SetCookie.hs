@@ -1,6 +1,6 @@
 
-module Okapi.HTTP.Headers.Cookie (
-    Cookie,
+module Okapi.HTTP.Response.Headers.SetCookie (
+    SetCookie,
     ParseError (..),
 ) where
 
@@ -11,35 +11,35 @@ import Data.Kind (Type)
 import Data.Text (Text)
 import Data.Time (Day)
 import Data.UUID (UUID)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
+import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
 import Web.HttpApiData (parseHeader, toHeader)
 
-type Cookie :: Type -> Type -> Type
-data Cookie i o
+type SetCookie :: Type -> Type -> Type
+data SetCookie i o
 
 data ParseError = ParseError deriving (Eq, Show)
 
-type instance Piece Cookie = ByteString
-type instance Failure Cookie = ParseError
+type instance Piece SetCookie = ByteString
+type instance Failure SetCookie = ParseError
 
-instance HasLeaf Cookie Int where
+instance HasLeaf SetCookie Int where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "integer" Nothing)
-instance HasLeaf Cookie Int16 where
+instance HasLeaf SetCookie Int16 where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "integer" (Just "int32"))
-instance HasLeaf Cookie Int32 where
+instance HasLeaf SetCookie Int32 where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "integer" (Just "int32"))
-instance HasLeaf Cookie Int64 where
+instance HasLeaf SetCookie Int64 where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "integer" (Just "int64"))
-instance HasLeaf Cookie Integer where
+instance HasLeaf SetCookie Integer where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "integer" Nothing)
-instance HasLeaf Cookie Bool where
+instance HasLeaf SetCookie Bool where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "boolean" Nothing)
-instance HasLeaf Cookie Text where
+instance HasLeaf SetCookie Text where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "string" Nothing)
-instance HasLeaf Cookie UUID where
+instance HasLeaf SetCookie UUID where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "uuid"))
-instance HasLeaf Cookie Day where
+instance HasLeaf SetCookie Day where
     leaf = Leaf (first (const ParseError) . parseHeader) toHeader (Info "string" (Just "date"))
 
-instance HasLeaf Cookie ByteString where
+instance HasLeaf SetCookie ByteString where
     leaf = Leaf Right id (Info "string" Nothing)

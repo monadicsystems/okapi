@@ -14,8 +14,8 @@ module Okapi.HTTP.Structured.Item (
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
-import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..), (=.))
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..), (=.))
+import Okapi.HTTP.Tree qualified as Tree
 import Okapi.HTTP.Structured.BareItem (BareItem)
 import Okapi.HTTP.Structured.Parameters (Parameters)
 import Okapi.HTTP.Structured.Parameters qualified as Parameters
@@ -23,7 +23,7 @@ import Okapi.HTTP.Structured.Scan (strip, firstAndTail)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (Leaf, printParse, parsePrintOr, integer, text, bool, (=.))
+-- >>> import Okapi.HTTP.Tree (Leaf, printParse, parsePrintOr, integer, text, bool, (=.))
 -- >>> import Okapi.HTTP.Structured.Parameters qualified as Parameters
 -- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
 -- >>> import Data.Text (Text)

@@ -26,11 +26,11 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Word (Word8)
 import Numeric (showHex)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
+import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
 import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
 
 -- $setup
--- >>> import Okapi.Tree (Leaf (..), HasLeaf (..), leafPrintParse, leafParsePrint, leafParsePrintOr, leafPrintParsePrint, leafParsePrintParse, integer, bool, text, scientific, double, float, utcTime)
+-- >>> import Okapi.HTTP.Tree (Leaf (..), HasLeaf (..), leafPrintParse, leafParsePrint, leafParsePrintOr, leafPrintParsePrint, leafParsePrintParse, integer, bool, text, scientific, double, float, utcTime)
 -- >>> import Data.ByteString.Char8 qualified as BS8
 -- >>> import Data.Text (Text)
 -- >>> import Data.ByteString (ByteString)

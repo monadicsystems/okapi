@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Mode.Endpoint (
+module Okapi.Artifact.Endpoint (
     Endpoint (..),
     endpoint,
     normalize,
@@ -42,21 +42,20 @@ import Okapi.Artifact.OpenApi (contractToOpenApi)
 import Okapi.HTTP.Request qualified as Request
 import Okapi.HTTP.Response qualified as Response
 import Okapi.HTTP.Responses qualified as Responses
-import Okapi.Mode.Contract (Contract (..), Shape, stripTags)
-import Okapi.Mode.Function (Function (..))
-import Okapi.Mode.Morph (Morph (..))
+import Okapi.HTTP (HTTP (..), Shape, stripTags, Morph (..))
+import Okapi.Artifact.Function (Function (..))
 
 data Endpoint (n :: Type -> Type) shape = Endpoint
     { transform :: n ~> IO
     , middleware :: Wai.Middleware
-    , contract :: Contract shape
+    , contract :: HTTP shape
     , function :: Function n shape
     }
 
 -- | Positional alternative to record syntax for building an 'Endpoint' —
 --   @endpoint nt mw ct fn@ is the same value as @Endpoint { transform = nt,
 --   middleware = mw, contract = ct, function = fn }@.
-endpoint :: (n ~> IO) -> Wai.Middleware -> Contract shape -> Function n shape -> Endpoint n shape
+endpoint :: (n ~> IO) -> Wai.Middleware -> HTTP shape -> Function n shape -> Endpoint n shape
 endpoint = Endpoint
 
 type (~>) :: (Type -> Type) -> (Type -> Type) -> Type
@@ -171,7 +170,7 @@ catchAll _req respond = respond (Wai.responseLBS Types.status404 [] mempty)
   'mount' uniformly (e.g. @map mount handles@) while every entry still runs
   under its own scoped middleware — no parallel list of middlewares to keep
   in sync with @handles@. Build one with 'handle'; run it with 'mount';
-  recover its 'Contract' for documentation with 'toOpenApi'.
+  recover its 'HTTP' for documentation with 'toOpenApi'.
 -}
 data Handle where
     Handle :: Endpoint n shape -> Handle
@@ -194,7 +193,7 @@ mount (Handle ep) = route ep
 run :: [Handle] -> Wai.Middleware
 run = foldr (.) id . map mount
 
--- | Recover the 'Contract' inside a 'Handle' as an OpenAPI document —
+-- | Recover the 'HTTP' inside a 'Handle' as an OpenAPI document —
 --   ignores the middleware and handler entirely — so a whole @[Handle]@ can
 --   be turned into docs the same way it's turned into an app via 'mount'.
 toOpenApi :: Handle -> OpenApi
@@ -219,29 +218,29 @@ instance
 instance
     GEndpoint
         n
-        (S1 sm (Rec0 (Contract (Shape method path query headers body result))))
+        (S1 sm (Rec0 (HTTP (Shape method path query headers body result))))
         (S1 sm' (Rec0 (Function n (Shape method path query headers body result))))
         (S1 sm'' (Rec0 (Endpoint IO (Shape method path query headers body result))))
     where
     gEndpoint nt (M1 (K1 ct)) (M1 (K1 (Function act))) = M1 (K1 (Endpoint id id ct (Function (nt . act))))
 
 {- | Lets a field be a nested record of the same shape (@moreRoutes ::
-  MoreRoutes f@) instead of a concrete 'Contract'\/'Function'\/'Endpoint' —
+  MoreRoutes f@) instead of a concrete 'HTTP'\/'Function'\/'Endpoint' —
   recurses via 'endpoints' itself. Never overlaps the instance above: its
-  leaf pattern is @nested Contract@ (some record applied to 'Contract'
-  itself, kind @Type -> Type@) versus @Contract (Shape ...)@ ('Contract'
+  leaf pattern is @nested HTTP@ (some record applied to 'HTTP'
+  itself, kind @Type -> Type@) versus @HTTP (Shape ...)@ ('HTTP'
   applied to a concrete 'Shape', kind @Type@) — unifying the two would
-  require @Contract@ to have both kinds at once, which can't happen.
+  require @HTTP@ to have both kinds at once, which can't happen.
 -}
 instance
-    ( Generic (nested Contract)
+    ( Generic (nested HTTP)
     , Generic (nested (Function n))
     , Generic (nested (Endpoint IO))
-    , GEndpoint n (Rep (nested Contract)) (Rep (nested (Function n))) (Rep (nested (Endpoint IO)))
+    , GEndpoint n (Rep (nested HTTP)) (Rep (nested (Function n))) (Rep (nested (Endpoint IO)))
     ) =>
     GEndpoint
         n
-        (S1 sm (Rec0 (nested Contract)))
+        (S1 sm (Rec0 (nested HTTP)))
         (S1 sm' (Rec0 (nested (Function n))))
         (S1 sm'' (Rec0 (nested (Endpoint IO))))
     where
@@ -255,17 +254,17 @@ instance
 -}
 endpoints ::
     forall record n.
-    ( Generic (record Contract)
+    ( Generic (record HTTP)
     , Generic (record (Function n))
     , Generic (record (Endpoint IO))
-    , GEndpoint n (Rep (record Contract)) (Rep (record (Function n))) (Rep (record (Endpoint IO)))
+    , GEndpoint n (Rep (record HTTP)) (Rep (record (Function n))) (Rep (record (Endpoint IO)))
     ) =>
     (n ~> IO) ->
-    record Contract ->
+    record HTTP ->
     record (Function n) ->
     record (Endpoint IO)
 endpoints nt contracts handlers =
-    to (gEndpoint @n @(Rep (record Contract)) @(Rep (record (Function n))) nt (from contracts) (from handlers))
+    to (gEndpoint @n @(Rep (record HTTP)) @(Rep (record (Function n))) nt (from contracts) (from handlers))
 
 newtype Transformer n shape = Transformer (n ~> IO)
 
@@ -288,7 +287,7 @@ instance
 instance
     GEndpointVia
         (S1 sm (Rec0 (Transformer n (Shape method path query headers body result))))
-        (S1 sm' (Rec0 (Morph Contract n (Shape method path query headers body result))))
+        (S1 sm' (Rec0 (Morph HTTP n (Shape method path query headers body result))))
         (S1 sm'' (Rec0 (Function n (Shape method path query headers body result))))
         (S1 sm''' (Rec0 (Endpoint n (Shape method path query headers body result))))
     where
@@ -296,7 +295,7 @@ instance
         M1 (K1 (Endpoint nt id ct fn))
 
 {- | Lets a field be a nested record of the same shape instead of a
-  concrete 'Transformer'\/'Morph' 'Contract'\/'Function' triple — recurses
+  concrete 'Transformer'\/'Morph' 'HTTP'\/'Function' triple — recurses
   via 'endpointsVia' itself. Same non-overlap argument as 'GEndpoint's
   nested instance: the leaf pattern here is @nested Transformer@ etc.
   (some record applied to this pipeline's own functors), never coinciding
@@ -307,14 +306,14 @@ instance
 -}
 instance
     ( Generic (nested Transformer)
-    , Generic (nested (Morph Contract))
+    , Generic (nested (Morph HTTP))
     , Generic (nested Function)
     , Generic (nested Endpoint)
-    , GEndpointVia (Rep (nested Transformer)) (Rep (nested (Morph Contract))) (Rep (nested Function)) (Rep (nested Endpoint))
+    , GEndpointVia (Rep (nested Transformer)) (Rep (nested (Morph HTTP))) (Rep (nested Function)) (Rep (nested Endpoint))
     ) =>
     GEndpointVia
         (S1 sm    (Rec0 (nested Transformer)))
-        (S1 sm'   (Rec0 (nested (Morph Contract))))
+        (S1 sm'   (Rec0 (nested (Morph HTTP))))
         (S1 sm''  (Rec0 (nested Function)))
         (S1 sm''' (Rec0 (nested Endpoint)))
     where
@@ -324,7 +323,7 @@ instance
 {- | Heterogeneous-@n@ counterpart to 'endpoints': instead of one shared @nt@
   for the whole record, each field supplies its own natural transformation
   via 'Transformer', its own contract via 'Morph' (lifting a plain
-  'Contract' — see 'Okapi.Mode.Morph.morph'), and its own handler via
+  'HTTP' — see 'Okapi.HTTP.morph'), and its own handler via
   'Function' — with @n@ free to differ field to field, exactly the way
   @shape@ already does. Argument order mirrors 'endpoint': transform-like
   thing first, then contract, then function.
@@ -338,17 +337,17 @@ instance
 endpointsVia ::
     forall record.
     ( Generic (record Transformer)
-    , Generic (record (Morph Contract))
+    , Generic (record (Morph HTTP))
     , Generic (record Function)
     , Generic (record Endpoint)
-    , GEndpointVia (Rep (record Transformer)) (Rep (record (Morph Contract))) (Rep (record Function)) (Rep (record Endpoint))
+    , GEndpointVia (Rep (record Transformer)) (Rep (record (Morph HTTP))) (Rep (record Function)) (Rep (record Endpoint))
     ) =>
     record Transformer ->
-    record (Morph Contract) ->
+    record (Morph HTTP) ->
     record Function ->
     record Endpoint
 endpointsVia transforms contracts handlers =
-    to (gEndpointVia @(Rep (record Transformer)) @(Rep (record (Morph Contract))) @(Rep (record Function)) (from transforms) (from contracts) (from handlers))
+    to (gEndpointVia @(Rep (record Transformer)) @(Rep (record (Morph HTTP))) @(Rep (record Function)) (from transforms) (from contracts) (from handlers))
 
 class GHandles (enF :: Type -> Type) where
     gHandles :: enF () -> [Handle]

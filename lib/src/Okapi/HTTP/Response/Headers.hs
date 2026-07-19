@@ -29,6 +29,6 @@ import Okapi.HTTP.Headers
     , field, field', field_, fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
     , contentType, setCookie, derived
     )
-import Okapi.HTTP.Side (ForResponse)
+import Okapi.HTTP.Tree (ForResponse)
 
 type ResponseHeaders = Headers ForResponse

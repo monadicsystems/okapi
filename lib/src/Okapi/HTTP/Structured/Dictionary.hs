@@ -15,15 +15,15 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Data.Word (Word8)
-import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
+import Okapi.HTTP.Tree qualified as Tree
 import Okapi.HTTP.Structured.BareItem (BareItem, parseInnerToList, renderInner)
 import Okapi.HTTP.Structured.Item (Item)
 import Okapi.HTTP.Structured.Item qualified as Item
 import Okapi.HTTP.Structured.Scan (strip, splitTop)
 
 -- $setup
--- >>> import Okapi.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
+-- >>> import Okapi.HTTP.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
 -- >>> import Okapi.HTTP.Structured.Item qualified as Item
 -- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
 -- >>> import Data.ByteString (ByteString)
@@ -112,7 +112,7 @@ type instance Failure Dictionary = ParseError
 --   stripped, canonical top-level header-value form). A bare key with no
 --   value is treated as the boolean shorthand @a=?1@. A match removes the
 --   matched entry and re-serializes the rest as leftover — combining
---   several 'member's via 'Okapi.Tree.Apply' correctly shrinks leftover
+--   several 'member's via 'Okapi.HTTP.Tree.Apply' correctly shrinks leftover
 --   entry by entry.
 --
 -- >>> parser (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) ", a=1, b=2"

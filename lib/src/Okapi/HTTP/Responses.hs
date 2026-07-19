@@ -19,10 +19,10 @@ import Data.Maybe (mapMaybe)
 import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Network.Wai qualified as Wai
-import Okapi.Record.Failure    qualified as Error
-import Okapi.Record.Result   qualified as Result
-import Okapi.Record.Data    qualified as Data
 import Okapi.HTTP.Response qualified as Res
+import Okapi.Data.Response qualified as Data
+import Okapi.Result.Response qualified as Result
+import Okapi.Failure.Response qualified as Error
 
 -- $setup
 -- >>> :set -XTypeApplications
@@ -32,7 +32,7 @@ import Okapi.HTTP.Response qualified as Res
 -- >>> import GHC.Generics (Generic)
 -- >>> import Okapi.HTTP.Response qualified as Res
 -- >>> import Okapi.HTTP.Response.Status qualified as Status
--- >>> import Okapi.Record.Data qualified as Data
+-- >>> import Okapi.Data.Response qualified as Data
 -- >>> data ExampleResponses f = ExOk (f (Status.KnownStatus 200) Types.ResponseHeaders (IO LBS.ByteString)) | ExNotFound (f (Status.KnownStatus 404) Types.ResponseHeaders (IO LBS.ByteString)) deriving Generic
 -- >>> instance Cases ExampleResponses
 
@@ -239,7 +239,7 @@ parseResponses (Responses cs) waiRes = do
 --   here across every constructor of a small example type sharing one
 --   'cases'-built value, not just one:
 --
--- >>> let cs = cases @ExampleResponses Res.res200 Res.res404
+-- >>> let cs = cases @ExampleResponses Res.ok Res.notFound
 -- >>> r1 <- printResponses cs (ExOk (Data.Response { status = 200, headers = [], body = pure "hi" }))
 -- >>> Types.statusCode (Wai.responseStatus r1)
 -- 200

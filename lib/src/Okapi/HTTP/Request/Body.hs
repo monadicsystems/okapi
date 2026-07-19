@@ -15,11 +15,11 @@ module Okapi.HTTP.Request.Body (
     json,
     jsonValue,
     form,
-    noContent,
+    none,
 ) where
 
 import Okapi.HTTP.Body
-    ( Body, None (..), IsoJson, ParseError (..), parser, printer, raw, json, jsonValue, form, noContent )
-import Okapi.HTTP.Side (ForRequest)
+    ( Body, None (..), IsoJson, ParseError (..), parser, printer, raw, json, jsonValue, form, none )
+import Okapi.HTTP.Tree (ForRequest)
 
 type RequestBody = Body ForRequest

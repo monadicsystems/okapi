@@ -17,9 +17,14 @@ import GHC.Generics (Generic)
 import Network.HTTP.Types qualified as Types
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
-import Okapi.Record.Data qualified as Data
-
 import Okapi
+import Okapi.HTTP
+import Okapi.HTTP.Request
+import Okapi.HTTP.Request qualified as Req
+import Okapi.HTTP.Response
+import Okapi.HTTP.Response qualified as Res
+import Okapi.Data.Request qualified as ReqData
+import Okapi.Data.Response qualified as ResData
 
 data Message = Message
     { temperature :: Integer
@@ -35,7 +40,7 @@ data InnerMessage = InnerMessage
     }
     deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-createMessageReq = reqPOST
+createMessageReq = Req.post
     { path = do
         seg_ text "v1"
         seg_ text "messages"
@@ -54,14 +59,14 @@ data CreateMessageResponses f
     | Any (f Types.Status Types.ResponseHeaders (IO LBS.ByteString))
     deriving (Generic, Cases)
 
-createMessageRes = res201
+createMessageRes = Res.created
 
 createMessageContract = createMessageReq :-< cases @CreateMessageResponses
-    res201
-    res
+    Res.created
+    Res.any
 
 -- | Renders 'createMessageContract' as an OpenAPI document — only needs the
---   'Contract' itself, no handler, so this is callable straight from the
+--   'HTTP' contract itself, no handler, so this is callable straight from the
 --   repl: @cabal repl okapi@, @:load test\/Ex1.hs@, then @printSchema@.
 printSchema :: IO ()
 printSchema = LBS8.putStrLn (Aeson.encode (contractToOpenApi createMessageContract))
@@ -87,7 +92,7 @@ createMessage reqVal = do
     case clientFor settings createMessageContract of
         Fn f -> f reqVal
 
-lookAtResult :: Either ClientError (CreateMessageResponses Data.Response) -> IO ()
+lookAtResult :: Either ClientError (CreateMessageResponses ResData.Response) -> IO ()
 lookAtResult cmr = case cmr of
     Left _ -> print "errored"
     Right aResp -> case aResp of
@@ -98,4 +103,4 @@ lookAtResult cmr = case cmr of
             bodyResult <- resData.body
             print bodyResult
 
-testRequest = (Data.Request POST () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))
+testRequest = (ReqData.Request POST () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))

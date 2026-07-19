@@ -4,8 +4,8 @@
 -- | The header codec shared by request and response headers alike —
 --   'Okapi.HTTP.Request.Headers.RequestHeaders' and
 --   'Okapi.HTTP.Response.Headers.ResponseHeaders' are just type aliases for
---   @'Headers' 'Okapi.HTTP.Side.ForRequest'@/@'Headers'
---   'Okapi.HTTP.Side.ForResponse'@. 'field' and friends are free in the
+--   @'Headers' 'Okapi.HTTP.Tree.ForRequest'@/@'Headers'
+--   'Okapi.HTTP.Tree.ForResponse'@. 'field' and friends are free in the
 --   phantom @ctx@ and work unqualified for either side; only
 --   'cookie'\/'cookie'' (request-only) and 'setCookie' (response-only) are
 --   pinned to a specific side, right at their GADT constructor.
@@ -55,13 +55,12 @@ import Network.HTTP.Types qualified as Types
 import Text.Read (readMaybe)
 import Web.Cookie qualified as WC
 import Web.HttpApiData (parseHeader, toHeader)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
-import Okapi.Tree qualified as Tree
-import Okapi.HTTP.Side (ForRequest, ForResponse)
-import Okapi.HTTP.Headers.Cookie (Cookie)
-import Okapi.HTTP.Headers.SetCookie (SetCookie)
-import Okapi.HTTP.Headers.Attributes (Attributes)
-import Okapi.HTTP.Headers.Attributes qualified as Attributes
+import Okapi.HTTP.Tree (ForRequest, ForResponse, Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.HTTP.Tree qualified as Tree
+import Okapi.HTTP.Request.Headers.Cookie (Cookie)
+import Okapi.HTTP.Response.Headers.SetCookie (SetCookie)
+import Okapi.HTTP.Response.Headers.Attributes (Attributes)
+import Okapi.HTTP.Response.Headers.Attributes qualified as Attributes
 import Okapi.HTTP.Structured (Structured)
 import Okapi.HTTP.Structured qualified as Structured
 import Okapi.HTTP.Structured.BareItem (BareItem)
@@ -71,7 +70,7 @@ import Okapi.HTTP.Structured.Dictionary (Dictionary)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (Leaf, printParse, int, integer, (=.))
+-- >>> import Okapi.HTTP.Tree (Leaf, printParse, int, integer, (=.))
 -- >>> import Okapi.HTTP.Structured.BareItem (BareItem)
 -- >>> import Okapi.HTTP.Structured.Dictionary qualified as Dictionary
 -- >>> import Okapi.HTTP.Structured.Item qualified as Item
@@ -291,7 +290,7 @@ fieldList name c = fieldStruct name (Structured.list c)
 --   Dictionary. Since 'fieldStruct' only consumes what @c@ recognizes,
 --   two 'fieldDict's sharing the same header name — each matching a
 --   different member — correctly split a single multi-member value across
---   two differently-typed record fields, combined via 'Okapi.Tree.Apply':
+--   two differently-typed record fields, combined via 'Okapi.HTTP.Tree.Apply':
 --
 -- >>> :{
 -- let two = (,) <$> (fst =. fieldDict "x" (Dictionary.member "a" (Item.bareItem (integer :: Leaf BareItem Integer))))

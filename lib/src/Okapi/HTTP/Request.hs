@@ -4,16 +4,16 @@
 
 module Okapi.HTTP.Request (
     Request (..),
-    req,
-    reqGET,
-    reqPOST,
-    reqPUT,
-    reqDELETE,
-    reqPATCH,
-    reqHEAD,
-    reqOPTIONS,
-    reqCONNECT,
-    reqTRACE,
+    any,
+    get,
+    post,
+    put,
+    delete,
+    patch,
+    head,
+    options,
+    connect,
+    trace,
     method,
     path,
     query,
@@ -23,54 +23,63 @@ module Okapi.HTTP.Request (
     parser',
     printer,
 
-    -- * Header combinators (re-exported from "Okapi.HTTP.Headers")
-    field,
-    field',
-    field_,
-    contentType,
+    -- * Side-pinned header combinators (re-exported from "Okapi.HTTP.Request.Headers")
     cookie,
     cookie',
-    fieldStruct,
-    fieldBareItem,
-    fieldItem,
-    fieldList,
-    fieldDict,
-    MediaType (..),
 
-    -- * Body combinators (re-exported from "Okapi.HTTP.Body")
-    json,
-    jsonValue,
+    -- * Side-pinned body combinator (re-exported from "Okapi.HTTP.Request.Body")
     form,
-    noContent,
-    None (..),
+
+    -- * Method singletons (re-exported from "Okapi.HTTP.Request.Method") -- the full set
+    KnownMethod (..),
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+    CONNECT,
+    TRACE,
+
+    -- * Path combinators (re-exported from "Okapi.HTTP.Request.Path")
+    seg,
+    seg_,
+    lit,
+    segs,
+
+    -- * Query combinators (re-exported from "Okapi.HTTP.Request.Query")
+    param,
+    param',
+    param_,
+    flag,
+    flag',
+    list,
+    list',
+    ArrayStyle (..),
 ) where
 
+import Prelude hiding (any, head)
 import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
-import Okapi.HTTP.Headers (MediaType (..))
 import Okapi.HTTP.Headers qualified as Headers
-import Okapi.HTTP.Headers
-    ( field, field', field_, contentType
-    , fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
-    )
 import Okapi.HTTP.Body qualified as Body
-import Okapi.HTTP.Body (json, jsonValue, noContent, None (..))
 import Okapi.HTTP.Request.Body (RequestBody, form)
 import Okapi.HTTP.Request.Headers (RequestHeaders, cookie, cookie', coalesceCookies)
 import Okapi.HTTP.Request.Method (CONNECT, DELETE, GET, HEAD, KnownMethod (..), OPTIONS, PATCH, POST, PUT, TRACE)
 import Okapi.HTTP.Request.Method qualified as Method
-import Okapi.HTTP.Request.Path (Path)
+import Okapi.HTTP.Request.Path (Path, seg, seg_, lit, segs)
 import Okapi.HTTP.Request.Path qualified as Path
-import Okapi.HTTP.Request.Query (Query)
+import Okapi.HTTP.Request.Query (Query, ArrayStyle (..), param, param', param_, flag, flag', list, list')
 import Okapi.HTTP.Request.Query qualified as Query
-import Okapi.Record.Data qualified as Data
-import Okapi.Record.Failure qualified as Error
-import Okapi.Record.Result qualified as Result
-import Okapi.Tree (SymTree)
+import Okapi.HTTP.Tree (SymTree)
+import Okapi.Data.Request qualified as Data
+import Okapi.Result.Request qualified as Result
+import Okapi.Failure.Request qualified as Error
 
 -- | Codecs for every part of an HTTP request.
 data Request method path query headers body = Request
@@ -81,8 +90,8 @@ data Request method path query headers body = Request
     , body    :: RequestBody body
     }
 
-req :: Request Types.Method [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-req =
+any :: Request Types.Method [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+any =
     Request
         { method = Method.raw
         , path = Path.raw
@@ -91,32 +100,32 @@ req =
         , body = Body.raw
         }
 
-reqGET :: Request GET [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqGET = req{method = Method.method GET}
+get :: Request GET [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+get = any{method = Method.method GET}
 
-reqPOST :: Request POST [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqPOST = req{method = Method.method POST}
+post :: Request POST [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+post = any{method = Method.method POST}
 
-reqPUT :: Request PUT [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqPUT = req{method = Method.method PUT}
+put :: Request PUT [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+put = any{method = Method.method PUT}
 
-reqDELETE :: Request DELETE [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqDELETE = req{method = Method.method DELETE}
+delete :: Request DELETE [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+delete = any{method = Method.method DELETE}
 
-reqPATCH :: Request PATCH [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqPATCH = req{method = Method.method PATCH}
+patch :: Request PATCH [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+patch = any{method = Method.method PATCH}
 
-reqHEAD :: Request HEAD [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqHEAD = req{method = Method.method HEAD}
+head :: Request HEAD [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+head = any{method = Method.method HEAD}
 
-reqOPTIONS :: Request OPTIONS [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqOPTIONS = req{method = Method.method OPTIONS}
+options :: Request OPTIONS [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+options = any{method = Method.method OPTIONS}
 
-reqCONNECT :: Request CONNECT [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqCONNECT = req{method = Method.method CONNECT}
+connect :: Request CONNECT [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+connect = any{method = Method.method CONNECT}
 
-reqTRACE :: Request TRACE [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
-reqTRACE = req{method = Method.method TRACE}
+trace :: Request TRACE [Text] Types.Query Types.RequestHeaders (IO LBS.ByteString)
+trace = any{method = Method.method TRACE}
 
 method ::
     KnownMethod m ->

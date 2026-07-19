@@ -27,7 +27,7 @@ import Prelude hiding (print)
 -- $setup
 -- >>> import Okapi.HTTP.Request.Method qualified as Method
 -- >>> import Network.HTTP.Types qualified as Types
--- >>> import Okapi.Tree (leafPrintParse, leafParsePrint)
+-- >>> import Okapi.HTTP.Tree (leafPrintParse, leafParsePrint)
 -- >>> import Test.QuickCheck.Instances ()
 
 data KnownMethod (m :: Symbol) where

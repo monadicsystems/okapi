@@ -2,7 +2,7 @@
 {-# LANGUAGE NoFieldSelectors #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Mode.Link (
+module Okapi.Artifact.Link (
     URI (..),
     Link (..),
     build,
@@ -31,9 +31,8 @@ import GHC.Records (HasField (..))
 import Network.HTTP.Types qualified as Types
 import Okapi.HTTP.Request.Path qualified as Path
 import Okapi.HTTP.Request.Query qualified as Query
-import Okapi.Mode.Contract (Contract (..), Shape, stripTags)
-import Okapi.Mode.Morph (Morph (..))
-import Okapi.HTTP.Request qualified as HTTP
+import Okapi.HTTP (HTTP (..), Shape, stripTags, Morph (..))
+import Okapi.HTTP.Request qualified as Req
 
 data URI = URI
     { path :: Text
@@ -49,7 +48,7 @@ data Link shape where
         Link (Shape method path query headers body result)
 
 build ::
-    HTTP.Request method path query headers body ->
+    Req.Request method path query headers body ->
     path ->
     query ->
     URI
@@ -73,7 +72,7 @@ instance (GLink ctL lnL, GLink ctR lnR) => GLink (ctL :*: ctR) (lnL :*: lnR) whe
 
 instance
     GLink
-        (S1 sm (Rec0 (Contract (Shape method path query headers body result))))
+        (S1 sm (Rec0 (HTTP (Shape method path query headers body result))))
         (S1 sm' (Rec0 (Link (Shape method path query headers body result))))
     where
     gLink (M1 (K1 ct)) =
@@ -87,27 +86,27 @@ instance
             )
 
 -- | Lets a field be a nested record of the same shape instead of a
---   concrete 'Contract'\/'Link' — recurses via 'links' itself. Same
---   non-overlap argument as the nested instances in "Okapi.Mode.Endpoint".
+--   concrete 'HTTP'\/'Link' — recurses via 'links' itself. Same
+--   non-overlap argument as the nested instances in "Okapi.Artifact.Endpoint".
 instance
-    ( Generic (nested Contract)
+    ( Generic (nested HTTP)
     , Generic (nested Link)
-    , GLink (Rep (nested Contract)) (Rep (nested Link))
+    , GLink (Rep (nested HTTP)) (Rep (nested Link))
     ) =>
-    GLink (S1 sm (Rec0 (nested Contract))) (S1 sm' (Rec0 (nested Link)))
+    GLink (S1 sm (Rec0 (nested HTTP))) (S1 sm' (Rec0 (nested Link)))
     where
     gLink (M1 (K1 ctVal)) = M1 (K1 (links ctVal))
 
 links ::
     forall record.
-    ( Generic (record Contract)
+    ( Generic (record HTTP)
     , Generic (record Link)
-    , GLink (Rep (record Contract)) (Rep (record Link))
+    , GLink (Rep (record HTTP)) (Rep (record Link))
     ) =>
-    record Contract ->
+    record HTTP ->
     record Link
 links contracts =
-    to (gLink @(Rep (record Contract)) @(Rep (record Link)) (from contracts))
+    to (gLink @(Rep (record HTTP)) @(Rep (record Link)) (from contracts))
 
 class GLinkVia (ctF :: Type -> Type) (lnF :: Type -> Type) where
     gLinkVia :: ctF () -> lnF ()
@@ -123,7 +122,7 @@ instance (GLinkVia ctL lnL, GLinkVia ctR lnR) => GLinkVia (ctL :*: ctR) (lnL :*:
 
 instance
     GLinkVia
-        (S1 sm (Rec0 (Morph Contract n (Shape method path query headers body result))))
+        (S1 sm (Rec0 (Morph HTTP n (Shape method path query headers body result))))
         (S1 sm' (Rec0 (Morph Link n (Shape method path query headers body result))))
     where
     gLinkVia (M1 (K1 (Morph ct))) =
@@ -139,19 +138,19 @@ instance
             )
 
 -- | Lets a field be a nested record of the same shape instead of a
---   concrete @Morph Contract@\/@Morph Link@ pair — recurses via
+--   concrete @Morph HTTP@\/@Morph Link@ pair — recurses via
 --   'linksVia' itself.
 instance
-    ( Generic (nested (Morph Contract))
+    ( Generic (nested (Morph HTTP))
     , Generic (nested (Morph Link))
-    , GLinkVia (Rep (nested (Morph Contract))) (Rep (nested (Morph Link)))
+    , GLinkVia (Rep (nested (Morph HTTP))) (Rep (nested (Morph Link)))
     ) =>
-    GLinkVia (S1 sm (Rec0 (nested (Morph Contract)))) (S1 sm' (Rec0 (nested (Morph Link))))
+    GLinkVia (S1 sm (Rec0 (nested (Morph HTTP)))) (S1 sm' (Rec0 (nested (Morph Link))))
     where
     gLinkVia (M1 (K1 ctVal)) = M1 (K1 (linksVia ctVal))
 
 {- | Heterogeneous-@n@ counterpart to 'links' — takes a record built with
-  'Okapi.Mode.Morph.Morph' (see 'Okapi.Mode.Endpoint.endpointsVia'). Output
+  'Okapi.HTTP.Morph' (see 'Okapi.Artifact.Endpoint.endpointsVia'). Output
   is @record (Morph Link)@, not plain @record Link@ — each field's @n@ is
   baked into the record's own field declarations, so the output has to stay
   2-arg-shaped to match; unwrap each field's 'Morph' to get the plain
@@ -159,11 +158,11 @@ instance
 -}
 linksVia ::
     forall record.
-    ( Generic (record (Morph Contract))
+    ( Generic (record (Morph HTTP))
     , Generic (record (Morph Link))
-    , GLinkVia (Rep (record (Morph Contract))) (Rep (record (Morph Link)))
+    , GLinkVia (Rep (record (Morph HTTP))) (Rep (record (Morph Link)))
     ) =>
-    record (Morph Contract) ->
+    record (Morph HTTP) ->
     record (Morph Link)
 linksVia contracts =
-    to (gLinkVia @(Rep (record (Morph Contract))) @(Rep (record (Morph Link))) (from contracts))
+    to (gLinkVia @(Rep (record (Morph HTTP))) @(Rep (record (Morph Link))) (from contracts))

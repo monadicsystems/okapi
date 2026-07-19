@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Artifact.OpenApi (contractToOpenApi, GenericOAPI, openApi, GenericOAPIVia, openApiVia) where
+module Okapi.Artifact.OpenApi (contractToOpenApi, GOpenApi, openApi, GOpenApiVia, openApiVia) where
 
 import Control.Applicative ((<|>))
 import Data.ByteString (ByteString)
@@ -28,12 +28,11 @@ import Data.List.NonEmpty qualified as NE
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:*:) (..))
 import Network.HTTP.Media (MediaType)
 import Network.HTTP.Types qualified as Types
-import Okapi.Mode.Contract (Contract ((:->), (:-<)), Shape, stripTags, collectTags)
-import Okapi.Mode.Contract qualified as Contract
-import Okapi.Mode.Morph (Morph (..))
-import Okapi.Tree (Info (..), Leaf (..), Tag (..))
-import Okapi.HTTP.Request qualified as HTTP
-import Okapi.HTTP.Response qualified as HTTP
+import Okapi.HTTP (HTTP ((:->), (:-<)), Shape, stripTags, collectTags, Morph (..))
+import Okapi.HTTP qualified as HTTP
+import Okapi.HTTP.Tree (Info (..), Leaf (..), Tag (..))
+import Okapi.HTTP.Request qualified as Req
+import Okapi.HTTP.Response qualified as Res
 import Okapi.HTTP.Request.Method qualified as Method
 import Okapi.HTTP.Request.Path (Path)
 import Okapi.HTTP.Request.Path qualified as Path
@@ -46,12 +45,12 @@ import Okapi.HTTP.Body qualified as Body
 import Okapi.HTTP.Response.Status qualified as Status
 import Okapi.HTTP.Responses (Cases, Responses)
 import Okapi.HTTP.Responses qualified as Resps
-import Okapi.Tree (Tree (..))
+import Okapi.HTTP.Tree (Tree (..))
 import Optics.Core ((%), (.~), (?~), (%~))
 
 -- | Fold 'Tag's onto an 'OA.Schema' — used for node-level metadata (path
 --   segments, response headers) where no separate 'Param' is built.
---   'Group' and 'Extension' have no target here (see 'Okapi.Tree.Tag').
+--   'Group' and 'Extension' have no target here (see 'Okapi.HTTP.Tree.Tag').
 applyTagsToSchema :: [Tag] -> OA.Schema -> OA.Schema
 applyTagsToSchema tags sc = foldl' applyOne sc tags
   where
@@ -86,11 +85,11 @@ applyTagsToOperation tags op = foldl' applyOne op tags
 
 data PathPiece = PLit Text | PParam Text OA.Schema
 
--- | Threads an accumulated @[Tag]@ (from any enclosing 'Okapi.Tree.annotate'
+-- | Threads an accumulated @[Tag]@ (from any enclosing 'Okapi.HTTP.Tree.annotate'
 --   layers) down to each leaf, folding it into that leaf's 'OA.Schema'
 --   right there — not accumulated bottom-up and merged after, which would
 --   get nested 'annotate' calls' merge order backwards (see
---   'Okapi.Mode.Contract.collectTags').
+--   'Okapi.HTTP.collectTags').
 walkPath :: [Tag] -> Tree Path i o -> [PathPiece]
 walkPath _    (Node (Path.Seg_ vLeaf x)) = [PLit (vLeaf.encode x)]
 walkPath tags (Node (Path.Seg n vLeaf))  = [PParam n (applyTagsToSchema tags (infoSchema vLeaf.info))]
@@ -198,7 +197,7 @@ resStatusOf :: Status.Status s -> Types.Status
 resStatusOf Status.Raw        = Types.status200
 resStatusOf (Status.Status ks) = Status.knownStatusToHTTP ks
 
-resInfoOf :: HTTP.Response s h b -> ResInfo
+resInfoOf :: Res.Response s h b -> ResInfo
 resInfoOf res = ResInfo
     { resStatus     = resStatusOf res.status
     , resMediaType  = extractContentType res.headers
@@ -207,10 +206,10 @@ resInfoOf res = ResInfo
     , resHdrNames   = extractHeaderInfo [] res.headers
     }
 
-extractResInfos :: Cases responses => Responses HTTP.Response responses -> [ResInfo]
+extractResInfos :: Cases responses => Responses Res.Response responses -> [ResInfo]
 extractResInfos rs =
     map
-        (getConst . Resps.traverseResponses @HTTP.Response @HTTP.Response (\c -> Const (resInfoOf c)))
+        (getConst . Resps.traverseResponses @Res.Response @Res.Response (\c -> Const (resInfoOf c)))
         (NE.toList (Resps.getResponses rs))
 
 methodStdOf :: Method.Method m -> Maybe Types.StdMethod
@@ -293,20 +292,20 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 
 -- $setup
 -- >>> :set -XOverloadedLabels
--- >>> import Okapi.Mode.Contract qualified as Contract
--- >>> import Okapi.HTTP.Request qualified as HTTP
+-- >>> import Okapi.HTTP qualified as HTTP
+-- >>> import Okapi.HTTP.Request qualified as Req
 -- >>> import Okapi.HTTP.Request.Path (Path, seg)
 -- >>> import Okapi.HTTP.Request.Query qualified as Query
 -- >>> import Okapi.HTTP.Request.Headers qualified as ReqH
 -- >>> import Okapi.HTTP.Request.Body qualified as ReqBody
 -- >>> import Okapi.HTTP.Request.Method qualified as Method
 -- >>> import Okapi.HTTP.Response qualified as Res
--- >>> import Okapi.Tree (Leaf, Tag (..), annotate, integer)
+-- >>> import Okapi.HTTP.Tree (Leaf, Tag (..), annotate, integer)
 -- >>> import Data.HashMap.Strict.InsOrd qualified as IHM
 -- >>> import Data.OpenApi (Referenced (..))
 -- >>> import Optics.Core ((^.))
--- >>> let reqTree = HTTP.Request { HTTP.method = Method.method Method.GET, HTTP.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), HTTP.query = Query.raw, HTTP.headers = ReqH.raw, HTTP.body = ReqBody.raw }
--- >>> let contract = Contract.annotate [Description "Get a user", Group "users"] (reqTree Contract.:-> Res.res200)
+-- >>> let reqTree = Req.Request { Req.method = Method.method Method.GET, Req.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.raw, Req.headers = ReqH.raw, Req.body = ReqBody.raw }
+-- >>> let contract = HTTP.annotate [Description "Get a user", Group "users"] (reqTree HTTP.:-> Res.ok)
 -- >>> let oa = contractToOpenApi contract
 -- >>> let Just pi_ = IHM.lookup "/{userId}" (oa ^. #paths)
 -- >>> let Just op = pi_ ^. #get
@@ -324,11 +323,11 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> let Just (Inline sc) = p ^. #schema
 -- >>> sc ^. #description
 -- Just "the user id"
-contractToOpenApi :: Contract shape -> OpenApi
+contractToOpenApi :: HTTP shape -> OpenApi
 contractToOpenApi contract = case stripTags contract of
     (req :-> singleRes) -> toOpenApi (collectTags contract) req [resInfoOf singleRes]
     (req :-< resAlt)    -> toOpenApi (collectTags contract) req (extractResInfos resAlt)
-    Contract.Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
+    HTTP.Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
   where
     toOpenApi tags req resInfos =
         let
@@ -364,74 +363,74 @@ contractToOpenApi contract = case stripTags contract of
                 & #components % #schemas .~ allDefs
                 & #paths .~ IHM.singleton (pathTemplate pieces) (setMethod stdMeth op mempty)
 
-class GenericOAPI (ctF :: Type -> Type) where
+class GOpenApi (ctF :: Type -> Type) where
     gOpenApi :: ctF () -> OpenApi
 
-instance GenericOAPI ctF => GenericOAPI (D1 dm ctF) where
+instance GOpenApi ctF => GOpenApi (D1 dm ctF) where
     gOpenApi (M1 ct) = gOpenApi @ctF ct
 
-instance GenericOAPI ctF => GenericOAPI (C1 cm ctF) where
+instance GOpenApi ctF => GOpenApi (C1 cm ctF) where
     gOpenApi (M1 ct) = gOpenApi @ctF ct
 
-instance (GenericOAPI ctL, GenericOAPI ctR) => GenericOAPI (ctL :*: ctR) where
+instance (GOpenApi ctL, GOpenApi ctR) => GOpenApi (ctL :*: ctR) where
     gOpenApi (ctL :*: ctR) = gOpenApi @ctL ctL <> gOpenApi @ctR ctR
 
-instance GenericOAPI (S1 sm (Rec0 (Contract (Shape method path query headers body result)))) where
+instance GOpenApi (S1 sm (Rec0 (HTTP (Shape method path query headers body result)))) where
     gOpenApi (M1 (K1 ct)) = contractToOpenApi ct
 
 -- | Lets a field be a nested record of contracts instead of a concrete
---   'Contract' — recurses via 'openApi' itself. Same non-overlap argument
---   as the nested instances in "Okapi.Mode.Endpoint".
+--   'HTTP' — recurses via 'openApi' itself. Same non-overlap argument
+--   as the nested instances in "Okapi.Artifact.Endpoint".
 instance
-    ( Generic (nested Contract)
-    , GenericOAPI (Rep (nested Contract))
+    ( Generic (nested HTTP)
+    , GOpenApi (Rep (nested HTTP))
     ) =>
-    GenericOAPI (S1 sm (Rec0 (nested Contract)))
+    GOpenApi (S1 sm (Rec0 (nested HTTP)))
     where
     gOpenApi (M1 (K1 ctVal)) = openApi ctVal
 
 openApi ::
     forall record.
-    ( Generic (record Contract)
-    , GenericOAPI (Rep (record Contract))
+    ( Generic (record HTTP)
+    , GOpenApi (Rep (record HTTP))
     ) =>
-    record Contract ->
+    record HTTP ->
     OpenApi
-openApi = gOpenApi @(Rep (record Contract)) . from
+openApi = gOpenApi @(Rep (record HTTP)) . from
 
-class GenericOAPIVia (ctF :: Type -> Type) where
+class GOpenApiVia (ctF :: Type -> Type) where
     gOpenApiVia :: ctF () -> OpenApi
 
-instance GenericOAPIVia ctF => GenericOAPIVia (D1 dm ctF) where
+instance GOpenApiVia ctF => GOpenApiVia (D1 dm ctF) where
     gOpenApiVia (M1 ct) = gOpenApiVia @ctF ct
 
-instance GenericOAPIVia ctF => GenericOAPIVia (C1 cm ctF) where
+instance GOpenApiVia ctF => GOpenApiVia (C1 cm ctF) where
     gOpenApiVia (M1 ct) = gOpenApiVia @ctF ct
 
-instance (GenericOAPIVia ctL, GenericOAPIVia ctR) => GenericOAPIVia (ctL :*: ctR) where
+instance (GOpenApiVia ctL, GOpenApiVia ctR) => GOpenApiVia (ctL :*: ctR) where
     gOpenApiVia (ctL :*: ctR) = gOpenApiVia @ctL ctL <> gOpenApiVia @ctR ctR
 
-instance GenericOAPIVia (S1 sm (Rec0 (Morph Contract n (Shape method path query headers body result)))) where
+instance GOpenApiVia (S1 sm (Rec0 (Morph HTTP n (Shape method path query headers body result)))) where
     gOpenApiVia (M1 (K1 (Morph ct))) = contractToOpenApi ct
 
 -- | Lets a field be a nested record of contracts instead of a concrete
---   @Morph Contract@ — recurses via 'openApiVia' itself.
+--   @Morph HTTP@ — recurses via 'openApiVia' itself.
 instance
-    ( Generic (nested (Morph Contract))
-    , GenericOAPIVia (Rep (nested (Morph Contract)))
+    ( Generic (nested (Morph HTTP))
+    , GOpenApiVia (Rep (nested (Morph HTTP)))
     ) =>
-    GenericOAPIVia (S1 sm (Rec0 (nested (Morph Contract))))
+    GOpenApiVia (S1 sm (Rec0 (nested (Morph HTTP))))
     where
     gOpenApiVia (M1 (K1 ctVal)) = openApiVia ctVal
 
 -- | Heterogeneous-@n@ counterpart to 'openApi' — takes a record built with
---   'Okapi.Mode.Morph.Morph' (see 'Okapi.Mode.Endpoint.endpointsVia')
---   instead of a plain @record Contract@.
+--   'Okapi.HTTP.Morph' (see 'Okapi.Artifact.Endpoint.endpointsVia')
+--   instead of a plain @record HTTP@.
 openApiVia ::
     forall record.
-    ( Generic (record (Morph Contract))
-    , GenericOAPIVia (Rep (record (Morph Contract)))
+    ( Generic (record (Morph HTTP))
+    , GOpenApiVia (Rep (record (Morph HTTP)))
     ) =>
-    record (Morph Contract) ->
+    record (Morph HTTP) ->
     OpenApi
-openApiVia = gOpenApiVia @(Rep (record (Morph Contract))) . from
+openApiVia = gOpenApiVia @(Rep (record (Morph HTTP))) . from

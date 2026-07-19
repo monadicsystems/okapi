@@ -36,13 +36,13 @@ import Data.Time (Day, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import Network.HTTP.Types qualified as Types
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.HTTP.Tree qualified as Tree
 import Web.HttpApiData (parseQueryParam, toQueryParam)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (printParse, int, integer, (=.))
+-- >>> import Okapi.HTTP.Tree (printParse, int, integer, (=.))
 -- >>> import Data.List.NonEmpty (NonEmpty((:|)))
 -- >>> import GHC.Generics (Generic)
 -- >>> :{

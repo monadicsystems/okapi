@@ -1,12 +1,12 @@
-module Okapi.Mode.Function (
+module Okapi.Artifact.Function (
     Function (..),
     fn,
 ) where
 
 import Data.Kind (Type)
 import Network.Wai qualified as Wai
-import Okapi.Mode.Contract (Shape)
-import Okapi.Record.Data qualified as Data
+import Okapi.HTTP (Shape)
+import Okapi.Data.Request qualified as Data
 
 data Function (n :: Type -> Type) shape where
     Function ::

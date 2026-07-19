@@ -2,54 +2,54 @@
 
 module Okapi.HTTP.Response (
     Response (..),
-    res,
-    res100,
-    res101,
-    res200,
-    res201,
-    res202,
-    res203,
-    res204,
-    res205,
-    res206,
-    res300,
-    res301,
-    res302,
-    res303,
-    res304,
-    res305,
-    res307,
-    res308,
-    res400,
-    res401,
-    res402,
-    res403,
-    res404,
-    res405,
-    res406,
-    res407,
-    res408,
-    res409,
-    res410,
-    res411,
-    res412,
-    res413,
-    res414,
-    res415,
-    res416,
-    res417,
-    res418,
-    res422,
-    res428,
-    res429,
-    res431,
-    res500,
-    res501,
-    res502,
-    res503,
-    res504,
-    res505,
-    res511,
+    any,
+    continue,
+    switchingProtocols,
+    ok,
+    created,
+    accepted,
+    nonAuthoritative,
+    noContent,
+    resetContent,
+    partialContent,
+    multipleChoices,
+    movedPermanently,
+    found,
+    seeOther,
+    notModified,
+    useProxy,
+    temporaryRedirect,
+    permanentRedirect,
+    badRequest,
+    unauthorized,
+    paymentRequired,
+    forbidden,
+    notFound,
+    methodNotAllowed,
+    notAcceptable,
+    proxyAuthenticationRequired,
+    requestTimeout,
+    conflict,
+    gone,
+    lengthRequired,
+    preconditionFailed,
+    requestEntityTooLarge,
+    requestURITooLong,
+    unsupportedMediaType,
+    requestedRangeNotSatisfiable,
+    expectationFailed,
+    imATeapot,
+    unprocessableEntity,
+    preconditionRequired,
+    tooManyRequests,
+    requestHeaderFieldsTooLarge,
+    internalServerError,
+    notImplemented,
+    badGateway,
+    serviceUnavailable,
+    gatewayTimeout,
+    httpVersionNotSupported,
+    networkAuthenticationRequired,
     headers,
     body,
     extractWaiResBody,
@@ -59,47 +59,54 @@ module Okapi.HTTP.Response (
     parser,
     printer,
 
-    -- * Header combinators (re-exported from "Okapi.HTTP.Headers")
-    field,
-    field',
-    field_,
-    contentType,
-    fieldStruct,
-    fieldBareItem,
-    fieldItem,
-    fieldList,
-    fieldDict,
+    -- * Side-pinned header combinator (re-exported from "Okapi.HTTP.Headers")
     setCookie,
-    MediaType (..),
 
-    -- * Body combinators (re-exported from "Okapi.HTTP.Body")
-    json,
-    jsonValue,
-    noContent,
-    None (..),
+    -- * Status singletons (re-exported from "Okapi.HTTP.Response.Status") -- the full set
+    KnownStatus (..),
+    S100, S101, S200, S201, S202, S203, S204, S205, S206,
+    S300, S301, S302, S303, S304, S305, S307, S308,
+    S400, S401, S402, S403, S404, S405, S406, S407, S408, S409,
+    S410, S411, S412, S413, S414, S415, S416, S417, S418,
+    S422, S428, S429, S431,
+    S500, S501, S502, S503, S504, S505, S511,
+    SomeKnownStatus (..),
+    allKnownStatuses,
+
+    -- * Set-Cookie attributes (re-exported from "Okapi.HTTP.Response.Headers.Attributes")
+    attr,
+    attr',
+    secure,
+    httpOnly,
 ) where
 
+import Prelude hiding (any)
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
-import Okapi.Record.Failure qualified as Error
-import Okapi.Record.Result qualified as Result
-import Okapi.Record.Data qualified as Data
-import Okapi.HTTP.Headers (MediaType (..))
 import Okapi.HTTP.Headers qualified as Headers
-import Okapi.HTTP.Headers
-    ( field, field', field_, contentType
-    , fieldStruct, fieldBareItem, fieldItem, fieldList, fieldDict
-    )
 import Okapi.HTTP.Body qualified as Body
-import Okapi.HTTP.Body (json, jsonValue, noContent, None (..))
 import Okapi.HTTP.Response.Body (ResponseBody)
 import Okapi.HTTP.Response.Headers (ResponseHeaders, setCookie)
-import Okapi.HTTP.Response.Status (KnownStatus)
+import Okapi.HTTP.Response.Status
+    ( KnownStatus (..)
+    , S100, S101, S200, S201, S202, S203, S204, S205, S206
+    , S300, S301, S302, S303, S304, S305, S307, S308
+    , S400, S401, S402, S403, S404, S405, S406, S407, S408, S409
+    , S410, S411, S412, S413, S414, S415, S416, S417, S418
+    , S422, S428, S429, S431
+    , S500, S501, S502, S503, S504, S505, S511
+    , SomeKnownStatus (..)
+    , allKnownStatuses
+    )
 import Okapi.HTTP.Response.Status qualified as Status
-import Okapi.Tree (SymTree)
+import Okapi.HTTP.Response.Headers.Attributes (attr, attr', secure, httpOnly)
+import Okapi.HTTP.Tree (SymTree)
+import Okapi.Data.Response qualified as Data
+import Okapi.Result.Response qualified as Result
+import Okapi.Failure.Response qualified as Error
 
 -- | Codecs for every part of an HTTP response.
 data Response status headers body = Response
@@ -108,337 +115,337 @@ data Response status headers body = Response
     , body    :: ResponseBody body
     }
 
-res :: Response Types.Status Types.ResponseHeaders (IO LBS.ByteString)
-res = Response
+any :: Response Types.Status Types.ResponseHeaders (IO LBS.ByteString)
+any = Response
     { status  = Status.raw
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res100 :: Response (Status.KnownStatus 100) Types.ResponseHeaders (IO LBS.ByteString)
-res100 = Response
+continue :: Response S100 Types.ResponseHeaders (IO LBS.ByteString)
+continue = Response
     { status  = Status.status 100
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res101 :: Response (Status.KnownStatus 101) Types.ResponseHeaders (IO LBS.ByteString)
-res101 = Response
+switchingProtocols :: Response S101 Types.ResponseHeaders (IO LBS.ByteString)
+switchingProtocols = Response
     { status  = Status.status 101
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res200 :: Response (Status.KnownStatus 200) Types.ResponseHeaders (IO LBS.ByteString)
-res200 = Response
+ok :: Response S200 Types.ResponseHeaders (IO LBS.ByteString)
+ok = Response
     { status  = Status.status 200
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res201 :: Response (Status.KnownStatus 201) Types.ResponseHeaders (IO LBS.ByteString)
-res201 = Response
+created :: Response S201 Types.ResponseHeaders (IO LBS.ByteString)
+created = Response
     { status  = Status.status 201
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res202 :: Response (Status.KnownStatus 202) Types.ResponseHeaders (IO LBS.ByteString)
-res202 = Response
+accepted :: Response S202 Types.ResponseHeaders (IO LBS.ByteString)
+accepted = Response
     { status  = Status.status 202
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res203 :: Response (Status.KnownStatus 203) Types.ResponseHeaders (IO LBS.ByteString)
-res203 = Response
+nonAuthoritative :: Response S203 Types.ResponseHeaders (IO LBS.ByteString)
+nonAuthoritative = Response
     { status  = Status.status 203
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res204 :: Response (Status.KnownStatus 204) Types.ResponseHeaders (IO LBS.ByteString)
-res204 = Response
+noContent :: Response S204 Types.ResponseHeaders (IO Body.None)
+noContent = Response
     { status  = Status.status 204
     , headers = Headers.raw
-    , body    = Body.raw
+    , body    = Body.none
     }
 
-res205 :: Response (Status.KnownStatus 205) Types.ResponseHeaders (IO LBS.ByteString)
-res205 = Response
+resetContent :: Response S205 Types.ResponseHeaders (IO LBS.ByteString)
+resetContent = Response
     { status  = Status.status 205
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res206 :: Response (Status.KnownStatus 206) Types.ResponseHeaders (IO LBS.ByteString)
-res206 = Response
+partialContent :: Response S206 Types.ResponseHeaders (IO LBS.ByteString)
+partialContent = Response
     { status  = Status.status 206
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res300 :: Response (Status.KnownStatus 300) Types.ResponseHeaders (IO LBS.ByteString)
-res300 = Response
+multipleChoices :: Response S300 Types.ResponseHeaders (IO LBS.ByteString)
+multipleChoices = Response
     { status  = Status.status 300
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res301 :: Response (Status.KnownStatus 301) Types.ResponseHeaders (IO LBS.ByteString)
-res301 = Response
+movedPermanently :: Response S301 Types.ResponseHeaders (IO LBS.ByteString)
+movedPermanently = Response
     { status  = Status.status 301
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res302 :: Response (Status.KnownStatus 302) Types.ResponseHeaders (IO LBS.ByteString)
-res302 = Response
+found :: Response S302 Types.ResponseHeaders (IO LBS.ByteString)
+found = Response
     { status  = Status.status 302
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res303 :: Response (Status.KnownStatus 303) Types.ResponseHeaders (IO LBS.ByteString)
-res303 = Response
+seeOther :: Response S303 Types.ResponseHeaders (IO LBS.ByteString)
+seeOther = Response
     { status  = Status.status 303
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res304 :: Response (Status.KnownStatus 304) Types.ResponseHeaders (IO LBS.ByteString)
-res304 = Response
+notModified :: Response S304 Types.ResponseHeaders (IO LBS.ByteString)
+notModified = Response
     { status  = Status.status 304
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res305 :: Response (Status.KnownStatus 305) Types.ResponseHeaders (IO LBS.ByteString)
-res305 = Response
+useProxy :: Response S305 Types.ResponseHeaders (IO LBS.ByteString)
+useProxy = Response
     { status  = Status.status 305
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res307 :: Response (Status.KnownStatus 307) Types.ResponseHeaders (IO LBS.ByteString)
-res307 = Response
+temporaryRedirect :: Response S307 Types.ResponseHeaders (IO LBS.ByteString)
+temporaryRedirect = Response
     { status  = Status.status 307
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res308 :: Response (Status.KnownStatus 308) Types.ResponseHeaders (IO LBS.ByteString)
-res308 = Response
+permanentRedirect :: Response S308 Types.ResponseHeaders (IO LBS.ByteString)
+permanentRedirect = Response
     { status  = Status.status 308
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res400 :: Response (Status.KnownStatus 400) Types.ResponseHeaders (IO LBS.ByteString)
-res400 = Response
+badRequest :: Response S400 Types.ResponseHeaders (IO LBS.ByteString)
+badRequest = Response
     { status  = Status.status 400
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res401 :: Response (Status.KnownStatus 401) Types.ResponseHeaders (IO LBS.ByteString)
-res401 = Response
+unauthorized :: Response S401 Types.ResponseHeaders (IO LBS.ByteString)
+unauthorized = Response
     { status  = Status.status 401
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res402 :: Response (Status.KnownStatus 402) Types.ResponseHeaders (IO LBS.ByteString)
-res402 = Response
+paymentRequired :: Response S402 Types.ResponseHeaders (IO LBS.ByteString)
+paymentRequired = Response
     { status  = Status.status 402
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res403 :: Response (Status.KnownStatus 403) Types.ResponseHeaders (IO LBS.ByteString)
-res403 = Response
+forbidden :: Response S403 Types.ResponseHeaders (IO LBS.ByteString)
+forbidden = Response
     { status  = Status.status 403
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res404 :: Response (Status.KnownStatus 404) Types.ResponseHeaders (IO LBS.ByteString)
-res404 = Response
+notFound :: Response S404 Types.ResponseHeaders (IO LBS.ByteString)
+notFound = Response
     { status  = Status.status 404
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res405 :: Response (Status.KnownStatus 405) Types.ResponseHeaders (IO LBS.ByteString)
-res405 = Response
+methodNotAllowed :: Response S405 Types.ResponseHeaders (IO LBS.ByteString)
+methodNotAllowed = Response
     { status  = Status.status 405
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res406 :: Response (Status.KnownStatus 406) Types.ResponseHeaders (IO LBS.ByteString)
-res406 = Response
+notAcceptable :: Response S406 Types.ResponseHeaders (IO LBS.ByteString)
+notAcceptable = Response
     { status  = Status.status 406
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res407 :: Response (Status.KnownStatus 407) Types.ResponseHeaders (IO LBS.ByteString)
-res407 = Response
+proxyAuthenticationRequired :: Response S407 Types.ResponseHeaders (IO LBS.ByteString)
+proxyAuthenticationRequired = Response
     { status  = Status.status 407
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res408 :: Response (Status.KnownStatus 408) Types.ResponseHeaders (IO LBS.ByteString)
-res408 = Response
+requestTimeout :: Response S408 Types.ResponseHeaders (IO LBS.ByteString)
+requestTimeout = Response
     { status  = Status.status 408
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res409 :: Response (Status.KnownStatus 409) Types.ResponseHeaders (IO LBS.ByteString)
-res409 = Response
+conflict :: Response S409 Types.ResponseHeaders (IO LBS.ByteString)
+conflict = Response
     { status  = Status.status 409
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res410 :: Response (Status.KnownStatus 410) Types.ResponseHeaders (IO LBS.ByteString)
-res410 = Response
+gone :: Response S410 Types.ResponseHeaders (IO LBS.ByteString)
+gone = Response
     { status  = Status.status 410
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res411 :: Response (Status.KnownStatus 411) Types.ResponseHeaders (IO LBS.ByteString)
-res411 = Response
+lengthRequired :: Response S411 Types.ResponseHeaders (IO LBS.ByteString)
+lengthRequired = Response
     { status  = Status.status 411
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res412 :: Response (Status.KnownStatus 412) Types.ResponseHeaders (IO LBS.ByteString)
-res412 = Response
+preconditionFailed :: Response S412 Types.ResponseHeaders (IO LBS.ByteString)
+preconditionFailed = Response
     { status  = Status.status 412
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res413 :: Response (Status.KnownStatus 413) Types.ResponseHeaders (IO LBS.ByteString)
-res413 = Response
+requestEntityTooLarge :: Response S413 Types.ResponseHeaders (IO LBS.ByteString)
+requestEntityTooLarge = Response
     { status  = Status.status 413
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res414 :: Response (Status.KnownStatus 414) Types.ResponseHeaders (IO LBS.ByteString)
-res414 = Response
+requestURITooLong :: Response S414 Types.ResponseHeaders (IO LBS.ByteString)
+requestURITooLong = Response
     { status  = Status.status 414
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res415 :: Response (Status.KnownStatus 415) Types.ResponseHeaders (IO LBS.ByteString)
-res415 = Response
+unsupportedMediaType :: Response S415 Types.ResponseHeaders (IO LBS.ByteString)
+unsupportedMediaType = Response
     { status  = Status.status 415
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res416 :: Response (Status.KnownStatus 416) Types.ResponseHeaders (IO LBS.ByteString)
-res416 = Response
+requestedRangeNotSatisfiable :: Response S416 Types.ResponseHeaders (IO LBS.ByteString)
+requestedRangeNotSatisfiable = Response
     { status  = Status.status 416
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res417 :: Response (Status.KnownStatus 417) Types.ResponseHeaders (IO LBS.ByteString)
-res417 = Response
+expectationFailed :: Response S417 Types.ResponseHeaders (IO LBS.ByteString)
+expectationFailed = Response
     { status  = Status.status 417
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res418 :: Response (Status.KnownStatus 418) Types.ResponseHeaders (IO LBS.ByteString)
-res418 = Response
+imATeapot :: Response S418 Types.ResponseHeaders (IO LBS.ByteString)
+imATeapot = Response
     { status  = Status.status 418
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res422 :: Response (Status.KnownStatus 422) Types.ResponseHeaders (IO LBS.ByteString)
-res422 = Response
+unprocessableEntity :: Response S422 Types.ResponseHeaders (IO LBS.ByteString)
+unprocessableEntity = Response
     { status  = Status.status 422
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res428 :: Response (Status.KnownStatus 428) Types.ResponseHeaders (IO LBS.ByteString)
-res428 = Response
+preconditionRequired :: Response S428 Types.ResponseHeaders (IO LBS.ByteString)
+preconditionRequired = Response
     { status  = Status.status 428
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res429 :: Response (Status.KnownStatus 429) Types.ResponseHeaders (IO LBS.ByteString)
-res429 = Response
+tooManyRequests :: Response S429 Types.ResponseHeaders (IO LBS.ByteString)
+tooManyRequests = Response
     { status  = Status.status 429
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res431 :: Response (Status.KnownStatus 431) Types.ResponseHeaders (IO LBS.ByteString)
-res431 = Response
+requestHeaderFieldsTooLarge :: Response S431 Types.ResponseHeaders (IO LBS.ByteString)
+requestHeaderFieldsTooLarge = Response
     { status  = Status.status 431
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res500 :: Response (Status.KnownStatus 500) Types.ResponseHeaders (IO LBS.ByteString)
-res500 = Response
+internalServerError :: Response S500 Types.ResponseHeaders (IO LBS.ByteString)
+internalServerError = Response
     { status  = Status.status 500
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res501 :: Response (Status.KnownStatus 501) Types.ResponseHeaders (IO LBS.ByteString)
-res501 = Response
+notImplemented :: Response S501 Types.ResponseHeaders (IO LBS.ByteString)
+notImplemented = Response
     { status  = Status.status 501
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res502 :: Response (Status.KnownStatus 502) Types.ResponseHeaders (IO LBS.ByteString)
-res502 = Response
+badGateway :: Response S502 Types.ResponseHeaders (IO LBS.ByteString)
+badGateway = Response
     { status  = Status.status 502
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res503 :: Response (Status.KnownStatus 503) Types.ResponseHeaders (IO LBS.ByteString)
-res503 = Response
+serviceUnavailable :: Response S503 Types.ResponseHeaders (IO LBS.ByteString)
+serviceUnavailable = Response
     { status  = Status.status 503
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res504 :: Response (Status.KnownStatus 504) Types.ResponseHeaders (IO LBS.ByteString)
-res504 = Response
+gatewayTimeout :: Response S504 Types.ResponseHeaders (IO LBS.ByteString)
+gatewayTimeout = Response
     { status  = Status.status 504
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res505 :: Response (Status.KnownStatus 505) Types.ResponseHeaders (IO LBS.ByteString)
-res505 = Response
+httpVersionNotSupported :: Response S505 Types.ResponseHeaders (IO LBS.ByteString)
+httpVersionNotSupported = Response
     { status  = Status.status 505
     , headers = Headers.raw
     , body    = Body.raw
     }
 
-res511 :: Response (Status.KnownStatus 511) Types.ResponseHeaders (IO LBS.ByteString)
-res511 = Response
+networkAuthenticationRequired :: Response S511 Types.ResponseHeaders (IO LBS.ByteString)
+networkAuthenticationRequired = Response
     { status  = Status.status 511
     , headers = Headers.raw
     , body    = Body.raw

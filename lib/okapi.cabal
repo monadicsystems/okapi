@@ -35,19 +35,19 @@ library
     import:           warnings, ghc-extensions
     exposed-modules:
         Okapi
-        Okapi.Tree
-        Okapi.Mode.Contract
-        Okapi.Mode.Shape
-        Okapi.Mode.Morph
-        Okapi.Mode.Function
-        Okapi.Mode.Client
-        Okapi.Mode.Endpoint
-        Okapi.Mode.Link
+        Okapi.Artifact.Client
+        Okapi.Artifact.Endpoint
+        Okapi.Artifact.Function
+        Okapi.Artifact.Link
         Okapi.Artifact.OpenApi
-        Okapi.Record.Failure
-        Okapi.Record.Result
-        Okapi.Record.Data
-        Okapi.HTTP.Side
+        Okapi.Data.Request
+        Okapi.Data.Response
+        Okapi.Result.Request
+        Okapi.Result.Response
+        Okapi.Failure.Request
+        Okapi.Failure.Response
+        Okapi.HTTP
+        Okapi.HTTP.Tree
         Okapi.HTTP.Headers
         Okapi.HTTP.Body
         Okapi.HTTP.Request
@@ -55,15 +55,15 @@ library
         Okapi.HTTP.Request.Path
         Okapi.HTTP.Request.Query
         Okapi.HTTP.Request.Headers
+        Okapi.HTTP.Request.Headers.Cookie
         Okapi.HTTP.Request.Body
         Okapi.HTTP.Response
         Okapi.HTTP.Response.Status
         Okapi.HTTP.Response.Headers
+        Okapi.HTTP.Response.Headers.SetCookie
+        Okapi.HTTP.Response.Headers.Attributes
         Okapi.HTTP.Response.Body
         Okapi.HTTP.Responses
-        Okapi.HTTP.Headers.Cookie
-        Okapi.HTTP.Headers.SetCookie
-        Okapi.HTTP.Headers.Attributes
         Okapi.HTTP.Structured
         Okapi.HTTP.Structured.Scan
         Okapi.HTTP.Structured.BareItem

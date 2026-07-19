@@ -32,13 +32,13 @@ import Data.Text qualified as Text
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
-import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), text)
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..), text)
+import Okapi.HTTP.Tree qualified as Tree
 import Web.HttpApiData (parseUrlPiece, toUrlPiece)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.Tree (printParse, int, integer, (=.))
+-- >>> import Okapi.HTTP.Tree (printParse, int, integer, (=.))
 -- >>> import Data.List.NonEmpty (NonEmpty((:|)))
 -- >>> import GHC.Generics (Generic)
 -- >>> :{

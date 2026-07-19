@@ -13,11 +13,11 @@ module Okapi.HTTP.Response.Body (
     raw,
     json,
     jsonValue,
-    noContent,
+    none,
 ) where
 
 import Okapi.HTTP.Body
-    ( Body, None (..), IsoJson, ParseError (..), parser, printer, raw, json, jsonValue, noContent )
-import Okapi.HTTP.Side (ForResponse)
+    ( Body, None (..), IsoJson, ParseError (..), parser, printer, raw, json, jsonValue, none )
+import Okapi.HTTP.Tree (ForResponse)
 
 type ResponseBody = Body ForResponse

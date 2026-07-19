@@ -1,5 +1,7 @@
 
-module Okapi.Tree (
+module Okapi.HTTP.Tree (
+    ForRequest,
+    ForResponse,
     Context,
     Failure,
     Piece,
@@ -57,6 +59,13 @@ import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Time (Day, LocalTime, TimeOfDay, UTCTime)
 import Data.UUID (UUID)
+
+-- | Phantom markers distinguishing request-side from response-side codecs
+--   (see "Okapi.HTTP.Headers", "Okapi.HTTP.Body") — never constructed, used
+--   only as a type-level tag.
+data ForRequest
+
+data ForResponse
 
 -- ── Leaf ─────────────────────────────────────────────────────────────────────
 
@@ -153,7 +162,7 @@ type SymTree t a = Tree t a a
 --   allowed and merge order is left to whatever consumes them (last tag
 --   wins for singular fields, by convention — see
 --   'Okapi.Artifact.OpenApi'). 'Group' and 'Extension' are meaningful only
---   at the whole-contract level ('Okapi.Mode.Contract.annotate'), not here —
+--   at the whole-contract level ('Okapi.HTTP.annotate'), not here —
 --   see there.
 data Tag
     = Description Text
@@ -180,7 +189,7 @@ data Tag
 -- >>> parsePrint toyParser toyPrinter (annotate [Deprecated] toyTree) [5] == parsePrint toyParser toyPrinter toyTree [5]
 -- True
 --
--- (There's also 'Okapi.Mode.Contract.annotate', a separate function for
+-- (There's also 'Okapi.HTTP.annotate', a separate function for
 -- annotating a whole @req :-> res@ contract rather than one 'Tree' node —
 -- qualify the import if both are needed in the same file.)
 annotate :: [Tag] -> Tree t i o -> Tree t i o

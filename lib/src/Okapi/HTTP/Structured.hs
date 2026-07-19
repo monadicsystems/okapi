@@ -15,8 +15,8 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
-import Okapi.Tree (Failure, Parser, Printer, Context, Tree (..))
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, Parser, Printer, Context, Tree (..))
+import Okapi.HTTP.Tree qualified as Tree
 import Okapi.HTTP.Structured.Dictionary (Dictionary)
 import Okapi.HTTP.Structured.Dictionary qualified as Dictionary
 import Okapi.HTTP.Structured.Item (Item)
@@ -25,7 +25,7 @@ import Okapi.HTTP.Structured.List (List)
 import Okapi.HTTP.Structured.List qualified as List
 
 -- $setup
--- >>> import Okapi.Tree (Leaf, printParse, parsePrintOr, integer, text, bool, (=.))
+-- >>> import Okapi.HTTP.Tree (Leaf, printParse, parsePrintOr, integer, text, bool, (=.))
 -- >>> import Okapi.HTTP.Structured.Item qualified as Item
 -- >>> import Okapi.HTTP.Structured.List qualified as List
 -- >>> import Okapi.HTTP.Structured.Dictionary qualified as Dictionary
@@ -56,7 +56,7 @@ stripLead bs = fromMaybe bs (BS.stripPrefix ", " bs)
 --   first), but a fresh top-level header value never does. Only prepend
 --   when it's not already there, so this is safe both for a fresh value
 --   /and/ for a leftover previously produced by this same parser (already
---   in Dictionary's native form) being fed back in — see 'Okapi.Tree.parser'.
+--   in Dictionary's native form) being fed back in — see 'Okapi.HTTP.Tree.parser'.
 unstripLead :: ByteString -> ByteString
 unstripLead bs = case BS.uncons bs of
     Just (44, _) -> bs
@@ -108,7 +108,7 @@ item = Node . SItem
 -- prop> forAll mixedRFCList (\bs -> parsePrintOr discard parser printer (list (List.items (Item.bareItem (integer :: Leaf BareItem Integer)))) (stripOWS bs))
 --
 -- RFC 9651 §3.1.1's own worked example — four hand-composed 'List.innerList'
--- members via 'Okapi.Tree.Apply' (including a trailing empty inner list),
+-- members via 'Okapi.HTTP.Tree.Apply' (including a trailing empty inner list),
 -- confirming they really do chain correctly (each consuming its own
 -- leading separator off what the previous one left behind, per
 -- 'List.innerList''s own docs):

@@ -28,7 +28,7 @@ import Prelude hiding (print)
 -- $setup
 -- >>> import Okapi.HTTP.Response.Status qualified as Status
 -- >>> import Network.HTTP.Types qualified as Types
--- >>> import Okapi.Tree (leafPrintParse, leafParsePrint)
+-- >>> import Okapi.HTTP.Tree (leafPrintParse, leafParsePrint)
 -- >>> import Test.QuickCheck.Instances ()
 
 {- | Evidence that @s@ is a known, valid HTTP status code (every @statusNNN@
@@ -573,7 +573,7 @@ raw = Raw
 --   (like these examples) need the numeral literal annotated with its own
 --   type, since nothing else pins it — but wherever @status 200@ appears
 --   inside a signature that already says @KnownStatus 200@ (e.g.
---   'Okapi.HTTP.Response.res200'), it just works, no annotation
+--   'Okapi.HTTP.Response.ok'), it just works, no annotation
 --   needed, because the surrounding type does that job instead.
 --
 -- >>> parse (status (200 :: KnownStatus 200)) Types.status200

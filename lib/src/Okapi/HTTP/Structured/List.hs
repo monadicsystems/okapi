@@ -20,8 +20,8 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
-import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
-import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
+import Okapi.HTTP.Tree qualified as Tree
 import Okapi.HTTP.Structured.BareItem (BareItem, parseInnerToList, renderInner)
 import Okapi.HTTP.Structured.Item (Item)
 import Okapi.HTTP.Structured.Item qualified as Item
@@ -30,7 +30,7 @@ import Okapi.HTTP.Structured.Parameters qualified as Parameters
 import Okapi.HTTP.Structured.Scan (strip, firstAndTail, firstTop, splitTop)
 
 -- $setup
--- >>> import Okapi.Tree (Leaf, printParse, integer, text, (=.))
+-- >>> import Okapi.HTTP.Tree (Leaf, printParse, integer, text, (=.))
 -- >>> import Okapi.HTTP.Structured.Item qualified as Item
 -- >>> import Okapi.HTTP.Structured.Parameters qualified as Parameters
 -- >>> import Okapi.HTTP.Structured.BareItem (BareItem)
@@ -59,7 +59,7 @@ type instance Failure List = ParseError
 --   way 'Okapi.HTTP.Structured.Item.Item' has no \"I am an inner list\" case
 --   either. Two shapes, mirroring 'item'\/'items' at the outer 'List'
 --   level exactly: 'innerItem' (heterogeneous, one hand-composable element
---   at a time, for use with 'Okapi.Tree.Apply') and 'innerItems'
+--   at a time, for use with 'Okapi.HTTP.Tree.Apply') and 'innerItems'
 --   (homogeneous, a whole run of same-typed items in one pass).
 type InnerItems :: Type -> Type -> Type
 data InnerItems i o where
@@ -105,7 +105,7 @@ innerList = Node . InnerList
 --   per-element, leading-separator convention as 'item' (there, a leading
 --   @, @; here, a single leading space), for hand-composing a
 --   heterogeneous sequence of differently-typed, individually-parameterized
---   items via 'Okapi.Tree.Apply' — see 'innerListOf'.
+--   items via 'Okapi.HTTP.Tree.Apply' — see 'innerListOf'.
 --
 -- >>> innerParser (innerItem (Item.bareItem (integer :: Leaf BareItem Integer))) "1 2 3"
 -- (Right 1," 2 3")
