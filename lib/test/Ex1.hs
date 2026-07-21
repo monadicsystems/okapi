@@ -18,13 +18,15 @@ import Network.HTTP.Types qualified as Types
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Okapi
-import Okapi.HTTP
 import Okapi.HTTP.Request
 import Okapi.HTTP.Request qualified as Req
-import Okapi.HTTP.Response
 import Okapi.HTTP.Response qualified as Res
-import Okapi.Data.Request qualified as ReqData
-import Okapi.Data.Response qualified as ResData
+import Okapi.HTTP.Request.Method qualified as Method
+import Okapi.HTTP.Headers qualified as Headers
+import Okapi.HTTP.Body qualified as Body
+import Okapi.HTTP.Response.Status qualified as Status
+import Okapi.Request.Data qualified as ReqData
+import Okapi.Response.Data qualified as ResData
 
 data Message = Message
     { temperature :: Integer
@@ -46,24 +48,24 @@ createMessageReq = Req.post
         seg_ text "messages"
         pure ()
     , headers = do
-        contentType JSON
-        field_ "X-Api-Key" "<API_KEY>"
-        field_ "anthropic-version" "2023-06-01"
-        maybeUserProfileId <- field' "anthropic-user-profile-id" text
+        Headers.contentType Headers.JSON
+        Headers.field_ "X-Api-Key" "<API_KEY>"
+        Headers.field_ "anthropic-version" "2023-06-01"
+        maybeUserProfileId <- Headers.field' "anthropic-user-profile-id" text
         pure maybeUserProfileId
-    , body = json @Message
+    , body = Body.json @Message
     }
 
 data CreateMessageResponses f
-    = Created (f (KnownStatus 201) Types.ResponseHeaders (IO LBS.ByteString))
+    = Created (f (Status.KnownStatus 201) Types.ResponseHeaders (IO LBS.ByteString))
     | Any (f Types.Status Types.ResponseHeaders (IO LBS.ByteString))
-    deriving (Generic, Cases)
+    deriving (Generic, Responses)
 
 createMessageRes = Res.created
 
-createMessageContract = createMessageReq :-< cases @CreateMessageResponses
+createMessageContract = createMessageReq :-< responses @CreateMessageResponses
     Res.created
-    Res.any
+    Res.base
 
 -- | Renders 'createMessageContract' as an OpenAPI document — only needs the
 --   'HTTP' contract itself, no handler, so this is callable straight from the
@@ -103,4 +105,4 @@ lookAtResult cmr = case cmr of
             bodyResult <- resData.body
             print bodyResult
 
-testRequest = (ReqData.Request POST () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))
+testRequest = (ReqData.Request Method.Post () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))

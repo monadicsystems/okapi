@@ -2,7 +2,7 @@
 {-# LANGUAGE NoFieldSelectors #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Artifact.Link (
+module Okapi.Link (
     URI (..),
     Link (..),
     build,
@@ -31,7 +31,7 @@ import GHC.Records (HasField (..))
 import Network.HTTP.Types qualified as Types
 import Okapi.HTTP.Request.Path qualified as Path
 import Okapi.HTTP.Request.Query qualified as Query
-import Okapi.HTTP (HTTP (..), Shape, stripTags, Morph (..))
+import Okapi.HTTP (HTTP (..), Signature, stripTags, Morph (..))
 import Okapi.HTTP.Request qualified as Req
 
 data URI = URI
@@ -45,7 +45,7 @@ instance HasField "full" URI Text where
 data Link shape where
     Builder ::
         (path -> query -> URI) ->
-        Link (Shape method path query headers body result)
+        Link (Signature method path query headers body result)
 
 build ::
     Req.Request method path query headers body ->
@@ -72,8 +72,8 @@ instance (GLink ctL lnL, GLink ctR lnR) => GLink (ctL :*: ctR) (lnL :*: lnR) whe
 
 instance
     GLink
-        (S1 sm (Rec0 (HTTP (Shape method path query headers body result))))
-        (S1 sm' (Rec0 (Link (Shape method path query headers body result))))
+        (S1 sm (Rec0 (HTTP (Signature method path query headers body result))))
+        (S1 sm' (Rec0 (Link (Signature method path query headers body result))))
     where
     gLink (M1 (K1 ct)) =
         M1
@@ -87,7 +87,7 @@ instance
 
 -- | Lets a field be a nested record of the same shape instead of a
 --   concrete 'HTTP'\/'Link' — recurses via 'links' itself. Same
---   non-overlap argument as the nested instances in "Okapi.Artifact.Endpoint".
+--   non-overlap argument as the nested instances in "Okapi.Server".
 instance
     ( Generic (nested HTTP)
     , Generic (nested Link)
@@ -122,8 +122,8 @@ instance (GLinkVia ctL lnL, GLinkVia ctR lnR) => GLinkVia (ctL :*: ctR) (lnL :*:
 
 instance
     GLinkVia
-        (S1 sm (Rec0 (Morph HTTP n (Shape method path query headers body result))))
-        (S1 sm' (Rec0 (Morph Link n (Shape method path query headers body result))))
+        (S1 sm (Rec0 (Morph HTTP n (Signature method path query headers body result))))
+        (S1 sm' (Rec0 (Morph Link n (Signature method path query headers body result))))
     where
     gLinkVia (M1 (K1 (Morph ct))) =
         M1
@@ -150,7 +150,7 @@ instance
     gLinkVia (M1 (K1 ctVal)) = M1 (K1 (linksVia ctVal))
 
 {- | Heterogeneous-@n@ counterpart to 'links' — takes a record built with
-  'Okapi.HTTP.Morph' (see 'Okapi.Artifact.Endpoint.endpointsVia'). Output
+  'Okapi.HTTP.Morph' (see 'Okapi.Server.serversVia'). Output
   is @record (Morph Link)@, not plain @record Link@ — each field's @n@ is
   baked into the record's own field declarations, so the output has to stay
   2-arg-shaped to match; unwrap each field's 'Morph' to get the plain

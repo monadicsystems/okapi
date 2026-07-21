@@ -1,6 +1,6 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Okapi.Data.Response (Response (..)) where
+module Okapi.Response.Data (Response (..)) where
 
 data Response status headers body = Response
     { status  :: status

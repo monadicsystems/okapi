@@ -3,12 +3,13 @@
 
 module Okapi.HTTP.Request.Query (
     Query (..),
+    Base,
     ArrayStyle (..),
     ParseError (..),
     parser,
     printer,
     parseExact,
-    raw,
+    base,
     param,
     param',
     param_,
@@ -62,7 +63,7 @@ import Web.HttpApiData (parseQueryParam, toQueryParam)
 
 type Query :: Type -> Type -> Type
 data Query i o where
-    Raw    :: Query Types.Query Types.Query
+    Base    :: Query Base Base
     Param  :: Text -> Leaf Query a -> Query a a
     Param' :: Text -> Leaf Query a -> Query (Maybe a) (Maybe a)
     Param_ :: Text -> Leaf Query a -> a -> Query i ()
@@ -83,7 +84,7 @@ parser :: Tree Query i o -> Parser Query o
 parser = Tree.parser alg
   where
     alg :: Query i o -> Parser Query o
-    alg Raw q = (Right q, [])
+    alg Base q = (Right q, [])
     alg (Param key vLeaf) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)                 -> (Left ParseError, q)
@@ -127,7 +128,7 @@ printer :: Tree Query i o -> Printer Query i
 printer = Tree.printer alg
   where
     alg :: Query i o -> Printer Query i
-    alg Raw                    q        = q
+    alg Base                    q        = q
     alg (Param key vLeaf)      x        = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
     alg (Param' _ _)           Nothing  = []
     alg (Param' key vLeaf)     (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
@@ -173,12 +174,15 @@ delim Exploded       = ','
 
 -- | Pass the raw query straight through, unconstrained.
 --
--- >>> parser raw [("a", Just "1")]
+-- >>> parser base [("a", Just "1")]
 -- (Right [("a",Just "1")],[])
--- >>> printer raw [("a", Just "1")]
+-- >>> printer base [("a", Just "1")]
 -- [("a",Just "1")]
-raw :: Tree Query Types.Query Types.Query
-raw = Node Raw
+base :: Tree Query Types.Query Types.Query
+base = Node Base
+
+-- | What 'base' decodes\/encodes to — the maximally unconstrained query slot.
+type Base = Types.Query
 
 -- | Parse and print a required query parameter.
 --

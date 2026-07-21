@@ -1,6 +1,6 @@
 {-# LANGUAGE NoFieldSelectors #-}
 
-module Okapi.Data.Request (Request (..)) where
+module Okapi.Request.Data (Request (..)) where
 
 data Request method path query headers body = Request
     { method  :: method

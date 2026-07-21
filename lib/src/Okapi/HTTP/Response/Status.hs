@@ -9,10 +9,11 @@ module Okapi.HTTP.Response.Status (
     S500, S501, S502, S503, S504, S505, S511,
     SomeKnownStatus (..),
     Status (..),
+    Base,
     ParseError (..),
     parse,
     print,
-    raw,
+    base,
     status,
     knownStatusToHTTP,
     extractStatus,
@@ -542,32 +543,35 @@ type S511 = KnownStatus 511
 
 type Status :: Type -> Type
 data Status a where
-    Raw    :: Status Types.Status
+    Base    :: Status Base
     Status :: KnownNat s => KnownStatus s -> Status (KnownStatus s)
+
+-- | What 'base' decodes\/encodes to — the maximally unconstrained status slot.
+type Base = Types.Status
 
 data ParseError = ParseError deriving (Eq, Show)
 
 parse :: Status status -> Types.Status -> Either ParseError status
-parse Raw         s = Right s
+parse Base         s = Right s
 parse (Status ks) s
     | s == knownStatusToHTTP ks = Right ks
     | otherwise                 = Left ParseError
 
 print :: Status status -> status -> Types.Status
-print Raw         s  = s
+print Base         s  = s
 print (Status ks) _  = knownStatusToHTTP ks
 
 -- | Pass the raw HTTP status straight through, unconstrained.
 --
--- >>> parse raw (Types.mkStatus 200 "OK")
+-- >>> parse base (Types.mkStatus 200 "OK")
 -- Right (Status {statusCode = 200, statusMessage = "OK"})
--- >>> Status.print raw (Types.mkStatus 200 "OK")
+-- >>> Status.print base (Types.mkStatus 200 "OK")
 -- Status {statusCode = 200, statusMessage = "OK"}
 --
--- prop> \code msg -> leafPrintParse (parse raw) (Status.print raw) (Types.mkStatus code msg)
--- prop> \code msg -> leafParsePrint (parse raw) (Status.print raw) (Types.mkStatus code msg)
-raw :: Status Types.Status
-raw = Raw
+-- prop> \code msg -> leafPrintParse (parse base) (Status.print base) (Types.mkStatus code msg)
+-- prop> \code msg -> leafParsePrint (parse base) (Status.print base) (Types.mkStatus code msg)
+base :: Status Types.Status
+base = Base
 
 -- | Match against a statically known HTTP status code. Standalone uses
 --   (like these examples) need the numeral literal annotated with its own

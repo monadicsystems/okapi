@@ -2,10 +2,10 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Okapi.HTTP.Responses
-    ( Responses
+    ( Responses'
     , getResponses
-    , Cases
-    , cases
+    , Responses
+    , responses
     , parseResponses
     , printResponses
     , traverseResponses
@@ -20,9 +20,9 @@ import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Network.Wai qualified as Wai
 import Okapi.HTTP.Response qualified as Res
-import Okapi.Data.Response qualified as Data
-import Okapi.Result.Response qualified as Result
-import Okapi.Failure.Response qualified as Error
+import Okapi.Response.Data qualified as Data
+import Okapi.Response.Result qualified as Result
+import Okapi.Response.Failure qualified as Error
 
 -- $setup
 -- >>> :set -XTypeApplications
@@ -32,17 +32,17 @@ import Okapi.Failure.Response qualified as Error
 -- >>> import GHC.Generics (Generic)
 -- >>> import Okapi.HTTP.Response qualified as Res
 -- >>> import Okapi.HTTP.Response.Status qualified as Status
--- >>> import Okapi.Data.Response qualified as Data
+-- >>> import Okapi.Response.Data qualified as Data
 -- >>> data ExampleResponses f = ExOk (f (Status.KnownStatus 200) Types.ResponseHeaders (IO LBS.ByteString)) | ExNotFound (f (Status.KnownStatus 404) Types.ResponseHeaders (IO LBS.ByteString)) deriving Generic
--- >>> instance Cases ExampleResponses
+-- >>> instance Responses ExampleResponses
 
-newtype Responses
+newtype Responses'
     (f         :: Type -> Type -> Type -> Type)
     (responses :: (Type -> Type -> Type -> Type) -> Type)
-    = Responses (NonEmpty (responses f))
+    = Responses' (NonEmpty (responses f))
 
-getResponses :: Responses f responses -> NonEmpty (responses f)
-getResponses (Responses xs) = xs
+getResponses :: Responses' f responses -> NonEmpty (responses f)
+getResponses (Responses' xs) = xs
 
 type family GArgs
     (f   :: Type -> Type -> Type -> Type)
@@ -170,7 +170,7 @@ instance (GConstruct fil, GConstruct fir) => GConstruct (fil :+: fir) where
 
 instance {-# OVERLAPPABLE #-}
     TypeError
-        ( 'Text "Cannot build `cases` for this `responses` type — its shape isn't supported."
+        ( 'Text "Cannot build this `responses` type — its shape isn't supported."
         ':$$: 'Text "Every constructor must hold exactly one field of type `f status headers body`."
         ':$$: 'Text "Example: data MyResponses f = Ok (f 200 () Body) | NotFound (f 404 () ())"
         )
@@ -194,31 +194,31 @@ class
     , GZip Res.Response Data.Response
         (Rep (responses Res.Response)) (Rep (responses Data.Response))
     ) =>
-    Cases (responses :: (Type -> Type -> Type -> Type) -> Type)
+    Responses (responses :: (Type -> Type -> Type -> Type) -> Type)
 
-cases ::
+responses ::
     forall (responses :: (Type -> Type -> Type -> Type) -> Type).
-    Cases responses =>
+    Responses responses =>
     GArgs
         Res.Response
         (Rep (responses Res.Response))
-        (Responses Res.Response responses)
-cases =
+        (Responses' Res.Response responses)
+responses =
     gConstruct
         (id :: Rep (responses Res.Response) () -> Rep (responses Res.Response) ())
-        (Responses @Res.Response @responses)
+        (Responses' @Res.Response @responses)
 
 parseResponses ::
     forall responses.
-    Cases responses =>
-    Responses Res.Response responses ->
+    Responses responses =>
+    Responses' Res.Response responses ->
     Wai.Response ->
-    IO (Either (Responses Error.Response responses) (responses Data.Response))
-parseResponses (Responses cs) waiRes = do
+    IO (Either (Responses' Error.Response responses) (responses Data.Response))
+parseResponses (Responses' cs) waiRes = do
     rs <- traverse parseBranch cs
     pure $ case mapMaybe toValue (NE.toList rs) of
         (v : _) -> Right v
-        []      -> Left (Responses (fmap toErrors rs))
+        []      -> Left (Responses' (fmap toErrors rs))
   where
     parseBranch :: responses Res.Response -> IO (responses Result.Response)
     parseBranch = traverseResponses (\codec -> Res.parser' codec waiRes)
@@ -227,19 +227,20 @@ parseResponses (Responses cs) waiRes = do
     toErrors :: responses Result.Response -> responses Error.Response
     toErrors = runIdentity . traverseResponses (Identity . Res.resultToError)
 
--- | 'Responses'' constructor isn't exported, so 'cases' is the only way to
---   build one — and 'GConstruct'\'s @(':+:')@ instance always combines
---   @ls <> rs@, never drops a branch, so the result is guaranteed to carry
---   exactly one codec per constructor of @responses@. Any @responses
---   Data.Response@ value handed to 'printResponses' was necessarily built
---   through one of those same (finitely many) constructors, and 'zipResponses'
---   only ever returns 'Just' when the codec and the value share a
---   constructor — so a match always exists and the @error@ branch below is
---   unreachable for any 'Responses' actually produced by 'cases'. Confirmed
---   here across every constructor of a small example type sharing one
---   'cases'-built value, not just one:
+-- | The 'Responses'' constructor isn't exported, so 'responses' is the only
+--   way to build a 'Responses'' value — and 'GConstruct'\'s @(':+:')@
+--   instance always combines @ls <> rs@, never drops a branch, so the
+--   result is guaranteed to carry exactly one codec per constructor of
+--   @responses@. Any @responses Data.Response@ value handed to
+--   'printResponses' was necessarily built through one of those same
+--   (finitely many) constructors, and 'zipResponses' only ever returns
+--   'Just' when the codec and the value share a constructor — so a match
+--   always exists and the @error@ branch below is unreachable for any
+--   'Responses'' value actually produced by 'responses'. Confirmed here
+--   across every constructor of a small example type sharing one
+--   'responses'-built value, not just one:
 --
--- >>> let cs = cases @ExampleResponses Res.ok Res.notFound
+-- >>> let cs = responses @ExampleResponses Res.ok Res.notFound
 -- >>> r1 <- printResponses cs (ExOk (Data.Response { status = 200, headers = [], body = pure "hi" }))
 -- >>> Types.statusCode (Wai.responseStatus r1)
 -- 200
@@ -248,11 +249,11 @@ parseResponses (Responses cs) waiRes = do
 -- 404
 printResponses ::
     forall responses.
-    Cases responses =>
-    Responses Res.Response responses ->
+    Responses responses =>
+    Responses' Res.Response responses ->
     responses Data.Response ->
     IO Wai.Response
-printResponses (Responses cs) rv =
+printResponses (Responses' cs) rv =
     case [io | c <- NE.toList cs, Just io <- [zipResponses Res.printer c rv]] of
         (io : _) -> io
         []       -> error "printResponses: no matching response constructor"

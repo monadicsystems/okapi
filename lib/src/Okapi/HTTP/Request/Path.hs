@@ -3,6 +3,7 @@
 
 module Okapi.HTTP.Request.Path (
     Path (..),
+    Base,
     ParseError (..),
     parser,
     printer,
@@ -11,7 +12,7 @@ module Okapi.HTTP.Request.Path (
     lit,
     seg,
     segs,
-    raw,
+    base,
     LitF (..),
     GPath (..),
     derived,
@@ -56,7 +57,7 @@ data Path i o where
     Seg_ :: Leaf Path a -> a -> Path i ()
     Seg  :: Text -> Leaf Path a -> Path a a
     Segs :: Leaf Path a -> Path (NonEmpty a) (NonEmpty a)
-    Raw  :: Path [Text] [Text]
+    Base  :: Path Base Base
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -83,7 +84,7 @@ parser = Tree.parser alg
             Right xs -> case NEL.nonEmpty xs of
                 Nothing   -> (Left ParseError, [])
                 Just nel' -> (Right nel', [])
-    alg Raw ts = (Right ts, [])
+    alg Base ts = (Right ts, [])
 
 printer :: Tree Path i o -> Printer Path i
 printer = Tree.printer alg
@@ -92,7 +93,7 @@ printer = Tree.printer alg
     alg (Seg_ vLeaf x) _  = [vLeaf.encode x]
     alg (Seg _name vLeaf) v = [vLeaf.encode v]
     alg (Segs vLeaf) nel = map vLeaf.encode (NEL.toList nel)
-    alg Raw ts = ts
+    alg Base ts = ts
 
 -- | Parse a full path, requiring every segment be consumed — 'Left' with
 --   the leftover segments if any remain, 'Left' with the underlying error
@@ -153,12 +154,15 @@ segs vLeaf = Node (Segs vLeaf)
 
 -- | Pass all remaining path segments straight through, unconstrained.
 --
--- >>> parser raw ["a", "b", "c"]
+-- >>> parser base ["a", "b", "c"]
 -- (Right ["a","b","c"],[])
--- >>> printer raw ["a", "b", "c"]
+-- >>> printer base ["a", "b", "c"]
 -- ["a","b","c"]
-raw :: Tree Path [Text] [Text]
-raw = Node Raw
+base :: Tree Path [Text] [Text]
+base = Node Base
+
+-- | What 'base' decodes\/encodes to — the maximally unconstrained path slot.
+type Base = [Text]
 
 instance HasLeaf Path Int     where leaf = Leaf (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" Nothing)
 instance HasLeaf Path Int16   where leaf = Leaf (first (const ParseError) . parseUrlPiece) toUrlPiece (Info "integer" (Just "int32"))

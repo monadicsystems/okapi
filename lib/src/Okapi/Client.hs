@@ -3,7 +3,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Artifact.Client (
+module Okapi.Client (
     ClientError (..),
     ClientSettings (..),
     Client,
@@ -28,11 +28,11 @@ import GHC.Generics
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
-import Okapi.HTTP (HTTP (..), Shape, stripTags, Morph (..))
+import Okapi.HTTP (HTTP (..), Signature, stripTags, Morph (..))
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
 import Okapi.HTTP.Responses qualified as Resps
-import Okapi.Data.Request qualified as Data
+import Okapi.Request.Data qualified as Data
 
 data ClientError = ClientError deriving (Eq, Show)
 
@@ -44,17 +44,17 @@ data ClientSettings = ClientSettings
 data Client shape where
     Function ::
         (Data.Request method path query headers body -> IO (Either ClientError result)) ->
-        Client (Shape method path query headers body result)
+        Client (Signature method path query headers body result)
 
 pattern Fn ::
     (Data.Request method path query headers body -> IO (Either ClientError result)) ->
-    Client (Shape method path query headers body result)
+    Client (Signature method path query headers body result)
 pattern Fn f <- Function f
 
 fetch ::
     HC.Manager ->
     String ->
-    HTTP (Shape method path query headers body result) ->
+    HTTP (Signature method path query headers body result) ->
     Data.Request method path query headers body ->
     IO (Either ClientError result)
 fetch mgr baseUrl contract reqVal = case stripTags contract of
@@ -82,8 +82,8 @@ fetch mgr baseUrl contract reqVal = case stripTags contract of
 --   > case clientFor settings contract of Fn f -> f requestValue
 clientFor ::
     ClientSettings ->
-    HTTP (Shape method path query headers body result) ->
-    Client (Shape method path query headers body result)
+    HTTP (Signature method path query headers body result) ->
+    Client (Signature method path query headers body result)
 clientFor (ClientSettings mgr url) contract = Function (fetch mgr url contract)
 
 toHCRequest :: String -> Wai.Request -> IO HC.Request
@@ -122,14 +122,14 @@ instance (GClient ctL clL, GClient ctR clR)
         gClient @ctL @clL s ctL :*: gClient @ctR @clR s ctR
 
 instance GClient
-    (S1 sm  (Rec0 (HTTP (Shape method path query headers body result))))
-    (S1 sm' (Rec0 (Client (Shape method path query headers body result)))) where
+    (S1 sm  (Rec0 (HTTP (Signature method path query headers body result))))
+    (S1 sm' (Rec0 (Client (Signature method path query headers body result)))) where
     gClient (ClientSettings mgr url) (M1 (K1 ct)) =
         M1 (K1 (Function \reqVal -> fetch mgr url ct reqVal))
 
 -- | Lets a field be a nested record of the same shape instead of a
 --   concrete 'HTTP'\/'Client' — recurses via 'client' itself. Same
---   non-overlap argument as the nested instances in "Okapi.Artifact.Endpoint".
+--   non-overlap argument as the nested instances in "Okapi.Server".
 instance
     ( Generic (nested HTTP)
     , Generic (nested Client)
@@ -166,8 +166,8 @@ instance (GClientVia ctL clL, GClientVia ctR clR)
         gClientVia @ctL @clL s ctL :*: gClientVia @ctR @clR s ctR
 
 instance GClientVia
-    (S1 sm  (Rec0 (Morph HTTP n (Shape method path query headers body result))))
-    (S1 sm' (Rec0 (Morph Client n (Shape method path query headers body result)))) where
+    (S1 sm  (Rec0 (Morph HTTP n (Signature method path query headers body result))))
+    (S1 sm' (Rec0 (Morph Client n (Signature method path query headers body result)))) where
     gClientVia (ClientSettings mgr url) (M1 (K1 (Morph ct))) =
         M1 (K1 (Morph (Function \reqVal -> fetch mgr url ct reqVal)))
 
@@ -184,9 +184,9 @@ instance
     gClientVia settings (M1 (K1 ctVal)) = M1 (K1 (clientVia ctVal settings))
 
 {- | Heterogeneous-@n@ counterpart to 'client' — takes a record built with
-  'Okapi.HTTP.Morph' (see 'Okapi.Artifact.Endpoint.endpointsVia') instead
+  'Okapi.HTTP.Morph' (see 'Okapi.Server.serversVia') instead
   of a plain @record HTTP@. Output is @record (Morph Client)@, not
-  plain @record Client@ — same reasoning as 'Okapi.Artifact.Link.linksVia':
+  plain @record Client@ — same reasoning as 'Okapi.Link.linksVia':
   each field's @n@ is baked into the record's own field declarations, so
   the output has to stay 2-arg-shaped to match, even though 'Client' itself
   no more cares about @n@ than 'Link' does.

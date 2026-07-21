@@ -2,7 +2,8 @@
 
 module Okapi.HTTP.Response (
     Response (..),
-    any,
+    Base,
+    base,
     continue,
     switchingProtocols,
     ok,
@@ -61,410 +62,479 @@ module Okapi.HTTP.Response (
 
     -- * Side-pinned header combinator (re-exported from "Okapi.HTTP.Headers")
     setCookie,
-
-    -- * Status singletons (re-exported from "Okapi.HTTP.Response.Status") -- the full set
-    KnownStatus (..),
-    S100, S101, S200, S201, S202, S203, S204, S205, S206,
-    S300, S301, S302, S303, S304, S305, S307, S308,
-    S400, S401, S402, S403, S404, S405, S406, S407, S408, S409,
-    S410, S411, S412, S413, S414, S415, S416, S417, S418,
-    S422, S428, S429, S431,
-    S500, S501, S502, S503, S504, S505, S511,
-    SomeKnownStatus (..),
-    allKnownStatuses,
-
-    -- * Set-Cookie attributes (re-exported from "Okapi.HTTP.Response.Headers.Attributes")
-    attr,
-    attr',
-    secure,
-    httpOnly,
 ) where
 
-import Prelude hiding (any)
 import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
-import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
-import Okapi.HTTP.Headers qualified as Headers
+import Okapi.Response.Data qualified as Data
+import Okapi.Response.Failure qualified as Error
 import Okapi.HTTP.Body qualified as Body
-import Okapi.HTTP.Response.Body (ResponseBody)
-import Okapi.HTTP.Response.Headers (ResponseHeaders, setCookie)
-import Okapi.HTTP.Response.Status
-    ( KnownStatus (..)
-    , S100, S101, S200, S201, S202, S203, S204, S205, S206
-    , S300, S301, S302, S303, S304, S305, S307, S308
-    , S400, S401, S402, S403, S404, S405, S406, S407, S408, S409
-    , S410, S411, S412, S413, S414, S415, S416, S417, S418
-    , S422, S428, S429, S431
-    , S500, S501, S502, S503, S504, S505, S511
-    , SomeKnownStatus (..)
-    , allKnownStatuses
-    )
+import Okapi.HTTP.Headers (setCookie)
+import Okapi.HTTP.Headers qualified as Headers
+import Okapi.HTTP.Response.Status (
+    S100,
+    S101,
+    S200,
+    S201,
+    S202,
+    S203,
+    S204,
+    S205,
+    S206,
+    S300,
+    S301,
+    S302,
+    S303,
+    S304,
+    S305,
+    S307,
+    S308,
+    S400,
+    S401,
+    S402,
+    S403,
+    S404,
+    S405,
+    S406,
+    S407,
+    S408,
+    S409,
+    S410,
+    S411,
+    S412,
+    S413,
+    S414,
+    S415,
+    S416,
+    S417,
+    S418,
+    S422,
+    S428,
+    S429,
+    S431,
+    S500,
+    S501,
+    S502,
+    S503,
+    S504,
+    S505,
+    S511
+ )
 import Okapi.HTTP.Response.Status qualified as Status
-import Okapi.HTTP.Response.Headers.Attributes (attr, attr', secure, httpOnly)
-import Okapi.HTTP.Tree (SymTree)
-import Okapi.Data.Response qualified as Data
-import Okapi.Result.Response qualified as Result
-import Okapi.Failure.Response qualified as Error
+import Okapi.HTTP.Tree (SymTree, ForResponse)
+import Okapi.Response.Result qualified as Result
 
 -- | Codecs for every part of an HTTP response.
 data Response status headers body = Response
-    { status  :: Status.Status status
-    , headers :: SymTree ResponseHeaders headers
-    , body    :: ResponseBody body
+    { status :: Status.Status status
+    , headers :: SymTree (Headers.Headers ForResponse) headers
+    , body :: Body.Body ForResponse body
     }
 
-any :: Response Types.Status Types.ResponseHeaders (IO LBS.ByteString)
-any = Response
-    { status  = Status.raw
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+-- | The maximally unconstrained 'Response' — every slot left raw.
+type Base = Response Status.Base Headers.Base Body.Base
 
-continue :: Response S100 Types.ResponseHeaders (IO LBS.ByteString)
-continue = Response
-    { status  = Status.status 100
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+base :: Base
+base =
+    Response
+        { status = Status.base
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-switchingProtocols :: Response S101 Types.ResponseHeaders (IO LBS.ByteString)
-switchingProtocols = Response
-    { status  = Status.status 101
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+continue :: Response S100 Headers.Base Body.Base
+continue =
+    Response
+        { status = Status.status 100
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-ok :: Response S200 Types.ResponseHeaders (IO LBS.ByteString)
-ok = Response
-    { status  = Status.status 200
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+switchingProtocols :: Response S101 Headers.Base Body.Base
+switchingProtocols =
+    Response
+        { status = Status.status 101
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-created :: Response S201 Types.ResponseHeaders (IO LBS.ByteString)
-created = Response
-    { status  = Status.status 201
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+ok :: Response S200 Headers.Base Body.Base
+ok =
+    Response
+        { status = Status.status 200
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-accepted :: Response S202 Types.ResponseHeaders (IO LBS.ByteString)
-accepted = Response
-    { status  = Status.status 202
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+created :: Response S201 Headers.Base Body.Base
+created =
+    Response
+        { status = Status.status 201
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-nonAuthoritative :: Response S203 Types.ResponseHeaders (IO LBS.ByteString)
-nonAuthoritative = Response
-    { status  = Status.status 203
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+accepted :: Response S202 Headers.Base Body.Base
+accepted =
+    Response
+        { status = Status.status 202
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-noContent :: Response S204 Types.ResponseHeaders (IO Body.None)
-noContent = Response
-    { status  = Status.status 204
-    , headers = Headers.raw
-    , body    = Body.none
-    }
+nonAuthoritative :: Response S203 Headers.Base Body.Base
+nonAuthoritative =
+    Response
+        { status = Status.status 203
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-resetContent :: Response S205 Types.ResponseHeaders (IO LBS.ByteString)
-resetContent = Response
-    { status  = Status.status 205
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+noContent :: Response S204 Headers.Base (IO Body.None)
+noContent =
+    Response
+        { status = Status.status 204
+        , headers = Headers.base
+        , body = Body.none
+        }
 
-partialContent :: Response S206 Types.ResponseHeaders (IO LBS.ByteString)
-partialContent = Response
-    { status  = Status.status 206
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+resetContent :: Response S205 Headers.Base Body.Base
+resetContent =
+    Response
+        { status = Status.status 205
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-multipleChoices :: Response S300 Types.ResponseHeaders (IO LBS.ByteString)
-multipleChoices = Response
-    { status  = Status.status 300
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+partialContent :: Response S206 Headers.Base Body.Base
+partialContent =
+    Response
+        { status = Status.status 206
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-movedPermanently :: Response S301 Types.ResponseHeaders (IO LBS.ByteString)
-movedPermanently = Response
-    { status  = Status.status 301
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+multipleChoices :: Response S300 Headers.Base Body.Base
+multipleChoices =
+    Response
+        { status = Status.status 300
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-found :: Response S302 Types.ResponseHeaders (IO LBS.ByteString)
-found = Response
-    { status  = Status.status 302
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+movedPermanently :: Response S301 Headers.Base Body.Base
+movedPermanently =
+    Response
+        { status = Status.status 301
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-seeOther :: Response S303 Types.ResponseHeaders (IO LBS.ByteString)
-seeOther = Response
-    { status  = Status.status 303
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+found :: Response S302 Headers.Base Body.Base
+found =
+    Response
+        { status = Status.status 302
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-notModified :: Response S304 Types.ResponseHeaders (IO LBS.ByteString)
-notModified = Response
-    { status  = Status.status 304
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+seeOther :: Response S303 Headers.Base Body.Base
+seeOther =
+    Response
+        { status = Status.status 303
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-useProxy :: Response S305 Types.ResponseHeaders (IO LBS.ByteString)
-useProxy = Response
-    { status  = Status.status 305
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+notModified :: Response S304 Headers.Base Body.Base
+notModified =
+    Response
+        { status = Status.status 304
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-temporaryRedirect :: Response S307 Types.ResponseHeaders (IO LBS.ByteString)
-temporaryRedirect = Response
-    { status  = Status.status 307
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+useProxy :: Response S305 Headers.Base Body.Base
+useProxy =
+    Response
+        { status = Status.status 305
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-permanentRedirect :: Response S308 Types.ResponseHeaders (IO LBS.ByteString)
-permanentRedirect = Response
-    { status  = Status.status 308
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+temporaryRedirect :: Response S307 Headers.Base Body.Base
+temporaryRedirect =
+    Response
+        { status = Status.status 307
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-badRequest :: Response S400 Types.ResponseHeaders (IO LBS.ByteString)
-badRequest = Response
-    { status  = Status.status 400
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+permanentRedirect :: Response S308 Headers.Base Body.Base
+permanentRedirect =
+    Response
+        { status = Status.status 308
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-unauthorized :: Response S401 Types.ResponseHeaders (IO LBS.ByteString)
-unauthorized = Response
-    { status  = Status.status 401
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+badRequest :: Response S400 Headers.Base Body.Base
+badRequest =
+    Response
+        { status = Status.status 400
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-paymentRequired :: Response S402 Types.ResponseHeaders (IO LBS.ByteString)
-paymentRequired = Response
-    { status  = Status.status 402
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+unauthorized :: Response S401 Headers.Base Body.Base
+unauthorized =
+    Response
+        { status = Status.status 401
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-forbidden :: Response S403 Types.ResponseHeaders (IO LBS.ByteString)
-forbidden = Response
-    { status  = Status.status 403
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+paymentRequired :: Response S402 Headers.Base Body.Base
+paymentRequired =
+    Response
+        { status = Status.status 402
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-notFound :: Response S404 Types.ResponseHeaders (IO LBS.ByteString)
-notFound = Response
-    { status  = Status.status 404
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+forbidden :: Response S403 Headers.Base Body.Base
+forbidden =
+    Response
+        { status = Status.status 403
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-methodNotAllowed :: Response S405 Types.ResponseHeaders (IO LBS.ByteString)
-methodNotAllowed = Response
-    { status  = Status.status 405
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+notFound :: Response S404 Headers.Base Body.Base
+notFound =
+    Response
+        { status = Status.status 404
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-notAcceptable :: Response S406 Types.ResponseHeaders (IO LBS.ByteString)
-notAcceptable = Response
-    { status  = Status.status 406
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+methodNotAllowed :: Response S405 Headers.Base Body.Base
+methodNotAllowed =
+    Response
+        { status = Status.status 405
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-proxyAuthenticationRequired :: Response S407 Types.ResponseHeaders (IO LBS.ByteString)
-proxyAuthenticationRequired = Response
-    { status  = Status.status 407
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+notAcceptable :: Response S406 Headers.Base Body.Base
+notAcceptable =
+    Response
+        { status = Status.status 406
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-requestTimeout :: Response S408 Types.ResponseHeaders (IO LBS.ByteString)
-requestTimeout = Response
-    { status  = Status.status 408
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+proxyAuthenticationRequired :: Response S407 Headers.Base Body.Base
+proxyAuthenticationRequired =
+    Response
+        { status = Status.status 407
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-conflict :: Response S409 Types.ResponseHeaders (IO LBS.ByteString)
-conflict = Response
-    { status  = Status.status 409
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+requestTimeout :: Response S408 Headers.Base Body.Base
+requestTimeout =
+    Response
+        { status = Status.status 408
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-gone :: Response S410 Types.ResponseHeaders (IO LBS.ByteString)
-gone = Response
-    { status  = Status.status 410
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+conflict :: Response S409 Headers.Base Body.Base
+conflict =
+    Response
+        { status = Status.status 409
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-lengthRequired :: Response S411 Types.ResponseHeaders (IO LBS.ByteString)
-lengthRequired = Response
-    { status  = Status.status 411
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+gone :: Response S410 Headers.Base Body.Base
+gone =
+    Response
+        { status = Status.status 410
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-preconditionFailed :: Response S412 Types.ResponseHeaders (IO LBS.ByteString)
-preconditionFailed = Response
-    { status  = Status.status 412
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+lengthRequired :: Response S411 Headers.Base Body.Base
+lengthRequired =
+    Response
+        { status = Status.status 411
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-requestEntityTooLarge :: Response S413 Types.ResponseHeaders (IO LBS.ByteString)
-requestEntityTooLarge = Response
-    { status  = Status.status 413
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+preconditionFailed :: Response S412 Headers.Base Body.Base
+preconditionFailed =
+    Response
+        { status = Status.status 412
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-requestURITooLong :: Response S414 Types.ResponseHeaders (IO LBS.ByteString)
-requestURITooLong = Response
-    { status  = Status.status 414
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+requestEntityTooLarge :: Response S413 Headers.Base Body.Base
+requestEntityTooLarge =
+    Response
+        { status = Status.status 413
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-unsupportedMediaType :: Response S415 Types.ResponseHeaders (IO LBS.ByteString)
-unsupportedMediaType = Response
-    { status  = Status.status 415
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+requestURITooLong :: Response S414 Headers.Base Body.Base
+requestURITooLong =
+    Response
+        { status = Status.status 414
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-requestedRangeNotSatisfiable :: Response S416 Types.ResponseHeaders (IO LBS.ByteString)
-requestedRangeNotSatisfiable = Response
-    { status  = Status.status 416
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+unsupportedMediaType :: Response S415 Headers.Base Body.Base
+unsupportedMediaType =
+    Response
+        { status = Status.status 415
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-expectationFailed :: Response S417 Types.ResponseHeaders (IO LBS.ByteString)
-expectationFailed = Response
-    { status  = Status.status 417
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+requestedRangeNotSatisfiable :: Response S416 Headers.Base Body.Base
+requestedRangeNotSatisfiable =
+    Response
+        { status = Status.status 416
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-imATeapot :: Response S418 Types.ResponseHeaders (IO LBS.ByteString)
-imATeapot = Response
-    { status  = Status.status 418
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+expectationFailed :: Response S417 Headers.Base Body.Base
+expectationFailed =
+    Response
+        { status = Status.status 417
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-unprocessableEntity :: Response S422 Types.ResponseHeaders (IO LBS.ByteString)
-unprocessableEntity = Response
-    { status  = Status.status 422
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+imATeapot :: Response S418 Headers.Base Body.Base
+imATeapot =
+    Response
+        { status = Status.status 418
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-preconditionRequired :: Response S428 Types.ResponseHeaders (IO LBS.ByteString)
-preconditionRequired = Response
-    { status  = Status.status 428
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+unprocessableEntity :: Response S422 Headers.Base Body.Base
+unprocessableEntity =
+    Response
+        { status = Status.status 422
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-tooManyRequests :: Response S429 Types.ResponseHeaders (IO LBS.ByteString)
-tooManyRequests = Response
-    { status  = Status.status 429
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+preconditionRequired :: Response S428 Headers.Base Body.Base
+preconditionRequired =
+    Response
+        { status = Status.status 428
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-requestHeaderFieldsTooLarge :: Response S431 Types.ResponseHeaders (IO LBS.ByteString)
-requestHeaderFieldsTooLarge = Response
-    { status  = Status.status 431
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+tooManyRequests :: Response S429 Headers.Base Body.Base
+tooManyRequests =
+    Response
+        { status = Status.status 429
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-internalServerError :: Response S500 Types.ResponseHeaders (IO LBS.ByteString)
-internalServerError = Response
-    { status  = Status.status 500
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+requestHeaderFieldsTooLarge :: Response S431 Headers.Base Body.Base
+requestHeaderFieldsTooLarge =
+    Response
+        { status = Status.status 431
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-notImplemented :: Response S501 Types.ResponseHeaders (IO LBS.ByteString)
-notImplemented = Response
-    { status  = Status.status 501
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+internalServerError :: Response S500 Headers.Base Body.Base
+internalServerError =
+    Response
+        { status = Status.status 500
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-badGateway :: Response S502 Types.ResponseHeaders (IO LBS.ByteString)
-badGateway = Response
-    { status  = Status.status 502
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+notImplemented :: Response S501 Headers.Base Body.Base
+notImplemented =
+    Response
+        { status = Status.status 501
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-serviceUnavailable :: Response S503 Types.ResponseHeaders (IO LBS.ByteString)
-serviceUnavailable = Response
-    { status  = Status.status 503
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+badGateway :: Response S502 Headers.Base Body.Base
+badGateway =
+    Response
+        { status = Status.status 502
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-gatewayTimeout :: Response S504 Types.ResponseHeaders (IO LBS.ByteString)
-gatewayTimeout = Response
-    { status  = Status.status 504
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+serviceUnavailable :: Response S503 Headers.Base Body.Base
+serviceUnavailable =
+    Response
+        { status = Status.status 503
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-httpVersionNotSupported :: Response S505 Types.ResponseHeaders (IO LBS.ByteString)
-httpVersionNotSupported = Response
-    { status  = Status.status 505
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+gatewayTimeout :: Response S504 Headers.Base Body.Base
+gatewayTimeout =
+    Response
+        { status = Status.status 504
+        , headers = Headers.base
+        , body = Body.base
+        }
 
-networkAuthenticationRequired :: Response S511 Types.ResponseHeaders (IO LBS.ByteString)
-networkAuthenticationRequired = Response
-    { status  = Status.status 511
-    , headers = Headers.raw
-    , body    = Body.raw
-    }
+httpVersionNotSupported :: Response S505 Headers.Base Body.Base
+httpVersionNotSupported =
+    Response
+        { status = Status.status 505
+        , headers = Headers.base
+        , body = Body.base
+        }
+
+networkAuthenticationRequired :: Response S511 Headers.Base Body.Base
+networkAuthenticationRequired =
+    Response
+        { status = Status.status 511
+        , headers = Headers.base
+        , body = Body.base
+        }
+
 headers ::
-    SymTree ResponseHeaders headers ->
-    Response status Types.ResponseHeaders body ->
+    SymTree (Headers.Headers ForResponse) headers ->
+    Response status Headers.Base body ->
     Response status headers body
-headers c r = r { headers = c }
+headers c r = r{headers = c}
 
 body ::
-    ResponseBody body ->
-    Response status headers (IO LBS.ByteString) ->
+    Body.Body ForResponse body ->
+    Response status headers Body.Base ->
     Response status headers body
-body c r = r { body = c }
+body c r = r{body = c}
 
 extractWaiResBody :: Wai.Response -> IO LBS.ByteString
 extractWaiResBody (WaiI.ResponseBuilder _ _ b) = pure (Builder.toLazyByteString b)
-extractWaiResBody _                            = pure LBS.empty
+extractWaiResBody _ = pure LBS.empty
 
 parser' ::
     Response status headers body ->
@@ -473,27 +543,27 @@ parser' ::
 parser' codec waiRes = do
     let httpStatus = Wai.responseStatus waiRes
         waiHeaders = Wai.responseHeaders waiRes
-        sr         = Status.parse codec.status httpStatus
-        (hr, _)    = Headers.parser codec.headers waiHeaders
-        br         = Body.parser codec.body (extractWaiResBody waiRes)
-    pure $ Result.Response { status = sr, headers = hr, body = br }
+        sr = Status.parse codec.status httpStatus
+        (hr, _) = Headers.parser codec.headers waiHeaders
+        br = Body.parser codec.body (extractWaiResBody waiRes)
+    pure $ Result.Response{status = sr, headers = hr, body = br}
 
 resultToValue ::
     Result.Response status headers body ->
     Maybe (Data.Response status headers body)
-resultToValue result = case (result.status, result.headers, result.body) of
-    (Right status, Right headers, Right body) ->
-        Just $ Data.Response { status = status, headers = headers, body = body }
+resultToValue result = case (result.status, result.headers) of
+    (Right status, Right headers) ->
+        Just $ Data.Response{status = status, headers = headers, body = result.body}
     _ -> Nothing
 
 resultToError ::
     Result.Response status headers body ->
     Error.Response status headers body
-resultToError result = Error.Response
-    { status  = either Just (const Nothing) result.status
-    , headers = either Just (const Nothing) result.headers
-    , body    = either Just (const Nothing) result.body
-    }
+resultToError result =
+    Error.Response
+        { status = either Just (const Nothing) result.status
+        , headers = either Just (const Nothing) result.headers
+        }
 
 parser ::
     Response status headers body ->

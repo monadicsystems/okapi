@@ -1,11 +1,11 @@
-
 module Okapi.HTTP.Request.Method (
     KnownMethod (..),
     Method (..),
+    Base,
     ParseError (..),
     parse,
     print,
-    raw,
+    base,
     method,
     knownMethodToStd,
     extractMethod,
@@ -24,22 +24,23 @@ import GHC.TypeLits (Symbol)
 import Network.HTTP.Types qualified as Types
 import Prelude hiding (print)
 
--- $setup
--- >>> import Okapi.HTTP.Request.Method qualified as Method
--- >>> import Network.HTTP.Types qualified as Types
--- >>> import Okapi.HTTP.Tree (leafPrintParse, leafParsePrint)
--- >>> import Test.QuickCheck.Instances ()
+{- $setup
+>>> import Okapi.HTTP.Request.Method qualified as Method
+>>> import Network.HTTP.Types qualified as Types
+>>> import Okapi.HTTP.Tree (leafPrintParse, leafParsePrint)
+>>> import Test.QuickCheck.Instances ()
+-}
 
 data KnownMethod (m :: Symbol) where
-    GET :: KnownMethod "GET"
-    POST :: KnownMethod "POST"
-    PUT :: KnownMethod "PUT"
-    DELETE :: KnownMethod "DELETE"
-    PATCH :: KnownMethod "PATCH"
-    HEAD :: KnownMethod "HEAD"
-    OPTIONS :: KnownMethod "OPTIONS"
-    CONNECT :: KnownMethod "CONNECT"
-    TRACE :: KnownMethod "TRACE"
+    Get :: GET
+    Post :: POST
+    Put :: PUT
+    Delete :: DELETE
+    Patch :: PATCH
+    Head :: HEAD
+    Options :: OPTIONS
+    Connect :: CONNECT
+    Trace :: TRACE
 
 deriving instance Eq (KnownMethod m)
 deriving instance Show (KnownMethod m)
@@ -55,71 +56,75 @@ type CONNECT = KnownMethod "CONNECT"
 type TRACE = KnownMethod "TRACE"
 
 data Method a where
-    Raw :: Method Types.Method
+    Base :: Method Base
     Method :: KnownMethod m -> Method (KnownMethod m)
+
+-- | What 'raw' decodes\/encodes to — the maximally unconstrained method slot.
+type Base = Types.Method
 
 data ParseError = ParseError deriving (Eq, Show)
 
 parse :: Method method -> Types.Method -> Either ParseError method
-parse Raw m = Right m
+parse Base m = Right m
 parse (Method km) m
     | m == Types.renderStdMethod (knownMethodToStd km) = Right km
     | otherwise = Left ParseError
 
 print :: Method method -> method -> Types.Method
-print Raw m = m
+print Base m = m
 print (Method km) _ = Types.renderStdMethod (knownMethodToStd km)
 
--- | Pass the raw HTTP method straight through, unconstrained.
---
--- >>> parse raw "PATCH"
--- Right "PATCH"
--- >>> Method.print raw "PATCH"
--- "PATCH"
---
--- prop> leafPrintParse (parse raw) (Method.print raw) (m :: Types.Method)
--- prop> leafParsePrint (parse raw) (Method.print raw) (m :: Types.Method)
-raw :: Method Types.Method
-raw = Raw
+{- | Pass the raw HTTP method straight through, unconstrained.
 
--- | Match against a statically known HTTP method.
---
--- >>> parse (method GET) "GET"
--- Right GET
--- >>> parse (method GET) "POST"
--- Left ParseError
--- >>> Method.print (method GET) GET
--- "GET"
--- >>> parse (method POST) "POST"
--- Right POST
--- >>> parse (method PUT) "PUT"
--- Right PUT
--- >>> parse (method DELETE) "DELETE"
--- Right DELETE
--- >>> parse (method PATCH) "PATCH"
--- Right PATCH
--- >>> parse (method HEAD) "HEAD"
--- Right HEAD
--- >>> parse (method OPTIONS) "OPTIONS"
--- Right OPTIONS
--- >>> parse (method CONNECT) "CONNECT"
--- Right CONNECT
--- >>> parse (method TRACE) "TRACE"
--- Right TRACE
+>>> parse base "PATCH"
+Right "PATCH"
+>>> Method.print base "PATCH"
+"PATCH"
+
+prop> leafPrintParse (parse base) (Method.print base) (m :: Types.Method)
+prop> leafParsePrint (parse base) (Method.print base) (m :: Types.Method)
+-}
+base :: Method Types.Method
+base = Base
+
+{- | Match against a statically known HTTP method.
+
+>>> parse (method Get) "GET"
+Right Get
+>>> parse (method Get) "POST"
+Left ParseError
+>>> Method.print (method Get) Get
+"GET"
+>>> parse (method Post) "POST"
+Right Post
+>>> parse (method Put) "PUT"
+Right Put
+>>> parse (method Delete) "DELETE"
+Right Delete
+>>> parse (method Patch) "PATCH"
+Right Patch
+>>> parse (method Head) "HEAD"
+Right Head
+>>> parse (method Options) "OPTIONS"
+Right Options
+>>> parse (method Connect) "CONNECT"
+Right Connect
+>>> parse (method Trace) "TRACE"
+Right Trace
+-}
 method :: KnownMethod m -> Method (KnownMethod m)
 method km = (Method km)
 
 knownMethodToStd :: KnownMethod m -> Types.StdMethod
-knownMethodToStd GET = Types.GET
-knownMethodToStd POST = Types.POST
-knownMethodToStd PUT = Types.PUT
-knownMethodToStd DELETE = Types.DELETE
-knownMethodToStd PATCH = Types.PATCH
-knownMethodToStd HEAD = Types.HEAD
-knownMethodToStd OPTIONS = Types.OPTIONS
-knownMethodToStd CONNECT = Types.CONNECT
-knownMethodToStd TRACE = Types.TRACE
+knownMethodToStd Get = Types.GET
+knownMethodToStd Post = Types.POST
+knownMethodToStd Put = Types.PUT
+knownMethodToStd Delete = Types.DELETE
+knownMethodToStd Patch = Types.PATCH
+knownMethodToStd Head = Types.HEAD
+knownMethodToStd Options = Types.OPTIONS
+knownMethodToStd Connect = Types.CONNECT
+knownMethodToStd Trace = Types.TRACE
 
 extractMethod :: Method (KnownMethod m) -> Types.StdMethod
 extractMethod (Method km) = knownMethodToStd km
-

@@ -1,21 +1,19 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- | The header codec shared by request and response headers alike —
---   'Okapi.HTTP.Request.Headers.RequestHeaders' and
---   'Okapi.HTTP.Response.Headers.ResponseHeaders' are just type aliases for
---   @'Headers' 'Okapi.HTTP.Tree.ForRequest'@/@'Headers'
---   'Okapi.HTTP.Tree.ForResponse'@. 'field' and friends are free in the
---   phantom @ctx@ and work unqualified for either side; only
---   'cookie'\/'cookie'' (request-only) and 'setCookie' (response-only) are
---   pinned to a specific side, right at their GADT constructor.
+-- | The header codec shared by request and response headers alike. 'field'
+--   and friends are free in the phantom @ctx@ and work unqualified for
+--   either side; only 'cookie'\/'cookie'' (request-only), 'setCookie'
+--   (response-only), and 'coalesceCookies' (request-only, see its own
+--   haddock) are pinned to a specific side.
 module Okapi.HTTP.Headers (
     Headers (..),
+    Base,
     ParseError (..),
     parser,
     printer,
     parseExact,
-    raw,
+    base,
     field,
     field',
     field_,
@@ -27,6 +25,7 @@ module Okapi.HTTP.Headers (
     contentType,
     cookie,
     cookie',
+    coalesceCookies,
     setCookie,
     MediaType (..),
     mediaTypeBytes,
@@ -97,7 +96,7 @@ import Okapi.HTTP.Structured.Dictionary (Dictionary)
 
 type Headers :: Type -> Type -> Type -> Type
 data Headers ctx i o where
-    Raw             :: Headers ctx [Types.Header] [Types.Header]
+    Base             :: Headers ctx Base Base
     Field           :: Types.HeaderName -> Leaf (Headers ctx) a -> Headers ctx a a
     Field'          :: Types.HeaderName -> Leaf (Headers ctx) a -> Headers ctx (Maybe a) (Maybe a)
     Field_          :: Types.HeaderName -> ByteString -> Headers ctx i ()
@@ -119,7 +118,7 @@ parser :: Tree (Headers ctx) i o -> Parser (Headers ctx) o
 parser = Tree.parser alg
   where
     alg :: Headers ctx i o -> Parser (Headers ctx) o
-    alg Raw hs = (Right hs, [])
+    alg Base hs = (Right hs, [])
     alg (Field key vLeaf) hs =
         case partition (\(k, _) -> k == key) hs of
             ([], _)            -> (Left ParseError, hs)
@@ -181,7 +180,7 @@ printer :: Tree (Headers ctx) i o -> Printer (Headers ctx) i
 printer = Tree.printer alg
   where
     alg :: Headers ctx i o -> Printer (Headers ctx) i
-    alg Raw                           hs       = hs
+    alg Base                           hs       = hs
     alg (Field key vLeaf)             x        = [(key, vLeaf.encode x)]
     alg (Field' _ _)                  Nothing  = []
     alg (Field' key vLeaf)            (Just x) = [(key, vLeaf.encode x)]
@@ -202,12 +201,18 @@ parseExact = Tree.parseExact parser
 
 -- | Pass all headers straight through, unconstrained.
 --
--- >>> parser raw [("x-a", "1"), ("x-b", "2")]
+-- >>> parser base [("x-a", "1"), ("x-b", "2")]
 -- (Right [("x-a","1"),("x-b","2")],[])
--- >>> printer raw [("x-a", "1"), ("x-b", "2")]
+-- >>> printer base [("x-a", "1"), ("x-b", "2")]
 -- [("x-a","1"),("x-b","2")]
-raw :: Tree (Headers ctx) [Types.Header] [Types.Header]
-raw = Node Raw
+base :: Tree (Headers ctx) [Types.Header] [Types.Header]
+base = Node Base
+
+-- | What 'base' decodes\/encodes to — the maximally unconstrained headers
+--   slot, shared by both sides (@'Headers' 'Okapi.HTTP.Tree.ForRequest'@
+--   and @'Headers' 'Okapi.HTTP.Tree.ForResponse'@ are both just
+--   @['Types.Header']@ underneath).
+type Base = [Types.Header]
 
 -- | Parse and print a required header field.
 --
@@ -321,6 +326,17 @@ cookie name vLeaf = Node (Cookie name vLeaf)
 -- prop> printParse parser printer (cookie' "sid" int) (x :: Maybe Int)
 cookie' :: ByteString -> Leaf Cookie a -> Tree (Headers ForRequest) (Maybe a) (Maybe a)
 cookie' name vLeaf = Node (Cookie' name vLeaf)
+
+-- | Merge multiple @cookie:@ headers into one, per RFC 6265 §5.4 —
+--   request-only (there's no equivalent merge rule for @Set-Cookie@,
+--   where multiple headers are the normal way to set multiple cookies).
+--   Printing needs this explicitly since the generic 'printer' above
+--   builds header lists one field at a time — applied once at the end by
+--   "Okapi.HTTP.Request"'s own @printer@, not inside 'printer' here.
+coalesceCookies :: [Types.Header] -> [Types.Header]
+coalesceCookies hs =
+    let (cks, rest) = partition ((== "cookie") . fst) hs
+     in rest ++ [("cookie", BS.intercalate "; " (map snd cks)) | not (null cks)]
 
 -- | Parse and print a @Set-Cookie@ header — the cookie's value via @vLeaf@,
 --   its attribute list (@Max-Age@, @Domain@, @Secure@, ...) via @attrsC@.

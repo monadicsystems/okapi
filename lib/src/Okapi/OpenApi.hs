@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.Artifact.OpenApi (contractToOpenApi, GOpenApi, openApi, GOpenApiVia, openApiVia) where
+module Okapi.OpenApi (contractToOpenApi, GOpenApi, openApi, GOpenApiVia, openApiVia) where
 
 import Control.Applicative ((<|>))
 import Data.ByteString (ByteString)
@@ -28,7 +28,7 @@ import Data.List.NonEmpty qualified as NE
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:*:) (..))
 import Network.HTTP.Media (MediaType)
 import Network.HTTP.Types qualified as Types
-import Okapi.HTTP (HTTP ((:->), (:-<)), Shape, stripTags, collectTags, Morph (..))
+import Okapi.HTTP (HTTP ((:->), (:-<)), Signature, stripTags, collectTags, Morph (..))
 import Okapi.HTTP qualified as HTTP
 import Okapi.HTTP.Tree (Info (..), Leaf (..), Tag (..))
 import Okapi.HTTP.Request qualified as Req
@@ -39,11 +39,9 @@ import Okapi.HTTP.Request.Path qualified as Path
 import Okapi.HTTP.Request.Query (Query)
 import Okapi.HTTP.Request.Query qualified as Query
 import Okapi.HTTP.Headers qualified as Headers
-import Okapi.HTTP.Request.Headers qualified as ReqH
-import Okapi.HTTP.Request.Body qualified as ReqBody
 import Okapi.HTTP.Body qualified as Body
 import Okapi.HTTP.Response.Status qualified as Status
-import Okapi.HTTP.Responses (Cases, Responses)
+import Okapi.HTTP.Responses (Responses, Responses')
 import Okapi.HTTP.Responses qualified as Resps
 import Okapi.HTTP.Tree (Tree (..))
 import Optics.Core ((%), (.~), (?~), (%~))
@@ -94,7 +92,7 @@ walkPath :: [Tag] -> Tree Path i o -> [PathPiece]
 walkPath _    (Node (Path.Seg_ vLeaf x)) = [PLit (vLeaf.encode x)]
 walkPath tags (Node (Path.Seg n vLeaf))  = [PParam n (applyTagsToSchema tags (infoSchema vLeaf.info))]
 walkPath tags (Node (Path.Segs vLeaf))   = [PParam "segs" (applyTagsToSchema tags (infoSchema vLeaf.info))]
-walkPath _    (Node Path.Raw)            = []
+walkPath _    (Node Path.Base)            = []
 walkPath tags (FMap _ c)                 = walkPath tags c
 walkPath tags (LMap _ c)                 = walkPath tags c
 walkPath tags (Apply cf cx)              = walkPath tags cf <> walkPath tags cx
@@ -122,7 +120,7 @@ extractQueryParams tags (Node qry) = map (applyTagsToParam tags) $ case qry of
     Query.Flag'  key         -> [mkParam key ParamQuery False]
     Query.List  style key _  -> [mkArrayParam key True  style]
     Query.List' style key _  -> [mkArrayParam key False style]
-    Query.Raw                -> []
+    Query.Base                -> []
 extractQueryParams tags (FMap _ c)     = extractQueryParams tags c
 extractQueryParams tags (LMap _ c)     = extractQueryParams tags c
 extractQueryParams tags (Apply cf cx)  = extractQueryParams tags cf ++ extractQueryParams tags cx
@@ -147,7 +145,7 @@ extractHeaderInfo :: [Tag] -> Tree (Headers.Headers ctx) i o -> [(Text, Bool, OA
 extractHeaderInfo tags (Node hdr) = map applyTags $ case hdr of
     Headers.Field  key vLeaf     -> [(hdrName key, True,  infoSchema vLeaf.info)]
     Headers.Field' key vLeaf     -> [(hdrName key, False, infoSchema vLeaf.info)]
-    Headers.Raw                  -> []
+    Headers.Base                  -> []
     Headers.Field_ _ _           -> []
     Headers.FieldStructured n _  -> [(hdrName n, True, mempty & #type ?~ OA.OpenApiString)]
     Headers.Cookie  _ _          -> []
@@ -194,7 +192,7 @@ data ResInfo = ResInfo
     }
 
 resStatusOf :: Status.Status s -> Types.Status
-resStatusOf Status.Raw        = Types.status200
+resStatusOf Status.Base        = Types.status200
 resStatusOf (Status.Status ks) = Status.knownStatusToHTTP ks
 
 resInfoOf :: Res.Response s h b -> ResInfo
@@ -206,14 +204,14 @@ resInfoOf res = ResInfo
     , resHdrNames   = extractHeaderInfo [] res.headers
     }
 
-extractResInfos :: Cases responses => Responses Res.Response responses -> [ResInfo]
+extractResInfos :: Responses responses => Responses' Res.Response responses -> [ResInfo]
 extractResInfos rs =
     map
         (getConst . Resps.traverseResponses @Res.Response @Res.Response (\c -> Const (resInfoOf c)))
         (NE.toList (Resps.getResponses rs))
 
 methodStdOf :: Method.Method m -> Maybe Types.StdMethod
-methodStdOf Method.Raw        = Nothing
+methodStdOf Method.Base        = Nothing
 methodStdOf (Method.Method km) = Just (Method.knownMethodToStd km)
 
 hdrName :: Types.HeaderName -> Text
@@ -296,15 +294,15 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> import Okapi.HTTP.Request qualified as Req
 -- >>> import Okapi.HTTP.Request.Path (Path, seg)
 -- >>> import Okapi.HTTP.Request.Query qualified as Query
--- >>> import Okapi.HTTP.Request.Headers qualified as ReqH
--- >>> import Okapi.HTTP.Request.Body qualified as ReqBody
 -- >>> import Okapi.HTTP.Request.Method qualified as Method
+-- >>> import Okapi.HTTP.Headers qualified as Headers
+-- >>> import Okapi.HTTP.Body qualified as Body
 -- >>> import Okapi.HTTP.Response qualified as Res
 -- >>> import Okapi.HTTP.Tree (Leaf, Tag (..), annotate, integer)
 -- >>> import Data.HashMap.Strict.InsOrd qualified as IHM
 -- >>> import Data.OpenApi (Referenced (..))
 -- >>> import Optics.Core ((^.))
--- >>> let reqTree = Req.Request { Req.method = Method.method Method.GET, Req.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.raw, Req.headers = ReqH.raw, Req.body = ReqBody.raw }
+-- >>> let reqTree = Req.Request { Req.method = Method.method Method.Get, Req.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.base, Req.headers = Headers.base, Req.body = Body.base }
 -- >>> let contract = HTTP.annotate [Description "Get a user", Group "users"] (reqTree HTTP.:-> Res.ok)
 -- >>> let oa = contractToOpenApi contract
 -- >>> let Just pi_ = IHM.lookup "/{userId}" (oa ^. #paths)
@@ -375,12 +373,12 @@ instance GOpenApi ctF => GOpenApi (C1 cm ctF) where
 instance (GOpenApi ctL, GOpenApi ctR) => GOpenApi (ctL :*: ctR) where
     gOpenApi (ctL :*: ctR) = gOpenApi @ctL ctL <> gOpenApi @ctR ctR
 
-instance GOpenApi (S1 sm (Rec0 (HTTP (Shape method path query headers body result)))) where
+instance GOpenApi (S1 sm (Rec0 (HTTP (Signature method path query headers body result)))) where
     gOpenApi (M1 (K1 ct)) = contractToOpenApi ct
 
 -- | Lets a field be a nested record of contracts instead of a concrete
 --   'HTTP' — recurses via 'openApi' itself. Same non-overlap argument
---   as the nested instances in "Okapi.Artifact.Endpoint".
+--   as the nested instances in "Okapi.Server".
 instance
     ( Generic (nested HTTP)
     , GOpenApi (Rep (nested HTTP))
@@ -410,7 +408,7 @@ instance GOpenApiVia ctF => GOpenApiVia (C1 cm ctF) where
 instance (GOpenApiVia ctL, GOpenApiVia ctR) => GOpenApiVia (ctL :*: ctR) where
     gOpenApiVia (ctL :*: ctR) = gOpenApiVia @ctL ctL <> gOpenApiVia @ctR ctR
 
-instance GOpenApiVia (S1 sm (Rec0 (Morph HTTP n (Shape method path query headers body result)))) where
+instance GOpenApiVia (S1 sm (Rec0 (Morph HTTP n (Signature method path query headers body result)))) where
     gOpenApiVia (M1 (K1 (Morph ct))) = contractToOpenApi ct
 
 -- | Lets a field be a nested record of contracts instead of a concrete
@@ -424,7 +422,7 @@ instance
     gOpenApiVia (M1 (K1 ctVal)) = openApiVia ctVal
 
 -- | Heterogeneous-@n@ counterpart to 'openApi' — takes a record built with
---   'Okapi.HTTP.Morph' (see 'Okapi.Artifact.Endpoint.endpointsVia')
+--   'Okapi.HTTP.Morph' (see 'Okapi.Server.serversVia')
 --   instead of a plain @record HTTP@.
 openApiVia ::
     forall record.

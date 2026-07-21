@@ -161,7 +161,7 @@ type SymTree t a = Tree t a a
 --   segment or query parameter. A list, not a record: duplicates are
 --   allowed and merge order is left to whatever consumes them (last tag
 --   wins for singular fields, by convention — see
---   'Okapi.Artifact.OpenApi'). 'Group' and 'Extension' are meaningful only
+--   'Okapi.OpenApi'). 'Group' and 'Extension' are meaningful only
 --   at the whole-contract level ('Okapi.HTTP.annotate'), not here —
 --   see there.
 data Tag
@@ -174,7 +174,7 @@ data Tag
 
 -- | Attach metadata to any 'Tree' node — never changes parse\/print
 --   behavior, purely a documentation\/introspection layer (consumed by
---   'Okapi.Artifact.OpenApi'). Confirmed transparent against a minimal toy
+--   'Okapi.OpenApi'). Confirmed transparent against a minimal toy
 --   instance (a single-context-cell integer leaf) — 'annotate'-wrapping a
 --   node changes neither direction of the round trip:
 --
