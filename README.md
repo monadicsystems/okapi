@@ -1,11 +1,11 @@
 # 🦓🦒Okapi
 
-Okapi is a data-driven micro framework for implementing HTTP servers.
+Okapi is a bidirectional DSL for describing HTTP servers.
 
-- Ergonomic DSLs for routing and parsing requests
+- Ergonomic DSLs for parsing and printing requests and responses
 - Integrate Okapi with ANY monad stack or effect system
-- Automatically generate clients and OpenAPI specifications (coming soon)
-- Programatically generate your API's structure
+- Generate clients and OpenAPI specifications for free
+- All in less than 5000 lines of code
 
 ## Hello World Example
 
