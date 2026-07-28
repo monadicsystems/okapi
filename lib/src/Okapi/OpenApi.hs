@@ -28,27 +28,27 @@ import Data.List.NonEmpty qualified as NE
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, Rep, S1, (:*:) (..))
 import Network.HTTP.Media (MediaType)
 import Network.HTTP.Types qualified as Types
-import Okapi.HTTP (HTTP ((:->), (:-<)), Signature, stripTags, collectTags, Morph (..))
-import Okapi.HTTP qualified as HTTP
-import Okapi.HTTP.Tree (Info (..), Leaf (..), Tag (..))
+import Okapi.Contract (Contract ((:->), (:-<)), Signature, stripTags, collectTags, Morph (..))
+import Okapi.Contract qualified as Contract
+import Okapi.Tree (Info (..), Leaf (..), Tag (..))
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
-import Okapi.HTTP.Request.Method qualified as Method
-import Okapi.HTTP.Request.Path (Path)
-import Okapi.HTTP.Request.Path qualified as Path
-import Okapi.HTTP.Request.Query (Query)
-import Okapi.HTTP.Request.Query qualified as Query
+import Okapi.HTTP.Method qualified as Method
+import Okapi.HTTP.Path (Path)
+import Okapi.HTTP.Path qualified as Path
+import Okapi.HTTP.Query (Query)
+import Okapi.HTTP.Query qualified as Query
 import Okapi.HTTP.Headers qualified as Headers
 import Okapi.HTTP.Body qualified as Body
-import Okapi.HTTP.Response.Status qualified as Status
+import Okapi.HTTP.Status qualified as Status
 import Okapi.HTTP.Responses (Responses, Responses')
 import Okapi.HTTP.Responses qualified as Resps
-import Okapi.HTTP.Tree (Tree (..))
+import Okapi.Tree (Tree (..))
 import Optics.Core ((%), (.~), (?~), (%~))
 
 -- | Fold 'Tag's onto an 'OA.Schema' — used for node-level metadata (path
 --   segments, response headers) where no separate 'Param' is built.
---   'Group' and 'Extension' have no target here (see 'Okapi.HTTP.Tree.Tag').
+--   'Group' and 'Extension' have no target here (see 'Okapi.Tree.Tag').
 applyTagsToSchema :: [Tag] -> OA.Schema -> OA.Schema
 applyTagsToSchema tags sc = foldl' applyOne sc tags
   where
@@ -83,11 +83,11 @@ applyTagsToOperation tags op = foldl' applyOne op tags
 
 data PathPiece = PLit Text | PParam Text OA.Schema
 
--- | Threads an accumulated @[Tag]@ (from any enclosing 'Okapi.HTTP.Tree.annotate'
+-- | Threads an accumulated @[Tag]@ (from any enclosing 'Okapi.Tree.annotate'
 --   layers) down to each leaf, folding it into that leaf's 'OA.Schema'
 --   right there — not accumulated bottom-up and merged after, which would
 --   get nested 'annotate' calls' merge order backwards (see
---   'Okapi.HTTP.collectTags').
+--   'Okapi.Contract.collectTags').
 walkPath :: [Tag] -> Tree Path i o -> [PathPiece]
 walkPath _    (Node (Path.Seg_ vLeaf x)) = [PLit (vLeaf.encode x)]
 walkPath tags (Node (Path.Seg n vLeaf))  = [PParam n (applyTagsToSchema tags (infoSchema vLeaf.info))]
@@ -115,7 +115,6 @@ extractQueryParams :: [Tag] -> Tree Query i o -> [Param]
 extractQueryParams tags (Node qry) = map (applyTagsToParam tags) $ case qry of
     Query.Param  key vLeaf   -> [mkParamWithSchema key ParamQuery True  (infoSchema vLeaf.info)]
     Query.Param' key vLeaf   -> [mkParamWithSchema key ParamQuery False (infoSchema vLeaf.info)]
-    Query.Param_ key vLeaf _ -> [mkParamWithSchema key ParamQuery True  (infoSchema vLeaf.info)]
     Query.Flag   key         -> [mkParam key ParamQuery True]
     Query.Flag'  key         -> [mkParam key ParamQuery False]
     Query.List  style key _  -> [mkArrayParam key True  style]
@@ -195,7 +194,7 @@ resStatusOf :: Status.Status s -> Types.Status
 resStatusOf Status.Base        = Types.status200
 resStatusOf (Status.Status ks) = Status.knownStatusToHTTP ks
 
-resInfoOf :: Res.Response s h b -> ResInfo
+resInfoOf :: Res.Codec s h b -> ResInfo
 resInfoOf res = ResInfo
     { resStatus     = resStatusOf res.status
     , resMediaType  = extractContentType res.headers
@@ -204,10 +203,10 @@ resInfoOf res = ResInfo
     , resHdrNames   = extractHeaderInfo [] res.headers
     }
 
-extractResInfos :: Responses responses => Responses' Res.Response responses -> [ResInfo]
+extractResInfos :: Responses responses => Responses' Res.Codec responses -> [ResInfo]
 extractResInfos rs =
     map
-        (getConst . Resps.traverseResponses @Res.Response @Res.Response (\c -> Const (resInfoOf c)))
+        (getConst . Resps.traverseResponses @Res.Codec @Res.Codec (\c -> Const (resInfoOf c)))
         (NE.toList (Resps.getResponses rs))
 
 methodStdOf :: Method.Method m -> Maybe Types.StdMethod
@@ -290,20 +289,20 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 
 -- $setup
 -- >>> :set -XOverloadedLabels
--- >>> import Okapi.HTTP qualified as HTTP
+-- >>> import Okapi.Contract qualified as Contract
 -- >>> import Okapi.HTTP.Request qualified as Req
--- >>> import Okapi.HTTP.Request.Path (Path, seg)
--- >>> import Okapi.HTTP.Request.Query qualified as Query
--- >>> import Okapi.HTTP.Request.Method qualified as Method
+-- >>> import Okapi.HTTP.Path (Path, seg)
+-- >>> import Okapi.HTTP.Query qualified as Query
+-- >>> import Okapi.HTTP.Method qualified as Method
 -- >>> import Okapi.HTTP.Headers qualified as Headers
 -- >>> import Okapi.HTTP.Body qualified as Body
 -- >>> import Okapi.HTTP.Response qualified as Res
--- >>> import Okapi.HTTP.Tree (Leaf, Tag (..), annotate, integer)
+-- >>> import Okapi.Tree (Leaf, Tag (..), annotate, integer)
 -- >>> import Data.HashMap.Strict.InsOrd qualified as IHM
 -- >>> import Data.OpenApi (Referenced (..))
 -- >>> import Optics.Core ((^.))
--- >>> let reqTree = Req.Request { Req.method = Method.method Method.Get, Req.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.base, Req.headers = Headers.base, Req.body = Body.base }
--- >>> let contract = HTTP.annotate [Description "Get a user", Group "users"] (reqTree HTTP.:-> Res.ok)
+-- >>> let reqTree = Req.Codec { Req.method = Method.method Method.Get, Req.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.base, Req.headers = Headers.base, Req.body = Body.base }
+-- >>> let contract = Contract.annotate [Description "Get a user", Group "users"] (reqTree Contract.:-> Res.ok)
 -- >>> let oa = contractToOpenApi contract
 -- >>> let Just pi_ = IHM.lookup "/{userId}" (oa ^. #paths)
 -- >>> let Just op = pi_ ^. #get
@@ -321,11 +320,11 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> let Just (Inline sc) = p ^. #schema
 -- >>> sc ^. #description
 -- Just "the user id"
-contractToOpenApi :: HTTP shape -> OpenApi
+contractToOpenApi :: Contract shape -> OpenApi
 contractToOpenApi contract = case stripTags contract of
     (req :-> singleRes) -> toOpenApi (collectTags contract) req [resInfoOf singleRes]
     (req :-< resAlt)    -> toOpenApi (collectTags contract) req (extractResInfos resAlt)
-    HTTP.Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
+    Contract.Annotate _ _ -> error "unreachable: stripTags already peeled off every Annotate layer"
   where
     toOpenApi tags req resInfos =
         let
@@ -373,28 +372,28 @@ instance GOpenApi ctF => GOpenApi (C1 cm ctF) where
 instance (GOpenApi ctL, GOpenApi ctR) => GOpenApi (ctL :*: ctR) where
     gOpenApi (ctL :*: ctR) = gOpenApi @ctL ctL <> gOpenApi @ctR ctR
 
-instance GOpenApi (S1 sm (Rec0 (HTTP (Signature method path query headers body result)))) where
+instance GOpenApi (S1 sm (Rec0 (Contract (Signature method path query headers body result)))) where
     gOpenApi (M1 (K1 ct)) = contractToOpenApi ct
 
 -- | Lets a field be a nested record of contracts instead of a concrete
---   'HTTP' — recurses via 'openApi' itself. Same non-overlap argument
+--   'Contract' — recurses via 'openApi' itself. Same non-overlap argument
 --   as the nested instances in "Okapi.Server".
 instance
-    ( Generic (nested HTTP)
-    , GOpenApi (Rep (nested HTTP))
+    ( Generic (nested Contract)
+    , GOpenApi (Rep (nested Contract))
     ) =>
-    GOpenApi (S1 sm (Rec0 (nested HTTP)))
+    GOpenApi (S1 sm (Rec0 (nested Contract)))
     where
     gOpenApi (M1 (K1 ctVal)) = openApi ctVal
 
 openApi ::
     forall record.
-    ( Generic (record HTTP)
-    , GOpenApi (Rep (record HTTP))
+    ( Generic (record Contract)
+    , GOpenApi (Rep (record Contract))
     ) =>
-    record HTTP ->
+    record Contract ->
     OpenApi
-openApi = gOpenApi @(Rep (record HTTP)) . from
+openApi = gOpenApi @(Rep (record Contract)) . from
 
 class GOpenApiVia (ctF :: Type -> Type) where
     gOpenApiVia :: ctF () -> OpenApi
@@ -408,27 +407,27 @@ instance GOpenApiVia ctF => GOpenApiVia (C1 cm ctF) where
 instance (GOpenApiVia ctL, GOpenApiVia ctR) => GOpenApiVia (ctL :*: ctR) where
     gOpenApiVia (ctL :*: ctR) = gOpenApiVia @ctL ctL <> gOpenApiVia @ctR ctR
 
-instance GOpenApiVia (S1 sm (Rec0 (Morph HTTP n (Signature method path query headers body result)))) where
+instance GOpenApiVia (S1 sm (Rec0 (Morph Contract n (Signature method path query headers body result)))) where
     gOpenApiVia (M1 (K1 (Morph ct))) = contractToOpenApi ct
 
 -- | Lets a field be a nested record of contracts instead of a concrete
---   @Morph HTTP@ — recurses via 'openApiVia' itself.
+--   @Morph Contract@ — recurses via 'openApiVia' itself.
 instance
-    ( Generic (nested (Morph HTTP))
-    , GOpenApiVia (Rep (nested (Morph HTTP)))
+    ( Generic (nested (Morph Contract))
+    , GOpenApiVia (Rep (nested (Morph Contract)))
     ) =>
-    GOpenApiVia (S1 sm (Rec0 (nested (Morph HTTP))))
+    GOpenApiVia (S1 sm (Rec0 (nested (Morph Contract))))
     where
     gOpenApiVia (M1 (K1 ctVal)) = openApiVia ctVal
 
 -- | Heterogeneous-@n@ counterpart to 'openApi' — takes a record built with
---   'Okapi.HTTP.Morph' (see 'Okapi.Server.serversVia')
---   instead of a plain @record HTTP@.
+--   'Okapi.Contract.Morph' (see 'Okapi.Server.serversVia')
+--   instead of a plain @record Contract@.
 openApiVia ::
     forall record.
-    ( Generic (record (Morph HTTP))
-    , GOpenApiVia (Rep (record (Morph HTTP)))
+    ( Generic (record (Morph Contract))
+    , GOpenApiVia (Rep (record (Morph Contract)))
     ) =>
-    record (Morph HTTP) ->
+    record (Morph Contract) ->
     OpenApi
-openApiVia = gOpenApiVia @(Rep (record (Morph HTTP))) . from
+openApiVia = gOpenApiVia @(Rep (record (Morph Contract))) . from

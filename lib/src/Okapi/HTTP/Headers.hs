@@ -29,7 +29,6 @@ module Okapi.HTTP.Headers (
     setCookie,
     MediaType (..),
     mediaTypeBytes,
-    ConstF (..),
     fieldToHeaderName,
     GHeaders (..),
     derived,
@@ -42,37 +41,35 @@ import Data.CaseInsensitive qualified as CI
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.List (partition)
-import Data.Proxy (Proxy (..))
 import Data.Text qualified as Text
 import Data.Text.Encoding (decodeUtf8Lenient, encodeUtf8)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime, localTimeOfDay, timeZoneOffsetString, zonedTimeToLocalTime, zonedTimeZone)
 import Data.Time.Format (defaultTimeLocale, formatTime, parseTimeM)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
-import GHC.TypeLits (KnownSymbol, Symbol, symbolVal)
 import Network.HTTP.Types qualified as Types
 import Text.Read (readMaybe)
 import Web.Cookie qualified as WC
 import Web.HttpApiData (parseHeader, toHeader)
-import Okapi.HTTP.Tree (ForRequest, ForResponse, Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
-import Okapi.HTTP.Tree qualified as Tree
-import Okapi.HTTP.Request.Headers.Cookie (Cookie)
-import Okapi.HTTP.Response.Headers.SetCookie (SetCookie)
-import Okapi.HTTP.Response.Headers.Attributes (Attributes)
-import Okapi.HTTP.Response.Headers.Attributes qualified as Attributes
-import Okapi.HTTP.Structured (Structured)
-import Okapi.HTTP.Structured qualified as Structured
-import Okapi.HTTP.Structured.BareItem (BareItem)
-import Okapi.HTTP.Structured.Item (Item, bareItem)
-import Okapi.HTTP.Structured.List (List)
-import Okapi.HTTP.Structured.Dictionary (Dictionary)
+import Okapi.Tree (ForRequest, ForResponse, Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.Tree qualified as Tree
+import Okapi.HTTP.Cookie (Cookie)
+import Okapi.HTTP.SetCookie (SetCookie)
+import Okapi.HTTP.Attributes (Attributes)
+import Okapi.HTTP.Attributes qualified as Attributes
+import Okapi.HTTP.SFV (SFV)
+import Okapi.HTTP.SFV qualified as SFV
+import Okapi.HTTP.SFV.Bare (Bare)
+import Okapi.HTTP.SFV.Item (Item, bareItem)
+import Okapi.HTTP.SFV.List (List)
+import Okapi.HTTP.SFV.Dictionary (Dictionary)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.HTTP.Tree (Leaf, printParse, int, integer, (=.))
--- >>> import Okapi.HTTP.Structured.BareItem (BareItem)
--- >>> import Okapi.HTTP.Structured.Dictionary qualified as Dictionary
--- >>> import Okapi.HTTP.Structured.Item qualified as Item
+-- >>> import Okapi.Tree (Leaf, printParse, int, integer, (=.))
+-- >>> import Okapi.HTTP.SFV.Bare (Bare)
+-- >>> import Okapi.HTTP.SFV.Dictionary qualified as Dictionary
+-- >>> import Okapi.HTTP.SFV.Item qualified as Item
 -- >>> import GHC.Generics (Generic)
 -- >>> :{
 -- let twoFields = do
@@ -100,7 +97,7 @@ data Headers ctx i o where
     Field           :: Types.HeaderName -> Leaf (Headers ctx) a -> Headers ctx a a
     Field'          :: Types.HeaderName -> Leaf (Headers ctx) a -> Headers ctx (Maybe a) (Maybe a)
     Field_          :: Types.HeaderName -> ByteString -> Headers ctx i ()
-    FieldStructured :: Types.HeaderName -> Tree Structured a a -> Headers ctx a a
+    FieldStructured :: Types.HeaderName -> Tree SFV a a -> Headers ctx a a
     Cookie          :: ByteString -> Leaf Cookie a -> Headers ForRequest a a
     Cookie'         :: ByteString -> Leaf Cookie a -> Headers ForRequest (Maybe a) (Maybe a)
     SetCookie       :: ByteString -> Leaf SetCookie a -> Tree Attributes p p -> Headers ForResponse (a, p) (a, p)
@@ -138,7 +135,7 @@ parser = Tree.parser alg
     alg (FieldStructured name c) hs =
         case partition (\(k, _) -> k == name) hs of
             ([], _)            -> (Left ParseError, hs)
-            ((_, v) : _, rest) -> case Structured.parser c v of
+            ((_, v) : _, rest) -> case SFV.parser c v of
                 (Left _, _)              -> (Left ParseError, hs)
                 (Right x, leftover)
                     | BS.null leftover  -> (Right x, rest)
@@ -185,7 +182,7 @@ printer = Tree.printer alg
     alg (Field' _ _)                  Nothing  = []
     alg (Field' key vLeaf)            (Just x) = [(key, vLeaf.encode x)]
     alg (Field_ k v)                  _        = [(k, v)]
-    alg (FieldStructured name c)      a        = [(name, Structured.printer c a)]
+    alg (FieldStructured name c)      a        = [(name, SFV.printer c a)]
     alg (Cookie name vLeaf)           x        = [("cookie", name <> "=" <> vLeaf.encode x)]
     alg (Cookie' _ _)                 Nothing  = []
     alg (Cookie' name vLeaf)          (Just x) = [("cookie", name <> "=" <> vLeaf.encode x)]
@@ -209,8 +206,8 @@ base :: Tree (Headers ctx) [Types.Header] [Types.Header]
 base = Node Base
 
 -- | What 'base' decodes\/encodes to — the maximally unconstrained headers
---   slot, shared by both sides (@'Headers' 'Okapi.HTTP.Tree.ForRequest'@
---   and @'Headers' 'Okapi.HTTP.Tree.ForResponse'@ are both just
+--   slot, shared by both sides (@'Headers' 'Okapi.Tree.ForRequest'@
+--   and @'Headers' 'Okapi.Tree.ForResponse'@ are both just
 --   @['Types.Header']@ underneath).
 type Base = [Types.Header]
 
@@ -228,7 +225,7 @@ field' key vLeaf = Node (Field' key vLeaf)
 
 -- | A required header field matched against a fixed literal value, e.g.
 --   the assertion in the RFC 9651 §3.2 boolean-shorthand style — matches
---   'Okapi.HTTP.Request.Path.seg_'\'s shape: contributes @()@ and
+--   'Okapi.HTTP.Path.seg_'\'s shape: contributes @()@ and
 --   accepts any input, so it composes with siblings of /any/ type via
 --   ordinary 'Applicative'\/@do@-block sequencing, no explicit alignment
 --   needed — not a wrapping combinator that takes "the rest of your
@@ -265,47 +262,47 @@ field_ k v = Node (Field_ k v)
 --   can continue parsing from exactly where this one left off (see
 --   'fieldDict' for the motivating use case); use 'parseExact' if
 --   you need to assert nothing was left over anywhere.
-fieldStruct :: Types.HeaderName -> Tree Structured a a -> Tree (Headers ctx) a a
+fieldStruct :: Types.HeaderName -> Tree SFV a a -> Tree (Headers ctx) a a
 fieldStruct name c = Node (FieldStructured name c)
 
 -- | A header field whose value is parsed\/printed as an RFC 9651
---   Structured Field Value Item wrapping a single bare value. Trailing
+--   Structured Field Value (SFV) Item wrapping a single bare value. Trailing
 --   content in the header value that @i@ doesn't recognize is left under
 --   the same header name (see 'fieldStruct') rather than erroring —
 --   'parseExact' catches it if that's not wanted:
 --
--- >>> parser (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) [("x-count", "5")]
+-- >>> parser (fieldBareItem "x-count" (integer :: Leaf Bare Integer)) [("x-count", "5")]
 -- (Right 5,[])
--- >>> parser (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) [("x-count", "5;bogus")]
+-- >>> parser (fieldBareItem "x-count" (integer :: Leaf Bare Integer)) [("x-count", "5;bogus")]
 -- (Right 5,[("x-count",";bogus")])
--- >>> parseExact (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) [("x-count", "5;bogus")]
+-- >>> parseExact (fieldBareItem "x-count" (integer :: Leaf Bare Integer)) [("x-count", "5;bogus")]
 -- Left (Right [("x-count",";bogus")])
--- >>> printer (fieldBareItem "x-count" (integer :: Leaf BareItem Integer)) 5
+-- >>> printer (fieldBareItem "x-count" (integer :: Leaf Bare Integer)) 5
 -- [("x-count","5")]
-fieldBareItem :: Types.HeaderName -> Leaf BareItem a -> Tree (Headers ctx) a a
-fieldBareItem name i = fieldStruct name (Structured.item (bareItem i))
+fieldBareItem :: Types.HeaderName -> Leaf Bare a -> Tree (Headers ctx) a a
+fieldBareItem name i = fieldStruct name (SFV.item (bareItem i))
 
 fieldItem :: Types.HeaderName -> Tree Item a a -> Tree (Headers ctx) a a
-fieldItem name c = fieldStruct name (Structured.item c)
+fieldItem name c = fieldStruct name (SFV.item c)
 
 fieldList :: Types.HeaderName -> Tree List a a -> Tree (Headers ctx) a a
-fieldList name c = fieldStruct name (Structured.list c)
+fieldList name c = fieldStruct name (SFV.list c)
 
 -- | A header field whose value is parsed\/printed as an RFC 9651
 --   Dictionary. Since 'fieldStruct' only consumes what @c@ recognizes,
 --   two 'fieldDict's sharing the same header name — each matching a
 --   different member — correctly split a single multi-member value across
---   two differently-typed record fields, combined via 'Okapi.HTTP.Tree.Apply':
+--   two differently-typed record fields, combined via 'Okapi.Tree.Apply':
 --
 -- >>> :{
--- let two = (,) <$> (fst =. fieldDict "x" (Dictionary.member "a" (Item.bareItem (integer :: Leaf BareItem Integer))))
---               <*> (snd =. fieldDict "x" (Dictionary.member "b" (Item.bareItem (integer :: Leaf BareItem Integer))))
+-- let two = (,) <$> (fst =. fieldDict "x" (Dictionary.member "a" (Item.bareItem (integer :: Leaf Bare Integer))))
+--               <*> (snd =. fieldDict "x" (Dictionary.member "b" (Item.bareItem (integer :: Leaf Bare Integer))))
 -- :}
 --
 -- >>> parser two [("x", "a=1, b=2")]
 -- (Right (1,2),[])
 fieldDict :: Types.HeaderName -> Tree Dictionary a a -> Tree (Headers ctx) a a
-fieldDict name c = fieldStruct name (Structured.dict c)
+fieldDict name c = fieldStruct name (SFV.dict c)
 
 -- | Asserts the @content-type@ header matches exactly — same shape as
 --   'field_', see there.
@@ -401,12 +398,6 @@ instance {-# OVERLAPPING #-} (Selector s, HasLeaf (Headers ctx) a) => GHeaders c
         let key = fieldToHeaderName (selName (undefined :: S1 s (Rec0 (Maybe a)) ()))
          in FMap (M1 . K1) $ LMap (unK1 . unM1) $ Node (Field' key (leaf @(Headers ctx) @a))
 
-instance {-# OVERLAPPING #-} (Selector s, KnownSymbol val) => GHeaders ctx (S1 s (Rec0 (ConstF val))) where
-    gHeadersCodec =
-        let k = fieldToHeaderName (selName (undefined :: S1 s (Rec0 (ConstF val)) ()))
-            v = encodeUtf8 (Text.pack (symbolVal (Proxy @val)))
-         in FMap (\() -> M1 (K1 ConstF)) $ LMap (const ()) $ Node (Field_ k v)
-
 -- | Generically derive a 'Headers' codec from a record's field names and
 --   'HasLeaf' instances (underscores become hyphens, e.g. field @x_a@
 --   becomes header @x-a@).
@@ -447,8 +438,6 @@ mediaTypeBytes FormUrlEncoded = "application/x-www-form-urlencoded"
 mediaTypeBytes OctetStream    = "application/octet-stream"
 mediaTypeBytes EventStream    = "text/event-stream"
 mediaTypeBytes (Custom bs)    = bs
-
-data ConstF (val :: Symbol) = ConstF deriving (Eq, Show)
 
 fieldToHeaderName :: String -> Types.HeaderName
 fieldToHeaderName = CI.mk . encodeUtf8 . Text.pack . map (\c -> if c == '_' then '-' else c)

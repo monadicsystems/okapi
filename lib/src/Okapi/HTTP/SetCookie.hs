@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Response.Headers.SetCookie (
+module Okapi.HTTP.SetCookie (
     SetCookie,
     ParseError (..),
 ) where
@@ -11,7 +11,7 @@ import Data.Kind (Type)
 import Data.Text (Text)
 import Data.Time (Day)
 import Data.UUID (UUID)
-import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
 import Web.HttpApiData (parseHeader, toHeader)
 
 type SetCookie :: Type -> Type -> Type

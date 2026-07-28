@@ -2,7 +2,7 @@
 -- | A natural transformation between two functors, and a record-field-
 --   friendly wrapper around one — used by 'Okapi.Server.serversVia' to let
 --   each field of a heterogeneous record of servers supply its own @n@,
---   the way 'Okapi.HTTP.Signature' already lets each field vary its own
+--   the way 'Okapi.Contract.Signature' already lets each field vary its own
 --   shape.
 module Okapi.Transformer (type (~>), Transformer (..)) where
 

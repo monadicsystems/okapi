@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Response.Headers.Attributes (
+module Okapi.HTTP.Attributes (
     Attributes,
     parser,
     printer,
@@ -21,13 +21,13 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Char8 qualified as BS8
 import Data.Char (toLower)
 import Data.Kind (Type)
-import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
-import Okapi.HTTP.Tree qualified as Tree
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseHeader, toHeader)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.HTTP.Tree ((=.), HasLeaf (..), printParse, parsePrint)
+-- >>> import Okapi.Tree ((=.), HasLeaf (..), printParse, parsePrint)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Data.ByteString qualified as BS
 -- >>> import Test.QuickCheck.Instances ()
@@ -58,7 +58,7 @@ instance HasLeaf Attributes ByteString where leaf = Leaf Right id (Info "string"
 
 -- | A required, named attribute, e.g. the @Max-Age@ in @; Max-Age=100@. A
 --   match removes the matched entry and re-serializes the rest as
---   leftover — combining several attributes via 'Okapi.HTTP.Tree.Apply'
+--   leftover — combining several attributes via 'Okapi.Tree.Apply'
 --   correctly shrinks leftover step by step, entry by entry.
 attr :: ByteString -> Leaf Attributes a -> Tree Attributes a a
 attr key vLeaf = Node (Attr key vLeaf)
@@ -153,7 +153,7 @@ maxAge = attr "Max-Age" (leaf @Attributes @Int)
 -- >>> printer domain "example.com"
 -- "; Domain=example.com"
 --
--- Combining two attributes via 'Okapi.HTTP.Tree.Apply' correctly shrinks the
+-- Combining two attributes via 'Okapi.Tree.Apply' correctly shrinks the
 -- leftover entry by entry, in either order:
 --
 -- >>> let both = (,) <$> (fst =. maxAge) <*> (snd =. domain)
@@ -222,12 +222,12 @@ printer = Tree.printer alg
 -- | Every well-formed 'Attributes' context is either empty or starts with
 --   the literal @"; "@ ('printer' always prefixes exactly that) — checked
 --   as a byte-for-byte prefix, not just a leading @;@, for the same reason
---   'Okapi.HTTP.Structured.Dictionary.memberEntries' does: a bare @;@ with no
+--   'Okapi.HTTP.SFV.Dictionary.memberEntries' does: a bare @;@ with no
 --   following space is never actually produced by 'printer', so accepting
 --   it here would let parsing succeed on bytes that don't reprint back to
 --   themselves. A match removes the matched entry and re-serializes the
 --   rest as leftover, so combining several attributes via
---   'Okapi.HTTP.Tree.Apply' correctly shrinks leftover entry by entry.
+--   'Okapi.Tree.Apply' correctly shrinks leftover entry by entry.
 lookAndRemove :: ByteString -> ByteString -> Maybe (Maybe ByteString, ByteString)
 lookAndRemove key bs = case BS.stripPrefix "; " bs of
     Nothing   -> Nothing
@@ -239,7 +239,7 @@ lookAndRemove key bs = case BS.stripPrefix "; " bs of
   where
     -- Any empty segment (a stray, doubled, or trailing @;@) is a real
     -- parse error, not silently collapsed — mirrors
-    -- 'Okapi.HTTP.Structured.List' and 'Okapi.HTTP.Structured.Dictionary''s
+    -- 'Okapi.HTTP.SFV.List' and 'Okapi.HTTP.SFV.Dictionary''s
     -- strict-separator treatment. Original casing is kept here (only
     -- lowercased transiently for the 'break' comparison above) —
     -- reserializing a lowercased key would change the leftover's bytes

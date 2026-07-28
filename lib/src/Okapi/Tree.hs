@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Tree (
+module Okapi.Tree (
     ForRequest,
     ForResponse,
     Context,
@@ -162,7 +162,7 @@ type SymTree t a = Tree t a a
 --   allowed and merge order is left to whatever consumes them (last tag
 --   wins for singular fields, by convention — see
 --   'Okapi.OpenApi'). 'Group' and 'Extension' are meaningful only
---   at the whole-contract level ('Okapi.HTTP.annotate'), not here —
+--   at the whole-contract level ('Okapi.Contract.annotate'), not here —
 --   see there.
 data Tag
     = Description Text
@@ -189,7 +189,7 @@ data Tag
 -- >>> parsePrint toyParser toyPrinter (annotate [Deprecated] toyTree) [5] == parsePrint toyParser toyPrinter toyTree [5]
 -- True
 --
--- (There's also 'Okapi.HTTP.annotate', a separate function for
+-- (There's also 'Okapi.Contract.annotate', a separate function for
 -- annotating a whole @req :-> res@ contract rather than one 'Tree' node —
 -- qualify the import if both are needed in the same file.)
 annotate :: [Tag] -> Tree t i o -> Tree t i o
@@ -241,7 +241,7 @@ parser alg = go
     go (Annotate _ c) s = go c s
 
 -- | Require full consumption — a generalization of
---   'Okapi.HTTP.Request.Path.parseExact' usable by any 'Tree' instance.
+--   'Okapi.HTTP.Path.parseExact' usable by any 'Tree' instance.
 --   'Left' with the underlying error if parsing itself failed; 'Left' with
 --   the leftover context if anything remains unconsumed.
 parseExact ::
@@ -283,7 +283,7 @@ printWith q c x extra = q c x <> extra
 --   parsing gives back the value with that trailing context untouched.
 --   Needs 'parseWith' to hold, which every parser in this codebase
 --   satisfies by construction (consume-a-prefix discipline) — and is the
---   same fact that makes 'Okapi.HTTP.Request.Headers.fieldStruct''s
+--   same fact that makes 'Okapi.HTTP.Headers.fieldStruct''s
 --   "leave the unconsumed remainder under the same header name" trick safe.
 printParseWith ::
     (Eq a, Eq (Failure t), Eq (Context t), Monoid (Context t)) =>

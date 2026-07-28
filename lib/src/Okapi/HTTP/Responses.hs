@@ -20,9 +20,6 @@ import GHC.Generics
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Network.Wai qualified as Wai
 import Okapi.HTTP.Response qualified as Res
-import Okapi.Response.Data qualified as Data
-import Okapi.Response.Result qualified as Result
-import Okapi.Response.Failure qualified as Error
 
 -- $setup
 -- >>> :set -XTypeApplications
@@ -31,8 +28,7 @@ import Okapi.Response.Failure qualified as Error
 -- >>> import Data.ByteString.Lazy qualified as LBS
 -- >>> import GHC.Generics (Generic)
 -- >>> import Okapi.HTTP.Response qualified as Res
--- >>> import Okapi.HTTP.Response.Status qualified as Status
--- >>> import Okapi.Response.Data qualified as Data
+-- >>> import Okapi.HTTP.Status qualified as Status
 -- >>> data ExampleResponses f = ExOk (f (Status.KnownStatus 200) Types.ResponseHeaders (IO LBS.ByteString)) | ExNotFound (f (Status.KnownStatus 404) Types.ResponseHeaders (IO LBS.ByteString)) deriving Generic
 -- >>> instance Responses ExampleResponses
 
@@ -148,10 +144,10 @@ zipResponses k a b = gzip k (from a) (from b)
 class GConstruct (rep :: Type -> Type) where
     gConstruct ::
         forall (responses :: (Type -> Type -> Type -> Type) -> Type) res.
-        Generic (responses Res.Response) =>
-        (rep () -> Rep (responses Res.Response) ()) ->
-        (NonEmpty (responses Res.Response) -> res) ->
-        GArgs Res.Response rep res
+        Generic (responses Res.Codec) =>
+        (rep () -> Rep (responses Res.Codec) ()) ->
+        (NonEmpty (responses Res.Codec) -> res) ->
+        GArgs Res.Codec rep res
 
 instance GConstruct fi => GConstruct (D1 meta fi) where
     gConstruct inject cont = gConstruct (inject . M1) cont
@@ -159,7 +155,7 @@ instance GConstruct fi => GConstruct (D1 meta fi) where
 instance GConstruct fi => GConstruct (C1 meta fi) where
     gConstruct inject cont = gConstruct (inject . M1) cont
 
-instance GConstruct (S1 meta (Rec0 (Res.Response status headers body))) where
+instance GConstruct (S1 meta (Rec0 (Res.Codec status headers body))) where
     gConstruct inject cont codec = cont (to (inject (M1 (K1 codec))) :| [])
 
 instance (GConstruct fil, GConstruct fir) => GConstruct (fil :+: fir) where
@@ -178,21 +174,21 @@ instance {-# OVERLAPPABLE #-}
     gConstruct = error "unreachable: resolved via TypeError instance"
 
 class
-    ( Generic (responses Res.Response)
-    , Generic (responses Result.Response)
-    , Generic (responses Data.Response)
-    , Generic (responses Error.Response)
-    , GConstruct (Rep (responses Res.Response))
-    , GTraverse Res.Response Result.Response
-        (Rep (responses Res.Response)) (Rep (responses Result.Response))
-    , GTraverse Result.Response   Data.Response
-        (Rep (responses Result.Response))   (Rep (responses Data.Response))
-    , GTraverse Result.Response   Error.Response
-        (Rep (responses Result.Response))   (Rep (responses Error.Response))
-    , GTraverse Res.Response Res.Response
-        (Rep (responses Res.Response)) (Rep (responses Res.Response))
-    , GZip Res.Response Data.Response
-        (Rep (responses Res.Response)) (Rep (responses Data.Response))
+    ( Generic (responses Res.Codec)
+    , Generic (responses Res.Result)
+    , Generic (responses Res.Data)
+    , Generic (responses Res.Failure)
+    , GConstruct (Rep (responses Res.Codec))
+    , GTraverse Res.Codec Res.Result
+        (Rep (responses Res.Codec)) (Rep (responses Res.Result))
+    , GTraverse Res.Result   Res.Data
+        (Rep (responses Res.Result))   (Rep (responses Res.Data))
+    , GTraverse Res.Result   Res.Failure
+        (Rep (responses Res.Result))   (Rep (responses Res.Failure))
+    , GTraverse Res.Codec Res.Codec
+        (Rep (responses Res.Codec)) (Rep (responses Res.Codec))
+    , GZip Res.Codec Res.Data
+        (Rep (responses Res.Codec)) (Rep (responses Res.Data))
     ) =>
     Responses (responses :: (Type -> Type -> Type -> Type) -> Type)
 
@@ -200,38 +196,38 @@ responses ::
     forall (responses :: (Type -> Type -> Type -> Type) -> Type).
     Responses responses =>
     GArgs
-        Res.Response
-        (Rep (responses Res.Response))
-        (Responses' Res.Response responses)
+        Res.Codec
+        (Rep (responses Res.Codec))
+        (Responses' Res.Codec responses)
 responses =
     gConstruct
-        (id :: Rep (responses Res.Response) () -> Rep (responses Res.Response) ())
-        (Responses' @Res.Response @responses)
+        (id :: Rep (responses Res.Codec) () -> Rep (responses Res.Codec) ())
+        (Responses' @Res.Codec @responses)
 
 parseResponses ::
     forall responses.
     Responses responses =>
-    Responses' Res.Response responses ->
+    Responses' Res.Codec responses ->
     Wai.Response ->
-    IO (Either (Responses' Error.Response responses) (responses Data.Response))
+    IO (Either (Responses' Res.Failure responses) (responses Res.Data))
 parseResponses (Responses' cs) waiRes = do
     rs <- traverse parseBranch cs
     pure $ case mapMaybe toValue (NE.toList rs) of
         (v : _) -> Right v
         []      -> Left (Responses' (fmap toErrors rs))
   where
-    parseBranch :: responses Res.Response -> IO (responses Result.Response)
+    parseBranch :: responses Res.Codec -> IO (responses Res.Result)
     parseBranch = traverseResponses (\codec -> Res.parser' codec waiRes)
-    toValue :: responses Result.Response -> Maybe (responses Data.Response)
+    toValue :: responses Res.Result -> Maybe (responses Res.Data)
     toValue = traverseResponses Res.resultToValue
-    toErrors :: responses Result.Response -> responses Error.Response
+    toErrors :: responses Res.Result -> responses Res.Failure
     toErrors = runIdentity . traverseResponses (Identity . Res.resultToError)
 
 -- | The 'Responses'' constructor isn't exported, so 'responses' is the only
 --   way to build a 'Responses'' value — and 'GConstruct'\'s @(':+:')@
 --   instance always combines @ls <> rs@, never drops a branch, so the
 --   result is guaranteed to carry exactly one codec per constructor of
---   @responses@. Any @responses Data.Response@ value handed to
+--   @responses@. Any @responses Res.Data@ value handed to
 --   'printResponses' was necessarily built through one of those same
 --   (finitely many) constructors, and 'zipResponses' only ever returns
 --   'Just' when the codec and the value share a constructor — so a match
@@ -241,17 +237,17 @@ parseResponses (Responses' cs) waiRes = do
 --   'responses'-built value, not just one:
 --
 -- >>> let cs = responses @ExampleResponses Res.ok Res.notFound
--- >>> r1 <- printResponses cs (ExOk (Data.Response { status = 200, headers = [], body = pure "hi" }))
+-- >>> r1 <- printResponses cs (ExOk (Res.Data { status = 200, headers = [], body = pure "hi" }))
 -- >>> Types.statusCode (Wai.responseStatus r1)
 -- 200
--- >>> r2 <- printResponses cs (ExNotFound (Data.Response { status = 404, headers = [], body = pure "nope" }))
+-- >>> r2 <- printResponses cs (ExNotFound (Res.Data { status = 404, headers = [], body = pure "nope" }))
 -- >>> Types.statusCode (Wai.responseStatus r2)
 -- 404
 printResponses ::
     forall responses.
     Responses responses =>
-    Responses' Res.Response responses ->
-    responses Data.Response ->
+    Responses' Res.Codec responses ->
+    responses Res.Data ->
     IO Wai.Response
 printResponses (Responses' cs) rv =
     case [io | c <- NE.toList cs, Just io <- [zipResponses Res.printer c rv]] of

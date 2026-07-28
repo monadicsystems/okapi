@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Structured.Dictionary (
+module Okapi.HTTP.SFV.Dictionary (
     Dictionary,
     parser,
     printer,
@@ -15,22 +15,22 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Data.Word (Word8)
-import Okapi.HTTP.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
-import Okapi.HTTP.Tree qualified as Tree
-import Okapi.HTTP.Structured.BareItem (BareItem, parseInnerToList, renderInner)
-import Okapi.HTTP.Structured.Item (Item)
-import Okapi.HTTP.Structured.Item qualified as Item
-import Okapi.HTTP.Structured.Scan (strip, splitTop)
+import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
+import Okapi.Tree qualified as Tree
+import Okapi.HTTP.SFV.Bare (Bare, parseInnerToList, renderInner)
+import Okapi.HTTP.SFV.Item (Item)
+import Okapi.HTTP.SFV.Item qualified as Item
+import Okapi.HTTP.SFV.Scan (strip, splitTop)
 
 -- $setup
--- >>> import Okapi.HTTP.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
--- >>> import Okapi.HTTP.Structured.Item qualified as Item
--- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
+-- >>> import Okapi.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
+-- >>> import Okapi.HTTP.SFV.Item qualified as Item
+-- >>> import Okapi.HTTP.SFV.Bare (Bare, hasNonCanonicalInteger)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Test.QuickCheck.Instances ()
 -- >>> import Test.QuickCheck (Gen, (==>), arbitrary, discard, forAll, frequency)
--- >>> let mixedMemberInteger = frequency [(1, arbitrary), (3, printer (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) <$> (arbitrary :: Gen Integer))] :: Gen ByteString
--- >>> let mixedListInteger = frequency [(1, arbitrary), (3, printer (list "a" (integer :: Leaf BareItem Integer)) <$> (arbitrary :: Gen [Integer]))] :: Gen ByteString
+-- >>> let mixedMemberInteger = frequency [(1, arbitrary), (3, printer (member "a" (Item.bareItem (integer :: Leaf Bare Integer))) <$> (arbitrary :: Gen Integer))] :: Gen ByteString
+-- >>> let mixedListInteger = frequency [(1, arbitrary), (3, printer (list "a" (integer :: Leaf Bare Integer)) <$> (arbitrary :: Gen [Integer]))] :: Gen ByteString
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -99,8 +99,8 @@ type Dictionary :: Type -> Type -> Type
 data Dictionary i o where
     Member  :: Key -> Tree Item a a  -> Dictionary a a
     Member' :: Key -> Tree Item a a  -> Dictionary (Maybe a) (Maybe a)
-    List    :: Key -> Leaf BareItem a -> Dictionary [a] [a]
-    List'   :: Key -> Leaf BareItem a -> Dictionary (Maybe [a]) (Maybe [a])
+    List    :: Key -> Leaf Bare a -> Dictionary [a] [a]
+    List'   :: Key -> Leaf Bare a -> Dictionary (Maybe [a]) (Maybe [a])
     Raw     :: Dictionary ByteString ByteString
 
 type instance Context Dictionary = ByteString
@@ -108,61 +108,61 @@ type instance Failure Dictionary = ParseError
 
 -- | A required, named entry, e.g. the RFC 9651 Dictionary (§3.2) member
 --   @a@ in @, a=1, b=2@ (the internal, always-leading-separator
---   representation — see 'Okapi.HTTP.Structured.dict' for the
+--   representation — see 'Okapi.HTTP.SFV.dict' for the
 --   stripped, canonical top-level header-value form). A bare key with no
 --   value is treated as the boolean shorthand @a=?1@. A match removes the
 --   matched entry and re-serializes the rest as leftover — combining
---   several 'member's via 'Okapi.HTTP.Tree.Apply' correctly shrinks leftover
+--   several 'member's via 'Okapi.Tree.Apply' correctly shrinks leftover
 --   entry by entry.
 --
--- >>> parser (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) ", a=1, b=2"
+-- >>> parser (member "a" (Item.bareItem (integer :: Leaf Bare Integer))) ", a=1, b=2"
 -- (Right 1,", b=2")
--- >>> parser (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) "a=1, b=2"
+-- >>> parser (member "a" (Item.bareItem (integer :: Leaf Bare Integer))) "a=1, b=2"
 -- (Left ParseError,"a=1, b=2")
--- >>> printer (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) 1
+-- >>> printer (member "a" (Item.bareItem (integer :: Leaf Bare Integer))) 1
 -- ", a=1"
 --
--- prop> printParse parser printer (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) (n :: Integer)
--- prop> forAll mixedMemberInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (member "a" (Item.bareItem (integer :: Leaf BareItem Integer))) bs)
+-- prop> printParse parser printer (member "a" (Item.bareItem (integer :: Leaf Bare Integer))) (n :: Integer)
+-- prop> forAll mixedMemberInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (member "a" (Item.bareItem (integer :: Leaf Bare Integer))) bs)
 member :: Key -> Tree Item a a -> Tree Dictionary a a
 member k c = Node (Member k c)
 
 -- | An optional entry — 'Nothing' when absent, printed as nothing.
 --
--- >>> parser (member' "a" (Item.bareItem (integer :: Leaf BareItem Integer))) ", b=2"
+-- >>> parser (member' "a" (Item.bareItem (integer :: Leaf Bare Integer))) ", b=2"
 -- (Right Nothing,", b=2")
--- >>> printer (member' "a" (Item.bareItem (integer :: Leaf BareItem Integer))) Nothing
+-- >>> printer (member' "a" (Item.bareItem (integer :: Leaf Bare Integer))) Nothing
 -- ""
--- >>> printer (member' "a" (Item.bareItem (integer :: Leaf BareItem Integer))) (Just 1)
+-- >>> printer (member' "a" (Item.bareItem (integer :: Leaf Bare Integer))) (Just 1)
 -- ", a=1"
 --
--- prop> printParse parser printer (member' "a" (Item.bareItem (integer :: Leaf BareItem Integer))) (mn :: Maybe Integer)
--- prop> \bs -> not (hasNonCanonicalInteger bs) ==> parsePrint parser printer (member' "a" (Item.bareItem (integer :: Leaf BareItem Integer))) bs
+-- prop> printParse parser printer (member' "a" (Item.bareItem (integer :: Leaf Bare Integer))) (mn :: Maybe Integer)
+-- prop> \bs -> not (hasNonCanonicalInteger bs) ==> parsePrint parser printer (member' "a" (Item.bareItem (integer :: Leaf Bare Integer))) bs
 member' :: Key -> Tree Item a a -> Tree Dictionary (Maybe a) (Maybe a)
 member' k c = Node (Member' k c)
 
 -- | A required entry whose value is an Inner List, e.g. @a=(1 2 3)@.
 --
--- >>> parser (list "a" (integer :: Leaf BareItem Integer)) ", a=(1 2 3), b=2"
+-- >>> parser (list "a" (integer :: Leaf Bare Integer)) ", a=(1 2 3), b=2"
 -- (Right [1,2,3],", b=2")
--- >>> printer (list "a" (integer :: Leaf BareItem Integer)) [1,2,3]
+-- >>> printer (list "a" (integer :: Leaf Bare Integer)) [1,2,3]
 -- ", a=(1 2 3)"
 --
--- prop> printParse parser printer (list "a" (integer :: Leaf BareItem Integer)) (xs :: [Integer])
--- prop> forAll mixedListInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (list "a" (integer :: Leaf BareItem Integer)) bs)
-list :: Key -> Leaf BareItem a -> Tree Dictionary [a] [a]
+-- prop> printParse parser printer (list "a" (integer :: Leaf Bare Integer)) (xs :: [Integer])
+-- prop> forAll mixedListInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (list "a" (integer :: Leaf Bare Integer)) bs)
+list :: Key -> Leaf Bare a -> Tree Dictionary [a] [a]
 list k vLeaf = Node (List k vLeaf)
 
 -- | Optional version of 'list'.
 --
--- >>> parser (list' "a" (integer :: Leaf BareItem Integer)) ", b=2"
+-- >>> parser (list' "a" (integer :: Leaf Bare Integer)) ", b=2"
 -- (Right Nothing,", b=2")
--- >>> printer (list' "a" (integer :: Leaf BareItem Integer)) Nothing
+-- >>> printer (list' "a" (integer :: Leaf Bare Integer)) Nothing
 -- ""
 --
--- prop> printParse parser printer (list' "a" (integer :: Leaf BareItem Integer)) (mxs :: Maybe [Integer])
--- prop> \bs -> not (hasNonCanonicalInteger bs) ==> parsePrint parser printer (list' "a" (integer :: Leaf BareItem Integer)) bs
-list' :: Key -> Leaf BareItem a -> Tree Dictionary (Maybe [a]) (Maybe [a])
+-- prop> printParse parser printer (list' "a" (integer :: Leaf Bare Integer)) (mxs :: Maybe [Integer])
+-- prop> \bs -> not (hasNonCanonicalInteger bs) ==> parsePrint parser printer (list' "a" (integer :: Leaf Bare Integer)) bs
+list' :: Key -> Leaf Bare a -> Tree Dictionary (Maybe [a]) (Maybe [a])
 list' k vLeaf = Node (List' k vLeaf)
 
 -- | Pass the raw bytes straight through, unconstrained.

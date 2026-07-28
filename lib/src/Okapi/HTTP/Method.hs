@@ -1,4 +1,4 @@
-module Okapi.HTTP.Request.Method (
+module Okapi.HTTP.Method (
     KnownMethod (..),
     Method (..),
     Base,
@@ -25,9 +25,9 @@ import Network.HTTP.Types qualified as Types
 import Prelude hiding (print)
 
 {- $setup
->>> import Okapi.HTTP.Request.Method qualified as Method
+>>> import Okapi.HTTP.Method qualified as Method
 >>> import Network.HTTP.Types qualified as Types
->>> import Okapi.HTTP.Tree (leafPrintParse, leafParsePrint)
+>>> import Okapi.Tree (leafPrintParse, leafParsePrint)
 >>> import Test.QuickCheck.Instances ()
 -}
 

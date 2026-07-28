@@ -1,11 +1,10 @@
 
-module Okapi.HTTP.Structured.Parameters (
+module Okapi.HTTP.SFV.Parameters (
     Parameters,
     parser,
     printer,
     param,
     param',
-    param_,
     flag,
     flag',
     raw,
@@ -14,25 +13,24 @@ module Okapi.HTTP.Structured.Parameters (
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
-import Okapi.HTTP.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..))
-import Okapi.HTTP.Tree qualified as Tree
-import Okapi.HTTP.Structured.BareItem (BareItem)
-import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
+import Okapi.Tree (Failure, Leaf (..), Parser, Printer, Context, Tree (..))
+import Okapi.Tree qualified as Tree
+import Okapi.HTTP.SFV.Bare (Bare)
+import Okapi.HTTP.SFV.Scan (strip, firstTop, splitTop)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.HTTP.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
--- >>> import Okapi.HTTP.Structured.BareItem (BareItem, hasNonCanonicalInteger)
+-- >>> import Okapi.Tree (Leaf, printParse, parsePrint, parsePrintOr, integer)
+-- >>> import Okapi.HTTP.SFV.Bare (Bare, hasNonCanonicalInteger)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Test.QuickCheck.Instances ()
 -- >>> import Test.QuickCheck (Gen, (==>), arbitrary, discard, forAll, frequency)
--- >>> let mixedParamInteger = frequency [(1, arbitrary), (3, printer (param "a" (integer :: Leaf BareItem Integer)) <$> (arbitrary :: Gen Integer))] :: Gen ByteString
--- >>> let mixedFixedInteger = frequency [(1, arbitrary), (3, pure (printer (param_ "a" (integer :: Leaf BareItem Integer) 1) ()))] :: Gen ByteString
+-- >>> let mixedParamInteger = frequency [(1, arbitrary), (3, printer (param "a" (integer :: Leaf Bare Integer)) <$> (arbitrary :: Gen Integer))] :: Gen ByteString
 -- >>> let mixedFlag = frequency [(1, arbitrary), (3, pure (printer (flag "a") ()))] :: Gen ByteString
 -- >>> :{
 -- let onCount = do
 --       flag "on"
---       x <- param "n" (integer :: Leaf BareItem Integer)
+--       x <- param "n" (integer :: Leaf Bare Integer)
 --       pure x
 -- :}
 
@@ -71,9 +69,8 @@ lookAndRemove bs k = case break ((== k) . fst) (paramEntries bs) of
 
 type Parameters :: Type -> Type -> Type
 data Parameters i o where
-    Param  :: Key -> Leaf BareItem a -> Parameters a a
-    Param' :: Key -> Leaf BareItem a -> Parameters (Maybe a) (Maybe a)
-    Param_ :: Key -> Leaf BareItem a -> a -> Parameters i ()
+    Param  :: Key -> Leaf Bare a -> Parameters a a
+    Param' :: Key -> Leaf Bare a -> Parameters (Maybe a) (Maybe a)
     Flag   :: Key -> Parameters i ()
     Flag'  :: Key -> Parameters Bool Bool
     Raw    :: Parameters ByteString ByteString
@@ -83,49 +80,34 @@ type instance Failure Parameters = ParseError
 
 -- | A required, named parameter, e.g. the @foo@ in @;foo=1@ (RFC 9651 §3.1.2).
 --   A match removes the matched entry and re-serializes the rest as
---   leftover — combining several 'param's via 'Okapi.HTTP.Tree.Apply' correctly
+--   leftover — combining several 'param's via 'Okapi.Tree.Apply' correctly
 --   shrinks leftover step by step, entry by entry.
 --
--- >>> parser (param "a" (integer :: Leaf BareItem Integer)) ";a=1;b=2"
+-- >>> parser (param "a" (integer :: Leaf Bare Integer)) ";a=1;b=2"
 -- (Right 1,";b=2")
--- >>> parser (param "a" (integer :: Leaf BareItem Integer)) "a=1"
+-- >>> parser (param "a" (integer :: Leaf Bare Integer)) "a=1"
 -- (Left ParseError,"a=1")
--- >>> printer (param "a" (integer :: Leaf BareItem Integer)) 1
+-- >>> printer (param "a" (integer :: Leaf Bare Integer)) 1
 -- ";a=1"
 --
--- prop> printParse parser printer (param "a" (integer :: Leaf BareItem Integer)) (n :: Integer)
--- prop> forAll mixedParamInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (param "a" (integer :: Leaf BareItem Integer)) bs)
-param :: Key -> Leaf BareItem a -> Tree Parameters a a
+-- prop> printParse parser printer (param "a" (integer :: Leaf Bare Integer)) (n :: Integer)
+-- prop> forAll mixedParamInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (param "a" (integer :: Leaf Bare Integer)) bs)
+param :: Key -> Leaf Bare a -> Tree Parameters a a
 param k vLeaf = Node (Param k vLeaf)
 
 -- | An optional parameter — 'Nothing' when absent, printed as nothing.
 --
--- >>> parser (param' "a" (integer :: Leaf BareItem Integer)) ";b=2"
+-- >>> parser (param' "a" (integer :: Leaf Bare Integer)) ";b=2"
 -- (Right Nothing,";b=2")
--- >>> printer (param' "a" (integer :: Leaf BareItem Integer)) Nothing
+-- >>> printer (param' "a" (integer :: Leaf Bare Integer)) Nothing
 -- ""
--- >>> printer (param' "a" (integer :: Leaf BareItem Integer)) (Just 1)
+-- >>> printer (param' "a" (integer :: Leaf Bare Integer)) (Just 1)
 -- ";a=1"
 --
--- prop> printParse parser printer (param' "a" (integer :: Leaf BareItem Integer)) (mn :: Maybe Integer)
--- prop> \bs -> not (hasNonCanonicalInteger bs) ==> parsePrint parser printer (param' "a" (integer :: Leaf BareItem Integer)) bs
-param' :: Key -> Leaf BareItem a -> Tree Parameters (Maybe a) (Maybe a)
+-- prop> printParse parser printer (param' "a" (integer :: Leaf Bare Integer)) (mn :: Maybe Integer)
+-- prop> \bs -> not (hasNonCanonicalInteger bs) ==> parsePrint parser printer (param' "a" (integer :: Leaf Bare Integer)) bs
+param' :: Key -> Leaf Bare a -> Tree Parameters (Maybe a) (Maybe a)
 param' k vLeaf = Node (Param' k vLeaf)
-
--- | A parameter constrained to one known value — parses only if present
---   and equal to the fixed value, ignored on print (the value is baked in).
---
--- >>> parser (param_ "a" (integer :: Leaf BareItem Integer) 1) ";a=1"
--- (Right (),"")
--- >>> parser (param_ "a" (integer :: Leaf BareItem Integer) 1) ";a=2"
--- (Left ParseError,";a=2")
--- >>> printer (param_ "a" (integer :: Leaf BareItem Integer) 1) ()
--- ";a=1"
---
--- prop> printParse parser printer (param_ "a" (integer :: Leaf BareItem Integer) 1) ()
--- prop> forAll mixedFixedInteger (\bs -> not (hasNonCanonicalInteger bs) ==> parsePrintOr discard parser printer (param_ "a" (integer :: Leaf BareItem Integer) 1) bs)
-param_ :: Key -> Leaf BareItem a -> a -> Tree Parameters i ()
-param_ k vLeaf x = Node (Param_ k vLeaf x)
 
 -- | A boolean-valued parameter present with no value (bare @;a@) or absent
 --   entirely — either is accepted, and printing always emits the bare form.
@@ -194,9 +176,6 @@ parser = Tree.parser alg
             Right a -> (Right (Just a), rest)
             Left _  -> (Right Nothing, s)
         _ -> (Right Nothing, s)
-    alg (Param_ key vLeaf x) s = case lookAndRemove s key of
-        Just (Just v, rest) | v == vLeaf.encode x -> (Right (), rest)
-        _                                          -> (Left ParseError, s)
     alg (Flag key) s = case lookAndRemove s key of
         Just (Nothing, rest)   -> (Right (), rest)
         Just (Just "?1", rest) -> (Right (), rest)
@@ -215,7 +194,6 @@ printer = Tree.printer alg
     alg (Param key vLeaf)    v        = ";" <> key <> "=" <> vLeaf.encode v
     alg (Param' key vLeaf)   (Just v) = ";" <> key <> "=" <> vLeaf.encode v
     alg (Param' _ _)         Nothing  = ""
-    alg (Param_ key vLeaf x) _        = ";" <> key <> "=" <> vLeaf.encode x
     alg (Flag key)           _        = ";" <> key
     alg (Flag' key)          True     = ";" <> key
     alg (Flag' _)            False    = ""

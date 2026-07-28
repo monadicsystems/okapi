@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Response.Status (
+module Okapi.HTTP.Status (
     KnownStatus (..),
     S100, S101, S200, S201, S202, S203, S204, S205, S206,
     S300, S301, S302, S303, S304, S305, S307, S308,
@@ -27,15 +27,15 @@ import Network.HTTP.Types qualified as Types
 import Prelude hiding (print)
 
 -- $setup
--- >>> import Okapi.HTTP.Response.Status qualified as Status
+-- >>> import Okapi.HTTP.Status qualified as Status
 -- >>> import Network.HTTP.Types qualified as Types
--- >>> import Okapi.HTTP.Tree (leafPrintParse, leafParsePrint)
+-- >>> import Okapi.Tree (leafPrintParse, leafParsePrint)
 -- >>> import Test.QuickCheck.Instances ()
 
 {- | Evidence that @s@ is a known, valid HTTP status code (every @statusNNN@
   @http-types@ ships — see 'statusTable', not the full IANA registry). One
   named constructor per recognized code, mirroring
-  "Okapi.HTTP.Request.Method"'s @KnownMethod@ exactly — carries no runtime
+  "Okapi.HTTP.Method"'s @KnownMethod@ exactly — carries no runtime
   data of its own beyond which constructor was used. Also constructible via
   the numeral literal itself: @200 :: KnownStatus 200@, through the 'Num'
   instance below — @status 200@ reads the same way a plain status-code
@@ -492,7 +492,7 @@ instance Num (KnownStatus 511) where
     negate = id
 
 -- | Short type-level names for each recognized status code, mirroring
---   "Okapi.HTTP.Request.Method"'s @GET@\/@POST@\/etc. type synonyms.
+--   "Okapi.HTTP.Method"'s @GET@\/@POST@\/etc. type synonyms.
 type S100 = KnownStatus 100
 type S101 = KnownStatus 101
 type S200 = KnownStatus 200

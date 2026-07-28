@@ -1,6 +1,6 @@
 
-module Okapi.HTTP.Structured.BareItem (
-    BareItem,
+module Okapi.HTTP.SFV.Bare (
+    Bare,
     hasNonCanonicalInteger,
     DisplayString (..),
     displayString,
@@ -26,11 +26,11 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime, utcTimeToPOSIXSeconds)
 import Data.Word (Word8)
 import Numeric (showHex)
-import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
-import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Piece)
+import Okapi.HTTP.SFV.Scan (strip, firstTop, splitTop)
 
 -- $setup
--- >>> import Okapi.HTTP.Tree (Leaf (..), HasLeaf (..), leafPrintParse, leafParsePrint, leafParsePrintOr, leafPrintParsePrint, leafParsePrintParse, integer, bool, text, scientific, double, float, utcTime)
+-- >>> import Okapi.Tree (Leaf (..), HasLeaf (..), leafPrintParse, leafParsePrint, leafParsePrintOr, leafPrintParsePrint, leafParsePrintParse, integer, bool, text, scientific, double, float, utcTime)
 -- >>> import Data.ByteString.Char8 qualified as BS8
 -- >>> import Data.Text (Text)
 -- >>> import Data.ByteString (ByteString)
@@ -41,7 +41,7 @@ import Okapi.HTTP.Structured.Scan (strip, firstTop, splitTop)
 -- >>> import Test.QuickCheck.Instances ()
 -- >>> import Test.QuickCheck (Gen, (==>), arbitrary, discard, forAll, frequency)
 -- >>> let mixedInteger = frequency [(1, arbitrary), (3, BS8.pack . show <$> (arbitrary :: Gen Integer))] :: Gen ByteString
--- >>> let mixedDisplayString = frequency [(1, arbitrary), (3, (encode (displayString :: Leaf BareItem DisplayString) . DisplayString) <$> (arbitrary :: Gen Text))] :: Gen ByteString
+-- >>> let mixedDisplayString = frequency [(1, arbitrary), (3, (encode (displayString :: Leaf Bare DisplayString) . DisplayString) <$> (arbitrary :: Gen Text))] :: Gen ByteString
 
 data ParseError = ParseError deriving (Eq, Show)
 
@@ -55,13 +55,13 @@ parseInnerBare m = case BS.uncons (strip m) of
         Nothing -> Nothing
     _ -> Nothing
 
-type BareItem :: Type -> Type -> Type
-data BareItem i o
+type Bare :: Type -> Type -> Type
+data Bare i o
 
-type instance Piece BareItem = ByteString
-type instance Failure BareItem = ParseError
+type instance Piece Bare = ByteString
+type instance Failure Bare = ParseError
 
-bareLeaf :: (ByteString -> Either Text a) -> (a -> ByteString) -> Info -> Leaf BareItem a
+bareLeaf :: (ByteString -> Either Text a) -> (a -> ByteString) -> Info -> Leaf Bare a
 bareLeaf dec enc nfo = Leaf (eParse . dec) enc nfo
 
 -- | RFC 9651 §3.3.1: @sf-integer = ["-"] 1*15DIGIT@ — no leading @+@,
@@ -101,27 +101,27 @@ hasNonCanonicalInteger bs = any badAt (BS.tails bs)
     isDigitB c = c >= '0' && c <= '9'
 
 -- |
--- >>> decode (integer :: Leaf BareItem Integer) "42"
+-- >>> decode (integer :: Leaf Bare Integer) "42"
 -- Right 42
--- >>> encode (integer :: Leaf BareItem Integer) 42
+-- >>> encode (integer :: Leaf Bare Integer) 42
 -- "42"
 --
--- prop> leafPrintParse (decode (integer :: Leaf BareItem Integer)) (encode (integer :: Leaf BareItem Integer)) x
--- prop> forAll mixedInteger (\bs -> not (hasNonCanonicalInteger bs) ==> leafParsePrintOr discard (decode (integer :: Leaf BareItem Integer)) (encode (integer :: Leaf BareItem Integer)) bs)
-instance HasLeaf BareItem Integer where
+-- prop> leafPrintParse (decode (integer :: Leaf Bare Integer)) (encode (integer :: Leaf Bare Integer)) x
+-- prop> forAll mixedInteger (\bs -> not (hasNonCanonicalInteger bs) ==> leafParsePrintOr discard (decode (integer :: Leaf Bare Integer)) (encode (integer :: Leaf Bare Integer)) bs)
+instance HasLeaf Bare Integer where
     leaf = bareLeaf decInteger (BS8.pack . show) (Info "integer" Nothing)
 
-instance HasLeaf BareItem Int where
+instance HasLeaf Bare Int where
     leaf = bareLeaf (fmap fromInteger . decInteger) (BS8.pack . show) (Info "integer" Nothing)
 
 -- |
--- >>> decode (bool :: Leaf BareItem Bool) "?1"
+-- >>> decode (bool :: Leaf Bare Bool) "?1"
 -- Right True
--- >>> encode (bool :: Leaf BareItem Bool) True
+-- >>> encode (bool :: Leaf Bare Bool) True
 -- "?1"
 --
--- prop> leafPrintParse (decode (bool :: Leaf BareItem Bool)) (encode (bool :: Leaf BareItem Bool)) x
-instance HasLeaf BareItem Bool where
+-- prop> leafPrintParse (decode (bool :: Leaf Bare Bool)) (encode (bool :: Leaf Bare Bool)) x
+instance HasLeaf Bare Bool where
     leaf = bareLeaf dec enc (Info "boolean" Nothing)
       where
         enc True  = "?1"
@@ -154,17 +154,17 @@ parseSfString bs = case BS.uncons bs of
 
 -- | Encoded as a quoted @sf-string@, with @"@ and @\\@ escaped.
 --
--- >>> decode (text :: Leaf BareItem Text) "\"hello\""
+-- >>> decode (text :: Leaf Bare Text) "\"hello\""
 -- Right "hello"
--- >>> encode (text :: Leaf BareItem Text) "hello"
+-- >>> encode (text :: Leaf Bare Text) "hello"
 -- "\"hello\""
--- >>> encode (text :: Leaf BareItem Text) "a\"b"
+-- >>> encode (text :: Leaf Bare Text) "a\"b"
 -- "\"a\\\"b\""
--- >>> decode (text :: Leaf BareItem Text) (encode (text :: Leaf BareItem Text) "a\"b")
+-- >>> decode (text :: Leaf Bare Text) (encode (text :: Leaf Bare Text) "a\"b")
 -- Right "a\"b"
 --
--- prop> leafPrintParse (decode (text :: Leaf BareItem Text)) (encode (text :: Leaf BareItem Text)) x
-instance HasLeaf BareItem Text where
+-- prop> leafPrintParse (decode (text :: Leaf Bare Text)) (encode (text :: Leaf Bare Text)) x
+instance HasLeaf Bare Text where
     leaf = bareLeaf parseSfString (\t -> "\"" <> escapeSfString (encodeUtf8 t) <> "\"") (Info "string" Nothing)
 
 -- | An RFC 9651 §3.3.8 Display String — conceptually the same kind of
@@ -229,22 +229,22 @@ parseDisplayString bs = case BS.uncons bs of
 --   quoted, percent-encoded UTF-8 string. The RFC's own worked example
 --   (§3.3.8):
 --
--- >>> decode (displayString :: Leaf BareItem DisplayString) "%\"This is intended for display to %c3%bcsers.\""
+-- >>> decode (displayString :: Leaf Bare DisplayString) "%\"This is intended for display to %c3%bcsers.\""
 -- Right (DisplayString "This is intended for display to \252sers.")
--- >>> encode (displayString :: Leaf BareItem DisplayString) (DisplayString "This is intended for display to \252sers.")
+-- >>> encode (displayString :: Leaf Bare DisplayString) (DisplayString "This is intended for display to \252sers.")
 -- "%\"This is intended for display to %c3%bcsers.\""
 --
 -- A literal backslash passes through unescaped, unlike 'Text'\'s
 -- @sf-string@ (contrast with the @a\\\"b@ example above):
 --
--- >>> encode (displayString :: Leaf BareItem DisplayString) (DisplayString "a\\b")
+-- >>> encode (displayString :: Leaf Bare DisplayString) (DisplayString "a\\b")
 -- "%\"a\\b\""
--- >>> decode (displayString :: Leaf BareItem DisplayString) "%\"a\\b\""
+-- >>> decode (displayString :: Leaf Bare DisplayString) "%\"a\\b\""
 -- Right (DisplayString "a\\b")
 --
--- prop> \t -> leafPrintParse (decode (displayString :: Leaf BareItem DisplayString)) (encode (displayString :: Leaf BareItem DisplayString)) (DisplayString t)
--- prop> forAll mixedDisplayString (\bs -> leafParsePrintOr discard (decode (displayString :: Leaf BareItem DisplayString)) (encode (displayString :: Leaf BareItem DisplayString)) bs)
-instance HasLeaf BareItem DisplayString where
+-- prop> \t -> leafPrintParse (decode (displayString :: Leaf Bare DisplayString)) (encode (displayString :: Leaf Bare DisplayString)) (DisplayString t)
+-- prop> forAll mixedDisplayString (\bs -> leafParsePrintOr discard (decode (displayString :: Leaf Bare DisplayString)) (encode (displayString :: Leaf Bare DisplayString)) bs)
+instance HasLeaf Bare DisplayString where
     leaf = bareLeaf (fmap DisplayString . parseDisplayString) (\(DisplayString t) -> renderDisplayString t) (Info "string" (Just "display"))
 
 displayString :: (HasLeaf t DisplayString) => Leaf t DisplayString
@@ -292,15 +292,15 @@ mkToken bs = case BS.uncons bs of
 
 -- | Encoded as the bare, unquoted bytes — RFC 9651 §3.3.4.
 --
--- >>> decode (token :: Leaf BareItem Token) "image/png"
+-- >>> decode (token :: Leaf Bare Token) "image/png"
 -- Right (Token "image/png")
--- >>> encode (token :: Leaf BareItem Token) <$> mkToken "image/png"
+-- >>> encode (token :: Leaf Bare Token) <$> mkToken "image/png"
 -- Just "image/png"
--- >>> decode (token :: Leaf BareItem Token) "1abc"
+-- >>> decode (token :: Leaf Bare Token) "1abc"
 -- Left ParseError
 --
--- prop> \bs -> maybe True (leafPrintParse (decode (token :: Leaf BareItem Token)) (encode (token :: Leaf BareItem Token))) (mkToken ("a" <> BS.filter (\w -> (w >= 48 && w <= 57) || (w >= 65 && w <= 90) || (w >= 97 && w <= 122)) bs))
-instance HasLeaf BareItem Token where
+-- prop> \bs -> maybe True (leafPrintParse (decode (token :: Leaf Bare Token)) (encode (token :: Leaf Bare Token))) (mkToken ("a" <> BS.filter (\w -> (w >= 48 && w <= 57) || (w >= 65 && w <= 90) || (w >= 97 && w <= 122)) bs))
+instance HasLeaf Bare Token where
     leaf = bareLeaf dec unToken (Info "token" Nothing)
       where
         dec bs = maybe (Left ("invalid sf-token: " <> decodeUtf8Lenient bs)) Right (mkToken bs)
@@ -331,15 +331,15 @@ parseByteSequence bs = case BS.uncons bs of
 -- | Encoded per RFC 9651 §3.3.5\/§4.1.8\/§4.2.7 — standard base64
 --   (RFC 4648 §4), colon-delimited.
 --
--- >>> decode (byteSequence :: Leaf BareItem ByteSequence) ":cGxlYXN1cmUu:"
+-- >>> decode (byteSequence :: Leaf Bare ByteSequence) ":cGxlYXN1cmUu:"
 -- Right (ByteSequence "pleasure.")
--- >>> encode (byteSequence :: Leaf BareItem ByteSequence) (ByteSequence "pleasure.")
+-- >>> encode (byteSequence :: Leaf Bare ByteSequence) (ByteSequence "pleasure.")
 -- ":cGxlYXN1cmUu:"
--- >>> decode (byteSequence :: Leaf BareItem ByteSequence) "cGxlYXN1cmUu"
+-- >>> decode (byteSequence :: Leaf Bare ByteSequence) "cGxlYXN1cmUu"
 -- Left ParseError
 --
--- prop> \bs -> leafPrintParse (decode (byteSequence :: Leaf BareItem ByteSequence)) (encode (byteSequence :: Leaf BareItem ByteSequence)) (ByteSequence bs)
-instance HasLeaf BareItem ByteSequence where
+-- prop> \bs -> leafPrintParse (decode (byteSequence :: Leaf Bare ByteSequence)) (encode (byteSequence :: Leaf Bare ByteSequence)) (ByteSequence bs)
+instance HasLeaf Bare ByteSequence where
     leaf = bareLeaf (fmap ByteSequence . parseByteSequence) (\(ByteSequence bs) -> renderByteSequence bs) (Info "string" (Just "byte-sequence"))
 
 byteSequence :: (HasLeaf t ByteSequence) => Leaf t ByteSequence
@@ -348,9 +348,9 @@ byteSequence = leaf
 -- | Identity leaf — @decode@ never fails, so both directions hold
 --   unconditionally for any input.
 --
--- prop> leafPrintParse (decode (leaf :: Leaf BareItem ByteString)) (encode (leaf :: Leaf BareItem ByteString)) x
--- prop> leafParsePrint (decode (leaf :: Leaf BareItem ByteString)) (encode (leaf :: Leaf BareItem ByteString)) (bs :: ByteString)
-instance HasLeaf BareItem ByteString where
+-- prop> leafPrintParse (decode (leaf :: Leaf Bare ByteString)) (encode (leaf :: Leaf Bare ByteString)) x
+-- prop> leafParsePrint (decode (leaf :: Leaf Bare ByteString)) (encode (leaf :: Leaf Bare ByteString)) (bs :: ByteString)
+instance HasLeaf Bare ByteString where
     leaf = bareLeaf Right id (Info "string" Nothing)
 
 -- | Rounding to 3 decimal places can turn a small negative value into all
@@ -377,28 +377,28 @@ parseSfDecimal bs = case BS8.readInt bs of
 --   inputs like @\"1.5\"@ that don't reprint to themselves). Use
 --   'leafPrintParsePrint'\/'leafParsePrintParse' instead.
 --
--- >>> encode (scientific :: Leaf BareItem Scientific) 1.5
+-- >>> encode (scientific :: Leaf Bare Scientific) 1.5
 -- "1.500"
--- >>> decode (scientific :: Leaf BareItem Scientific) "1.5"
+-- >>> decode (scientific :: Leaf Bare Scientific) "1.5"
 -- Right 1.5
--- >>> decode (scientific :: Leaf BareItem Scientific) (encode (scientific :: Leaf BareItem Scientific) 1.5)
+-- >>> decode (scientific :: Leaf Bare Scientific) (encode (scientific :: Leaf Bare Scientific) 1.5)
 -- Right 1.5
 --
--- prop> leafPrintParsePrint (decode (scientific :: Leaf BareItem Scientific)) (encode (scientific :: Leaf BareItem Scientific)) x
--- prop> leafParsePrintParse (decode (scientific :: Leaf BareItem Scientific)) (encode (scientific :: Leaf BareItem Scientific)) (bs :: ByteString)
-instance HasLeaf BareItem Scientific where
+-- prop> leafPrintParsePrint (decode (scientific :: Leaf Bare Scientific)) (encode (scientific :: Leaf Bare Scientific)) x
+-- prop> leafParsePrintParse (decode (scientific :: Leaf Bare Scientific)) (encode (scientific :: Leaf Bare Scientific)) (bs :: ByteString)
+instance HasLeaf Bare Scientific where
     leaf = bareLeaf parseSfDecimal renderSfDecimal (Info "number" Nothing)
 
 -- | Same lossy-encode\/lenient-decode caveat as 'Scientific' — see there.
 --
--- prop> leafPrintParsePrint (decode (double :: Leaf BareItem Double)) (encode (double :: Leaf BareItem Double)) x
-instance HasLeaf BareItem Double where
+-- prop> leafPrintParsePrint (decode (double :: Leaf Bare Double)) (encode (double :: Leaf Bare Double)) x
+instance HasLeaf Bare Double where
     leaf = bareLeaf (fmap toRealFloat . parseSfDecimal) (renderSfDecimal . realToFrac) (Info "number" (Just "double"))
 
 -- | Same lossy-encode\/lenient-decode caveat as 'Scientific' — see there.
 --
--- prop> leafPrintParsePrint (decode (float :: Leaf BareItem Float)) (encode (float :: Leaf BareItem Float)) x
-instance HasLeaf BareItem Float where
+-- prop> leafPrintParsePrint (decode (float :: Leaf Bare Float)) (encode (float :: Leaf Bare Float)) x
+instance HasLeaf Bare Float where
     leaf = bareLeaf (fmap toRealFloat . parseSfDecimal) (renderSfDecimal . realToFrac) (Info "number" (Just "float"))
 
 -- | Encoded as @\@\<posix-seconds\>@, truncated to whole seconds — encoding
@@ -407,14 +407,14 @@ instance HasLeaf BareItem Float where
 --   'leafPrintParsePrint'\/'leafParsePrintParse' instead, same caveat as
 --   'Scientific'.
 --
--- >>> decode (utcTime :: Leaf BareItem UTCTime) "@1000000000"
+-- >>> decode (utcTime :: Leaf Bare UTCTime) "@1000000000"
 -- Right 2001-09-09 01:46:40 UTC
--- >>> encode (utcTime :: Leaf BareItem UTCTime) (posixSecondsToUTCTime 1000000000)
+-- >>> encode (utcTime :: Leaf Bare UTCTime) (posixSecondsToUTCTime 1000000000)
 -- "@1000000000"
 --
--- prop> leafPrintParsePrint (decode (utcTime :: Leaf BareItem UTCTime)) (encode (utcTime :: Leaf BareItem UTCTime)) x
--- prop> leafParsePrintParse (decode (utcTime :: Leaf BareItem UTCTime)) (encode (utcTime :: Leaf BareItem UTCTime)) (bs :: ByteString)
-instance HasLeaf BareItem UTCTime where
+-- prop> leafPrintParsePrint (decode (utcTime :: Leaf Bare UTCTime)) (encode (utcTime :: Leaf Bare UTCTime)) x
+-- prop> leafParsePrintParse (decode (utcTime :: Leaf Bare UTCTime)) (encode (utcTime :: Leaf Bare UTCTime)) (bs :: ByteString)
+instance HasLeaf Bare UTCTime where
     leaf = bareLeaf dec enc (Info "string" (Just "date-time"))
       where
         enc t = BS8.cons '@' (BS8.pack (show (truncate (utcTimeToPOSIXSeconds t) :: Integer)))
@@ -424,10 +424,10 @@ instance HasLeaf BareItem UTCTime where
                 _ -> Left ("invalid sf-date: " <> decodeUtf8Lenient bs)
             _ -> Left ("invalid sf-date (expected '@'): " <> decodeUtf8Lenient bs)
 
-renderInner :: Leaf BareItem a -> [a] -> ByteString
+renderInner :: Leaf Bare a -> [a] -> ByteString
 renderInner vLeaf xs = "(" <> BS.intercalate " " (map vLeaf.encode xs) <> ")"
 
-parseInnerToList :: Leaf BareItem a -> ByteString -> Either ParseError [a]
+parseInnerToList :: Leaf Bare a -> ByteString -> Either ParseError [a]
 parseInnerToList vLeaf v = case parseInnerBare (strip v) of
     Just xs -> traverse vLeaf.decode xs
     Nothing -> Left ParseError

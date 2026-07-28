@@ -1,7 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Okapi.HTTP.Request.Query (
+module Okapi.HTTP.Query (
     Query (..),
     Base,
     ArrayStyle (..),
@@ -12,7 +12,6 @@ module Okapi.HTTP.Request.Query (
     base,
     param,
     param',
-    param_,
     flag,
     flag',
     list,
@@ -37,13 +36,13 @@ import Data.Time (Day, UTCTime)
 import Data.UUID (UUID)
 import GHC.Generics (C1, D1, Generic (..), K1 (..), M1 (..), Rec0, S1, Selector (..), (:*:) (..))
 import Network.HTTP.Types qualified as Types
-import Okapi.HTTP.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
-import Okapi.HTTP.Tree qualified as Tree
+import Okapi.Tree (Failure, HasLeaf (..), Info (..), Leaf (..), Parser, Printer, Piece, Context, Tree (..))
+import Okapi.Tree qualified as Tree
 import Web.HttpApiData (parseQueryParam, toQueryParam)
 
 -- $setup
 -- >>> :set -XApplicativeDo
--- >>> import Okapi.HTTP.Tree (printParse, int, integer, (=.))
+-- >>> import Okapi.Tree (printParse, int, integer, (=.))
 -- >>> import Data.List.NonEmpty (NonEmpty((:|)))
 -- >>> import GHC.Generics (Generic)
 -- >>> :{
@@ -66,7 +65,6 @@ data Query i o where
     Base    :: Query Base Base
     Param  :: Text -> Leaf Query a -> Query a a
     Param' :: Text -> Leaf Query a -> Query (Maybe a) (Maybe a)
-    Param_ :: Text -> Leaf Query a -> a -> Query i ()
     Flag   :: Text -> Query i ()
     Flag'  :: Text -> Query Bool Bool
     List   :: ArrayStyle -> Text -> Leaf Query a -> Query (NonEmpty a) (NonEmpty a)
@@ -103,10 +101,6 @@ parser = Tree.parser alg
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)       -> (Left ParseError, q)
             (_ : _, rest) -> (Right (), rest)
-    alg (Param_ key vLeaf x) q =
-        case partition (\(k, _) -> k == encodeUtf8 key) q of
-            ((_, Just v) : _, rest) | decodeUtf8Lenient v == vLeaf.encode x -> (Right (), rest)
-            _ -> (Left ParseError, q)
     alg (Flag' key) q =
         case partition (\(k, _) -> k == encodeUtf8 key) q of
             ([], _)       -> (Right False, q)
@@ -132,7 +126,6 @@ printer = Tree.printer alg
     alg (Param key vLeaf)      x        = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
     alg (Param' _ _)           Nothing  = []
     alg (Param' key vLeaf)     (Just x) = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
-    alg (Param_ key vLeaf x)   _        = [(encodeUtf8 key, Just (encodeUtf8 (vLeaf.encode x)))]
     alg (Flag key)             _        = [(encodeUtf8 key, Nothing)]
     alg (Flag' key)            True     = [(encodeUtf8 key, Nothing)]
     alg (Flag' _)              False    = []
@@ -195,18 +188,6 @@ param key vLeaf = Node (Param key vLeaf)
 -- prop> printParse parser printer (param' "k" int) (x :: Maybe Int)
 param' :: Text -> Leaf Query a -> Tree Query (Maybe a) (Maybe a)
 param' key vLeaf = Node (Param' key vLeaf)
-
--- | A parameter constrained to one known value — parses only if present
---   and equal to the fixed value, ignored on print (the value is baked in).
---
--- >>> parser (param_ "v" int 1) [("v", Just "1")]
--- (Right (),[])
--- >>> parser (param_ "v" int 1) [("v", Just "2")]
--- (Left ParseError,[("v",Just "2")])
--- >>> printer (param_ "v" int 1) ()
--- [("v",Just "1")]
-param_ :: Text -> Leaf Query a -> a -> Tree Query i ()
-param_ key vLeaf x = Node (Param_ key vLeaf x)
 
 -- | Parse and print a boolean flag (presence = True).
 --

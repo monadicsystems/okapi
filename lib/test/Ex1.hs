@@ -9,6 +9,7 @@
 module Main where
 
 import Data.Aeson qualified as Aeson
+import Data.Function ((&))
 import Data.ByteString.Lazy qualified as LBS
 import Data.ByteString.Lazy.Char8 qualified as LBS8
 import Data.OpenApi (ToSchema)
@@ -21,12 +22,10 @@ import Okapi
 import Okapi.HTTP.Request
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
-import Okapi.HTTP.Request.Method qualified as Method
+import Okapi.HTTP.Method qualified as Method
 import Okapi.HTTP.Headers qualified as Headers
 import Okapi.HTTP.Body qualified as Body
-import Okapi.HTTP.Response.Status qualified as Status
-import Okapi.Request.Data qualified as ReqData
-import Okapi.Response.Data qualified as ResData
+import Okapi.HTTP.Status qualified as Status
 
 data Message = Message
     { temperature :: Integer
@@ -42,19 +41,19 @@ data InnerMessage = InnerMessage
     }
     deriving (Generic, Aeson.FromJSON, Aeson.ToJSON, ToSchema)
 
-createMessageReq = Req.post
-    { path = do
-        seg_ text "v1"
-        seg_ text "messages"
-        pure ()
-    , headers = do
-        Headers.contentType Headers.JSON
-        Headers.field_ "X-Api-Key" "<API_KEY>"
-        Headers.field_ "anthropic-version" "2023-06-01"
-        maybeUserProfileId <- Headers.field' "anthropic-user-profile-id" text
-        pure maybeUserProfileId
-    , body = Body.json @Message
-    }
+createMessageReq =
+    Req.post
+        & Req.path do
+            seg_ text "v1"
+            seg_ text "messages"
+            pure ()
+        & Req.headers do
+            Headers.contentType Headers.JSON
+            Headers.field_ "X-Api-Key" "<API_KEY>"
+            Headers.field_ "anthropic-version" "2023-06-01"
+            maybeUserProfileId <- Headers.field' "anthropic-user-profile-id" text
+            pure maybeUserProfileId
+        & Req.body (Body.json @Message)
 
 data CreateMessageResponses f
     = Created (f (Status.KnownStatus 201) Types.ResponseHeaders (IO LBS.ByteString))
@@ -68,7 +67,7 @@ createMessageContract = createMessageReq :-< responses @CreateMessageResponses
     Res.base
 
 -- | Renders 'createMessageContract' as an OpenAPI document — only needs the
---   'HTTP' contract itself, no handler, so this is callable straight from the
+--   'Contract' itself, no handler, so this is callable straight from the
 --   repl: @cabal repl okapi@, @:load test\/Ex1.hs@, then @printSchema@.
 printSchema :: IO ()
 printSchema = LBS8.putStrLn (Aeson.encode (contractToOpenApi createMessageContract))
@@ -94,7 +93,7 @@ createMessage reqVal = do
     case clientFor settings createMessageContract of
         Fn f -> f reqVal
 
-lookAtResult :: Either ClientError (CreateMessageResponses ResData.Response) -> IO ()
+lookAtResult :: Either ClientError (CreateMessageResponses Res.Data) -> IO ()
 lookAtResult cmr = case cmr of
     Left _ -> print "errored"
     Right aResp -> case aResp of
@@ -105,4 +104,4 @@ lookAtResult cmr = case cmr of
             bodyResult <- resData.body
             print bodyResult
 
-testRequest = (ReqData.Request Method.Post () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))
+testRequest = (Req.Data Method.Post () [] Nothing ((pure $ Message 1 "claude-opus-4-6" [InnerMessage "h1!" "user"] 1024) :: IO Message))

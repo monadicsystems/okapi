@@ -1,5 +1,5 @@
 
-module Okapi.HTTP.Structured.List (
+module Okapi.HTTP.SFV.List (
     List,
     parser,
     printer,
@@ -20,20 +20,20 @@ import Data.ByteString (ByteString)
 import Data.ByteString qualified as BS
 import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
-import Okapi.HTTP.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
-import Okapi.HTTP.Tree qualified as Tree
-import Okapi.HTTP.Structured.BareItem (BareItem, parseInnerToList, renderInner)
-import Okapi.HTTP.Structured.Item (Item)
-import Okapi.HTTP.Structured.Item qualified as Item
-import Okapi.HTTP.Structured.Parameters (Parameters)
-import Okapi.HTTP.Structured.Parameters qualified as Parameters
-import Okapi.HTTP.Structured.Scan (strip, firstAndTail, firstTop, splitTop)
+import Okapi.Tree (Failure, Leaf, Parser, Printer, Context, Tree (..))
+import Okapi.Tree qualified as Tree
+import Okapi.HTTP.SFV.Bare (Bare, parseInnerToList, renderInner)
+import Okapi.HTTP.SFV.Item (Item)
+import Okapi.HTTP.SFV.Item qualified as Item
+import Okapi.HTTP.SFV.Parameters (Parameters)
+import Okapi.HTTP.SFV.Parameters qualified as Parameters
+import Okapi.HTTP.SFV.Scan (strip, firstAndTail, firstTop, splitTop)
 
 -- $setup
--- >>> import Okapi.HTTP.Tree (Leaf, printParse, integer, text, (=.))
--- >>> import Okapi.HTTP.Structured.Item qualified as Item
--- >>> import Okapi.HTTP.Structured.Parameters qualified as Parameters
--- >>> import Okapi.HTTP.Structured.BareItem (BareItem)
+-- >>> import Okapi.Tree (Leaf, printParse, integer, text, (=.))
+-- >>> import Okapi.HTTP.SFV.Item qualified as Item
+-- >>> import Okapi.HTTP.SFV.Parameters qualified as Parameters
+-- >>> import Okapi.HTTP.SFV.Bare (Bare)
 -- >>> import Data.ByteString (ByteString)
 -- >>> import Data.Text (Text)
 -- >>> import Test.QuickCheck.Instances ()
@@ -43,7 +43,7 @@ data ParseError = ParseError deriving (Eq, Show)
 type List :: Type -> Type -> Type
 data List i o where
     ListItem    :: Tree Item a a -> List a a
-    InnerList   :: Leaf BareItem a -> List [a] [a]
+    InnerList   :: Leaf Bare a -> List [a] [a]
     InnerListOf :: Tree InnerItems a a -> Tree Parameters p p -> List (a, p) (a, p)
     Items       :: Tree Item a a -> List [a] [a]
     Raw         :: List ByteString ByteString
@@ -56,10 +56,10 @@ type instance Failure List = ParseError
 --   /plus/ optional parameters), space-separated, and — per the grammar —
 --   never another inner list: there's no constructor for that here, so an
 --   inner list can't nest inside an inner list by construction, the same
---   way 'Okapi.HTTP.Structured.Item.Item' has no \"I am an inner list\" case
+--   way 'Okapi.HTTP.SFV.Item.Item' has no \"I am an inner list\" case
 --   either. Two shapes, mirroring 'item'\/'items' at the outer 'List'
 --   level exactly: 'innerItem' (heterogeneous, one hand-composable element
---   at a time, for use with 'Okapi.HTTP.Tree.Apply') and 'innerItems'
+--   at a time, for use with 'Okapi.Tree.Apply') and 'innerItems'
 --   (homogeneous, a whole run of same-typed items in one pass).
 type InnerItems :: Type -> Type -> Type
 data InnerItems i o where
@@ -78,12 +78,12 @@ type instance Failure InnerItems = ParseError
 --   @,@ attached to the leftover — so a chain of 'item' parses over a
 --   comma-joined sequence correctly consumes one entry at a time.
 --
--- >>> parser (item (Item.bareItem (integer :: Leaf BareItem Integer))) "1, 2, 3"
+-- >>> parser (item (Item.bareItem (integer :: Leaf Bare Integer))) "1, 2, 3"
 -- (Right 1,", 2, 3")
--- >>> printer (item (Item.bareItem (integer :: Leaf BareItem Integer))) 1
+-- >>> printer (item (Item.bareItem (integer :: Leaf Bare Integer))) 1
 -- ", 1"
 --
--- prop> printParse parser printer (item (Item.bareItem (integer :: Leaf BareItem Integer))) (n :: Integer)
+-- prop> printParse parser printer (item (Item.bareItem (integer :: Leaf Bare Integer))) (n :: Integer)
 item :: Tree Item a a -> Tree List a a
 item = Node . ListItem
 
@@ -91,13 +91,13 @@ item = Node . ListItem
 --   e.g. @(1 2 3)@ — same per-element, leading-separator convention as
 --   'item'.
 --
--- >>> parser (innerList (integer :: Leaf BareItem Integer)) "(1 2 3), 4"
+-- >>> parser (innerList (integer :: Leaf Bare Integer)) "(1 2 3), 4"
 -- (Right [1,2,3],", 4")
--- >>> printer (innerList (integer :: Leaf BareItem Integer)) [1,2,3]
+-- >>> printer (innerList (integer :: Leaf Bare Integer)) [1,2,3]
 -- ", (1 2 3)"
 --
--- prop> printParse parser printer (innerList (integer :: Leaf BareItem Integer)) (xs :: [Integer])
-innerList :: Leaf BareItem a -> Tree List [a] [a]
+-- prop> printParse parser printer (innerList (integer :: Leaf Bare Integer)) (xs :: [Integer])
+innerList :: Leaf Bare a -> Tree List [a] [a]
 innerList = Node . InnerList
 
 -- | One member of an inner list's contents — a single 'Item' (bare value
@@ -105,14 +105,14 @@ innerList = Node . InnerList
 --   per-element, leading-separator convention as 'item' (there, a leading
 --   @, @; here, a single leading space), for hand-composing a
 --   heterogeneous sequence of differently-typed, individually-parameterized
---   items via 'Okapi.HTTP.Tree.Apply' — see 'innerListOf'.
+--   items via 'Okapi.Tree.Apply' — see 'innerListOf'.
 --
--- >>> innerParser (innerItem (Item.bareItem (integer :: Leaf BareItem Integer))) "1 2 3"
+-- >>> innerParser (innerItem (Item.bareItem (integer :: Leaf Bare Integer))) "1 2 3"
 -- (Right 1," 2 3")
--- >>> innerPrinter (innerItem (Item.bareItem (integer :: Leaf BareItem Integer))) 1
+-- >>> innerPrinter (innerItem (Item.bareItem (integer :: Leaf Bare Integer))) 1
 -- " 1"
 --
--- prop> printParse innerParser innerPrinter (innerItem (Item.bareItem (integer :: Leaf BareItem Integer))) (n :: Integer)
+-- prop> printParse innerParser innerPrinter (innerItem (Item.bareItem (integer :: Leaf Bare Integer))) (n :: Integer)
 innerItem :: Tree Item a a -> Tree InnerItems a a
 innerItem = Node . InnerListItem
 
@@ -122,12 +122,12 @@ innerItem = Node . InnerListItem
 --   a full 'Item', so e.g. @\"foo\"; a=1@ as one inner-list member is
 --   representable.
 --
--- >>> innerParser (innerItems (Item.bareItem (integer :: Leaf BareItem Integer))) "1 2 3"
+-- >>> innerParser (innerItems (Item.bareItem (integer :: Leaf Bare Integer))) "1 2 3"
 -- (Right [1,2,3],"")
--- >>> innerPrinter (innerItems (Item.bareItem (integer :: Leaf BareItem Integer))) [1,2,3]
+-- >>> innerPrinter (innerItems (Item.bareItem (integer :: Leaf Bare Integer))) [1,2,3]
 -- " 1 2 3"
 --
--- prop> printParse innerParser innerPrinter (innerItems (Item.bareItem (integer :: Leaf BareItem Integer))) (xs :: [Integer])
+-- prop> printParse innerParser innerPrinter (innerItems (Item.bareItem (integer :: Leaf Bare Integer))) (xs :: [Integer])
 innerItems :: Tree Item a a -> Tree InnerItems [a] [a]
 innerItems = Node . InnerListItems
 
@@ -135,22 +135,22 @@ innerItems = Node . InnerListItems
 --   (parameters-capable, and\/or heterogeneous), rather than 'innerList''s
 --   bare-leaf-only shorthand — /and/, per RFC 9651 §3.1.1's @*parameters@
 --   after the closing paren, parameters on the inner list itself, exactly
---   like 'Okapi.HTTP.Structured.Item.item' takes a bare value /plus/ a
+--   like 'Okapi.HTTP.SFV.Item.item' takes a bare value /plus/ a
 --   parameters tree. Pass @pure ()@ for no list-level parameters. There's
 --   no way to nest an inner list inside this — 'InnerItems' only ever
---   holds 'Okapi.HTTP.Structured.Item.Item's, by construction, matching RFC
+--   holds 'Okapi.HTTP.SFV.Item.Item's, by construction, matching RFC
 --   9651 §3.1.1's restriction that inner lists can't nest. Requires the
 --   wrapped 'InnerItems' tree to fully consume the parenthesized content
 --   (too few or too many space-separated elements for what was asked for
 --   is a parse error, not silently ignored) — unrecognized trailing
---   parameters, like 'Okapi.HTTP.Structured.Item.item', become leftover
+--   parameters, like 'Okapi.HTTP.SFV.Item.item', become leftover
 --   rather than a hard error.
 --
 -- RFC 9651 §3.1.2 allows optional whitespace after each @;@ (@; a=1@ and
 -- @;a=1@ are equivalent) — parsing accepts either, but printing always
 -- emits the no-space canonical form:
 --
--- >>> let itemWithParam = Item.item (text :: Leaf BareItem Text) (Parameters.param "a" (integer :: Leaf BareItem Integer))
+-- >>> let itemWithParam = Item.item (text :: Leaf Bare Text) (Parameters.param "a" (integer :: Leaf Bare Integer))
 -- >>> parser (innerListOf (innerItem itemWithParam) (pure ())) "(\"foo\"; a=1)"
 -- (Right (("foo",1),()),"")
 -- >>> printer (innerListOf (innerItem itemWithParam) (pure ())) (("foo",1),())
@@ -159,12 +159,12 @@ innerItems = Node . InnerListItems
 -- With a real list-level parameter too — RFC 9651 §3.1.1's own worked
 -- example, one inner list of it:
 --
--- >>> parser (innerListOf (innerItem itemWithParam) (Parameters.param "lvl" (integer :: Leaf BareItem Integer))) "(\"foo\"; a=1);lvl=5"
+-- >>> parser (innerListOf (innerItem itemWithParam) (Parameters.param "lvl" (integer :: Leaf Bare Integer))) "(\"foo\"; a=1);lvl=5"
 -- (Right (("foo",1),5),"")
--- >>> printer (innerListOf (innerItem itemWithParam) (Parameters.param "lvl" (integer :: Leaf BareItem Integer))) (("foo",1),5)
+-- >>> printer (innerListOf (innerItem itemWithParam) (Parameters.param "lvl" (integer :: Leaf Bare Integer))) (("foo",1),5)
 -- ", (\"foo\";a=1);lvl=5"
 --
--- prop> printParse parser printer (innerListOf (innerItems (Item.bareItem (integer :: Leaf BareItem Integer))) (pure ())) (xs :: [Integer], ())
+-- prop> printParse parser printer (innerListOf (innerItems (Item.bareItem (integer :: Leaf Bare Integer))) (pure ())) (xs :: [Integer], ())
 innerListOf :: Tree InnerItems a a -> Tree Parameters p p -> Tree List (a, p) (a, p)
 innerListOf c ps = Node (InnerListOf c ps)
 
@@ -176,12 +176,12 @@ innerListOf c ps = Node (InnerListOf c ps)
 --   the same way 'item''s is, plus rejecting any other stray, doubled, or
 --   trailing @,@ as a parse error.
 --
--- >>> parser (items (Item.bareItem (integer :: Leaf BareItem Integer))) "1, 2, 3"
+-- >>> parser (items (Item.bareItem (integer :: Leaf Bare Integer))) "1, 2, 3"
 -- (Right [1,2,3],"")
--- >>> printer (items (Item.bareItem (integer :: Leaf BareItem Integer))) [1,2,3]
+-- >>> printer (items (Item.bareItem (integer :: Leaf Bare Integer))) [1,2,3]
 -- ", 1, 2, 3"
 --
--- prop> printParse parser printer (items (Item.bareItem (integer :: Leaf BareItem Integer))) (xs :: [Integer])
+-- prop> printParse parser printer (items (Item.bareItem (integer :: Leaf Bare Integer))) (xs :: [Integer])
 items :: Tree Item a a -> Tree List [a] [a]
 items = Node . Items
 
@@ -250,8 +250,8 @@ parser = Tree.parser alg
         -- empty segment is a stray, doubled, or trailing @,@ and is
         -- 'Nothing' (a real parse error) — except wholly empty input,
         -- which is the valid zero-item list. Mirrors
-        -- 'Okapi.HTTP.Structured.Parameters' and
-        -- 'Okapi.HTTP.Structured.Dictionary''s strict-separator treatment.
+        -- 'Okapi.HTTP.SFV.Parameters' and
+        -- 'Okapi.HTTP.SFV.Dictionary''s strict-separator treatment.
         members bs = case BS.stripPrefix ", " bs of
             Just rest -> checkSegs (splitTop 44 rest)
             Nothing

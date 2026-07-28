@@ -1,6 +1,6 @@
 
 -- | The body codec shared by request and response bodies alike —
---   @'Body' 'Okapi.HTTP.Tree.ForRequest'@\/@'Body' 'Okapi.HTTP.Tree.ForResponse'@
+--   @'Body' 'Okapi.Tree.ForRequest'@\/@'Body' 'Okapi.Tree.ForResponse'@
 --   are the two side instantiations. 'json'\/'jsonValue'\/'none'\/'base'
 --   are free in the phantom @ctx@ and work unqualified for either side;
 --   only 'form' (request-only) is pinned to a specific side, right at its
@@ -28,7 +28,7 @@ import Data.Kind (Type)
 import Data.OpenApi (ToSchema)
 import Data.Text (Text)
 import Web.FormUrlEncoded (FromForm, ToForm, urlDecodeAsForm, urlEncodeAsForm)
-import Okapi.HTTP.Tree (ForRequest)
+import Okapi.Tree (ForRequest)
 
 -- $setup
 -- >>> :set -XTypeApplications
@@ -41,13 +41,13 @@ type IsoJson a = (Aeson.FromJSON a, Aeson.ToJSON a, ToSchema a)
 --   distinct thing rather than an incidental unit value.
 data None = None deriving (Eq, Show)
 
--- | Unlike the 'Okapi.HTTP.Tree'-based DSLs, 'parser'\/'printer' here are
+-- | Unlike the 'Okapi.Tree'-based DSLs, 'parser'\/'printer' here are
 --   IO-wrapped and monadic ('Context' itself is @IO LBS.ByteString@) —
 --   'parser' is total (it just transforms one @IO@ action into another; it
 --   has no way to synchronously fail, so it carries no 'Either'). A real
 --   decode failure only surfaces later, as a thrown IO exception, when the
 --   returned action is actually run — a caller who wants to observe it
---   calls 'try' on that action themselves. The pure 'Okapi.HTTP.Tree'
+--   calls 'try' on that action themselves. The pure 'Okapi.Tree'
 --   round-trip law vocabulary (@printParse@\/@parsePrint@, which compare
 --   'Either' results directly) doesn't apply here. Concrete, executed
 --   @>>>@ examples stand in for @prop>@ properties on this module. Named
@@ -110,8 +110,8 @@ printer JsonValue ioA   = Aeson.encode <$> ioA
 printer Form      ioA   = urlEncodeAsForm <$> ioA
 printer NoContent _     = pure mempty
 
--- | Run an already-deferred body action (e.g. a 'Okapi.Request.Data.Request'\/
---   'Okapi.Response.Data.Response' value's own @body@ field), catching a
+-- | Run an already-deferred body action (e.g. a 'Okapi.HTTP.Request.Data'\/
+--   'Okapi.HTTP.Response.Data' value's own @body@ field), catching a
 --   JSON\/form decode failure as a real 'ParseError' instead of an
 --   uncaught exception — covers both 'json' and 'jsonValue' bodies (both
 --   throw the same internal exception type on decode failure) as well as

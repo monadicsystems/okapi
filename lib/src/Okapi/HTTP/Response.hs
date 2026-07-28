@@ -1,7 +1,8 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE NoFieldSelectors #-}
 
 module Okapi.HTTP.Response (
-    Response (..),
+    Codec (..),
     Base,
     base,
     continue,
@@ -57,6 +58,9 @@ module Okapi.HTTP.Response (
     parser',
     resultToValue,
     resultToError,
+    Data (..),
+    Failure (..),
+    Result (..),
     parser,
     printer,
 
@@ -68,12 +72,11 @@ import Data.ByteString.Builder qualified as Builder
 import Data.ByteString.Lazy qualified as LBS
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
-import Okapi.Response.Data qualified as Data
-import Okapi.Response.Failure qualified as Error
 import Okapi.HTTP.Body qualified as Body
 import Okapi.HTTP.Headers (setCookie)
+import Okapi.HTTP.Headers (Headers)
 import Okapi.HTTP.Headers qualified as Headers
-import Okapi.HTTP.Response.Status (
+import Okapi.HTTP.Status (
     S100,
     S101,
     S200,
@@ -122,399 +125,399 @@ import Okapi.HTTP.Response.Status (
     S505,
     S511
  )
-import Okapi.HTTP.Response.Status qualified as Status
-import Okapi.HTTP.Tree (SymTree, ForResponse)
-import Okapi.Response.Result qualified as Result
+import Okapi.HTTP.Status qualified as Status
+import Okapi.Tree (SymTree, ForResponse)
+import Okapi.Tree qualified as Tree
 
 -- | Codecs for every part of an HTTP response.
-data Response status headers body = Response
+data Codec status headers body = Codec
     { status :: Status.Status status
     , headers :: SymTree (Headers.Headers ForResponse) headers
     , body :: Body.Body ForResponse body
     }
 
--- | The maximally unconstrained 'Response' — every slot left raw.
-type Base = Response Status.Base Headers.Base Body.Base
+-- | The maximally unconstrained 'Codec' — every slot left raw.
+type Base = Codec Status.Base Headers.Base Body.Base
 
 base :: Base
 base =
-    Response
+    Codec
         { status = Status.base
         , headers = Headers.base
         , body = Body.base
         }
 
-continue :: Response S100 Headers.Base Body.Base
+continue :: Codec S100 Headers.Base Body.Base
 continue =
-    Response
+    Codec
         { status = Status.status 100
         , headers = Headers.base
         , body = Body.base
         }
 
-switchingProtocols :: Response S101 Headers.Base Body.Base
+switchingProtocols :: Codec S101 Headers.Base Body.Base
 switchingProtocols =
-    Response
+    Codec
         { status = Status.status 101
         , headers = Headers.base
         , body = Body.base
         }
 
-ok :: Response S200 Headers.Base Body.Base
+ok :: Codec S200 Headers.Base Body.Base
 ok =
-    Response
+    Codec
         { status = Status.status 200
         , headers = Headers.base
         , body = Body.base
         }
 
-created :: Response S201 Headers.Base Body.Base
+created :: Codec S201 Headers.Base Body.Base
 created =
-    Response
+    Codec
         { status = Status.status 201
         , headers = Headers.base
         , body = Body.base
         }
 
-accepted :: Response S202 Headers.Base Body.Base
+accepted :: Codec S202 Headers.Base Body.Base
 accepted =
-    Response
+    Codec
         { status = Status.status 202
         , headers = Headers.base
         , body = Body.base
         }
 
-nonAuthoritative :: Response S203 Headers.Base Body.Base
+nonAuthoritative :: Codec S203 Headers.Base Body.Base
 nonAuthoritative =
-    Response
+    Codec
         { status = Status.status 203
         , headers = Headers.base
         , body = Body.base
         }
 
-noContent :: Response S204 Headers.Base (IO Body.None)
+noContent :: Codec S204 Headers.Base (IO Body.None)
 noContent =
-    Response
+    Codec
         { status = Status.status 204
         , headers = Headers.base
         , body = Body.none
         }
 
-resetContent :: Response S205 Headers.Base Body.Base
+resetContent :: Codec S205 Headers.Base Body.Base
 resetContent =
-    Response
+    Codec
         { status = Status.status 205
         , headers = Headers.base
         , body = Body.base
         }
 
-partialContent :: Response S206 Headers.Base Body.Base
+partialContent :: Codec S206 Headers.Base Body.Base
 partialContent =
-    Response
+    Codec
         { status = Status.status 206
         , headers = Headers.base
         , body = Body.base
         }
 
-multipleChoices :: Response S300 Headers.Base Body.Base
+multipleChoices :: Codec S300 Headers.Base Body.Base
 multipleChoices =
-    Response
+    Codec
         { status = Status.status 300
         , headers = Headers.base
         , body = Body.base
         }
 
-movedPermanently :: Response S301 Headers.Base Body.Base
+movedPermanently :: Codec S301 Headers.Base Body.Base
 movedPermanently =
-    Response
+    Codec
         { status = Status.status 301
         , headers = Headers.base
         , body = Body.base
         }
 
-found :: Response S302 Headers.Base Body.Base
+found :: Codec S302 Headers.Base Body.Base
 found =
-    Response
+    Codec
         { status = Status.status 302
         , headers = Headers.base
         , body = Body.base
         }
 
-seeOther :: Response S303 Headers.Base Body.Base
+seeOther :: Codec S303 Headers.Base Body.Base
 seeOther =
-    Response
+    Codec
         { status = Status.status 303
         , headers = Headers.base
         , body = Body.base
         }
 
-notModified :: Response S304 Headers.Base Body.Base
+notModified :: Codec S304 Headers.Base Body.Base
 notModified =
-    Response
+    Codec
         { status = Status.status 304
         , headers = Headers.base
         , body = Body.base
         }
 
-useProxy :: Response S305 Headers.Base Body.Base
+useProxy :: Codec S305 Headers.Base Body.Base
 useProxy =
-    Response
+    Codec
         { status = Status.status 305
         , headers = Headers.base
         , body = Body.base
         }
 
-temporaryRedirect :: Response S307 Headers.Base Body.Base
+temporaryRedirect :: Codec S307 Headers.Base Body.Base
 temporaryRedirect =
-    Response
+    Codec
         { status = Status.status 307
         , headers = Headers.base
         , body = Body.base
         }
 
-permanentRedirect :: Response S308 Headers.Base Body.Base
+permanentRedirect :: Codec S308 Headers.Base Body.Base
 permanentRedirect =
-    Response
+    Codec
         { status = Status.status 308
         , headers = Headers.base
         , body = Body.base
         }
 
-badRequest :: Response S400 Headers.Base Body.Base
+badRequest :: Codec S400 Headers.Base Body.Base
 badRequest =
-    Response
+    Codec
         { status = Status.status 400
         , headers = Headers.base
         , body = Body.base
         }
 
-unauthorized :: Response S401 Headers.Base Body.Base
+unauthorized :: Codec S401 Headers.Base Body.Base
 unauthorized =
-    Response
+    Codec
         { status = Status.status 401
         , headers = Headers.base
         , body = Body.base
         }
 
-paymentRequired :: Response S402 Headers.Base Body.Base
+paymentRequired :: Codec S402 Headers.Base Body.Base
 paymentRequired =
-    Response
+    Codec
         { status = Status.status 402
         , headers = Headers.base
         , body = Body.base
         }
 
-forbidden :: Response S403 Headers.Base Body.Base
+forbidden :: Codec S403 Headers.Base Body.Base
 forbidden =
-    Response
+    Codec
         { status = Status.status 403
         , headers = Headers.base
         , body = Body.base
         }
 
-notFound :: Response S404 Headers.Base Body.Base
+notFound :: Codec S404 Headers.Base Body.Base
 notFound =
-    Response
+    Codec
         { status = Status.status 404
         , headers = Headers.base
         , body = Body.base
         }
 
-methodNotAllowed :: Response S405 Headers.Base Body.Base
+methodNotAllowed :: Codec S405 Headers.Base Body.Base
 methodNotAllowed =
-    Response
+    Codec
         { status = Status.status 405
         , headers = Headers.base
         , body = Body.base
         }
 
-notAcceptable :: Response S406 Headers.Base Body.Base
+notAcceptable :: Codec S406 Headers.Base Body.Base
 notAcceptable =
-    Response
+    Codec
         { status = Status.status 406
         , headers = Headers.base
         , body = Body.base
         }
 
-proxyAuthenticationRequired :: Response S407 Headers.Base Body.Base
+proxyAuthenticationRequired :: Codec S407 Headers.Base Body.Base
 proxyAuthenticationRequired =
-    Response
+    Codec
         { status = Status.status 407
         , headers = Headers.base
         , body = Body.base
         }
 
-requestTimeout :: Response S408 Headers.Base Body.Base
+requestTimeout :: Codec S408 Headers.Base Body.Base
 requestTimeout =
-    Response
+    Codec
         { status = Status.status 408
         , headers = Headers.base
         , body = Body.base
         }
 
-conflict :: Response S409 Headers.Base Body.Base
+conflict :: Codec S409 Headers.Base Body.Base
 conflict =
-    Response
+    Codec
         { status = Status.status 409
         , headers = Headers.base
         , body = Body.base
         }
 
-gone :: Response S410 Headers.Base Body.Base
+gone :: Codec S410 Headers.Base Body.Base
 gone =
-    Response
+    Codec
         { status = Status.status 410
         , headers = Headers.base
         , body = Body.base
         }
 
-lengthRequired :: Response S411 Headers.Base Body.Base
+lengthRequired :: Codec S411 Headers.Base Body.Base
 lengthRequired =
-    Response
+    Codec
         { status = Status.status 411
         , headers = Headers.base
         , body = Body.base
         }
 
-preconditionFailed :: Response S412 Headers.Base Body.Base
+preconditionFailed :: Codec S412 Headers.Base Body.Base
 preconditionFailed =
-    Response
+    Codec
         { status = Status.status 412
         , headers = Headers.base
         , body = Body.base
         }
 
-requestEntityTooLarge :: Response S413 Headers.Base Body.Base
+requestEntityTooLarge :: Codec S413 Headers.Base Body.Base
 requestEntityTooLarge =
-    Response
+    Codec
         { status = Status.status 413
         , headers = Headers.base
         , body = Body.base
         }
 
-requestURITooLong :: Response S414 Headers.Base Body.Base
+requestURITooLong :: Codec S414 Headers.Base Body.Base
 requestURITooLong =
-    Response
+    Codec
         { status = Status.status 414
         , headers = Headers.base
         , body = Body.base
         }
 
-unsupportedMediaType :: Response S415 Headers.Base Body.Base
+unsupportedMediaType :: Codec S415 Headers.Base Body.Base
 unsupportedMediaType =
-    Response
+    Codec
         { status = Status.status 415
         , headers = Headers.base
         , body = Body.base
         }
 
-requestedRangeNotSatisfiable :: Response S416 Headers.Base Body.Base
+requestedRangeNotSatisfiable :: Codec S416 Headers.Base Body.Base
 requestedRangeNotSatisfiable =
-    Response
+    Codec
         { status = Status.status 416
         , headers = Headers.base
         , body = Body.base
         }
 
-expectationFailed :: Response S417 Headers.Base Body.Base
+expectationFailed :: Codec S417 Headers.Base Body.Base
 expectationFailed =
-    Response
+    Codec
         { status = Status.status 417
         , headers = Headers.base
         , body = Body.base
         }
 
-imATeapot :: Response S418 Headers.Base Body.Base
+imATeapot :: Codec S418 Headers.Base Body.Base
 imATeapot =
-    Response
+    Codec
         { status = Status.status 418
         , headers = Headers.base
         , body = Body.base
         }
 
-unprocessableEntity :: Response S422 Headers.Base Body.Base
+unprocessableEntity :: Codec S422 Headers.Base Body.Base
 unprocessableEntity =
-    Response
+    Codec
         { status = Status.status 422
         , headers = Headers.base
         , body = Body.base
         }
 
-preconditionRequired :: Response S428 Headers.Base Body.Base
+preconditionRequired :: Codec S428 Headers.Base Body.Base
 preconditionRequired =
-    Response
+    Codec
         { status = Status.status 428
         , headers = Headers.base
         , body = Body.base
         }
 
-tooManyRequests :: Response S429 Headers.Base Body.Base
+tooManyRequests :: Codec S429 Headers.Base Body.Base
 tooManyRequests =
-    Response
+    Codec
         { status = Status.status 429
         , headers = Headers.base
         , body = Body.base
         }
 
-requestHeaderFieldsTooLarge :: Response S431 Headers.Base Body.Base
+requestHeaderFieldsTooLarge :: Codec S431 Headers.Base Body.Base
 requestHeaderFieldsTooLarge =
-    Response
+    Codec
         { status = Status.status 431
         , headers = Headers.base
         , body = Body.base
         }
 
-internalServerError :: Response S500 Headers.Base Body.Base
+internalServerError :: Codec S500 Headers.Base Body.Base
 internalServerError =
-    Response
+    Codec
         { status = Status.status 500
         , headers = Headers.base
         , body = Body.base
         }
 
-notImplemented :: Response S501 Headers.Base Body.Base
+notImplemented :: Codec S501 Headers.Base Body.Base
 notImplemented =
-    Response
+    Codec
         { status = Status.status 501
         , headers = Headers.base
         , body = Body.base
         }
 
-badGateway :: Response S502 Headers.Base Body.Base
+badGateway :: Codec S502 Headers.Base Body.Base
 badGateway =
-    Response
+    Codec
         { status = Status.status 502
         , headers = Headers.base
         , body = Body.base
         }
 
-serviceUnavailable :: Response S503 Headers.Base Body.Base
+serviceUnavailable :: Codec S503 Headers.Base Body.Base
 serviceUnavailable =
-    Response
+    Codec
         { status = Status.status 503
         , headers = Headers.base
         , body = Body.base
         }
 
-gatewayTimeout :: Response S504 Headers.Base Body.Base
+gatewayTimeout :: Codec S504 Headers.Base Body.Base
 gatewayTimeout =
-    Response
+    Codec
         { status = Status.status 504
         , headers = Headers.base
         , body = Body.base
         }
 
-httpVersionNotSupported :: Response S505 Headers.Base Body.Base
+httpVersionNotSupported :: Codec S505 Headers.Base Body.Base
 httpVersionNotSupported =
-    Response
+    Codec
         { status = Status.status 505
         , headers = Headers.base
         , body = Body.base
         }
 
-networkAuthenticationRequired :: Response S511 Headers.Base Body.Base
+networkAuthenticationRequired :: Codec S511 Headers.Base Body.Base
 networkAuthenticationRequired =
-    Response
+    Codec
         { status = Status.status 511
         , headers = Headers.base
         , body = Body.base
@@ -522,60 +525,82 @@ networkAuthenticationRequired =
 
 headers ::
     SymTree (Headers.Headers ForResponse) headers ->
-    Response status Headers.Base body ->
-    Response status headers body
+    Codec status Headers.Base body ->
+    Codec status headers body
 headers c r = r{headers = c}
 
 body ::
     Body.Body ForResponse body ->
-    Response status headers Body.Base ->
-    Response status headers body
+    Codec status headers Body.Base ->
+    Codec status headers body
 body c r = r{body = c}
+
+-- | The decoded value of every part of an HTTP response, once parsing has
+--   fully succeeded.
+data Data status headers body = Data
+    { status  :: status
+    , headers :: headers
+    , body    :: body
+    }
+
+-- | Per-part accumulated parse failures — 'Nothing' where that part parsed
+--   fine.
+data Failure status headers body = Failure
+    { status  :: Maybe Status.ParseError
+    , headers :: Maybe (Tree.Failure (Headers ForResponse))
+    }
+
+-- | Per-part parse result, before it's known whether every part succeeded.
+data Result status headers body = Result
+    { status  :: Either Status.ParseError status
+    , headers :: Either (Tree.Failure (Headers ForResponse)) headers
+    , body    :: body
+    }
 
 extractWaiResBody :: Wai.Response -> IO LBS.ByteString
 extractWaiResBody (WaiI.ResponseBuilder _ _ b) = pure (Builder.toLazyByteString b)
 extractWaiResBody _ = pure LBS.empty
 
 parser' ::
-    Response status headers body ->
+    Codec status headers body ->
     Wai.Response ->
-    IO (Result.Response status headers body)
+    IO (Result status headers body)
 parser' codec waiRes = do
     let httpStatus = Wai.responseStatus waiRes
         waiHeaders = Wai.responseHeaders waiRes
         sr = Status.parse codec.status httpStatus
         (hr, _) = Headers.parser codec.headers waiHeaders
         br = Body.parser codec.body (extractWaiResBody waiRes)
-    pure $ Result.Response{status = sr, headers = hr, body = br}
+    pure $ Result{status = sr, headers = hr, body = br}
 
 resultToValue ::
-    Result.Response status headers body ->
-    Maybe (Data.Response status headers body)
+    Result status headers body ->
+    Maybe (Data status headers body)
 resultToValue result = case (result.status, result.headers) of
     (Right status, Right headers) ->
-        Just $ Data.Response{status = status, headers = headers, body = result.body}
+        Just $ Data{status = status, headers = headers, body = result.body}
     _ -> Nothing
 
 resultToError ::
-    Result.Response status headers body ->
-    Error.Response status headers body
+    Result status headers body ->
+    Failure status headers body
 resultToError result =
-    Error.Response
+    Failure
         { status = either Just (const Nothing) result.status
         , headers = either Just (const Nothing) result.headers
         }
 
 parser ::
-    Response status headers body ->
+    Codec status headers body ->
     Wai.Response ->
-    IO (Either (Error.Response status headers body) (Data.Response status headers body))
+    IO (Either (Failure status headers body) (Data status headers body))
 parser res waiRes = do
     rr <- parser' res waiRes
     pure $ maybe (Left (resultToError rr)) Right (resultToValue rr)
 
 printer ::
-    Response status headers body ->
-    Data.Response status headers body ->
+    Codec status headers body ->
+    Data status headers body ->
     IO Wai.Response
 printer codec value = do
     bodyBytes <- Body.printer codec.body value.body

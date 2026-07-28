@@ -41,33 +41,27 @@ library
         Okapi.Link
         Okapi.OpenApi
         Okapi.Transformer
-        Okapi.Request.Data
-        Okapi.Request.Result
-        Okapi.Request.Failure
-        Okapi.Response.Data
-        Okapi.Response.Result
-        Okapi.Response.Failure
-        Okapi.HTTP
-        Okapi.HTTP.Tree
+        Okapi.Contract
+        Okapi.Tree
         Okapi.HTTP.Headers
         Okapi.HTTP.Body
         Okapi.HTTP.Request
-        Okapi.HTTP.Request.Method
-        Okapi.HTTP.Request.Path
-        Okapi.HTTP.Request.Query
-        Okapi.HTTP.Request.Headers.Cookie
+        Okapi.HTTP.Method
+        Okapi.HTTP.Path
+        Okapi.HTTP.Query
+        Okapi.HTTP.Cookie
         Okapi.HTTP.Response
-        Okapi.HTTP.Response.Status
-        Okapi.HTTP.Response.Headers.SetCookie
-        Okapi.HTTP.Response.Headers.Attributes
+        Okapi.HTTP.Status
+        Okapi.HTTP.SetCookie
+        Okapi.HTTP.Attributes
         Okapi.HTTP.Responses
-        Okapi.HTTP.Structured
-        Okapi.HTTP.Structured.Scan
-        Okapi.HTTP.Structured.BareItem
-        Okapi.HTTP.Structured.Parameters
-        Okapi.HTTP.Structured.Item
-        Okapi.HTTP.Structured.List
-        Okapi.HTTP.Structured.Dictionary
+        Okapi.HTTP.SFV
+        Okapi.HTTP.SFV.Scan
+        Okapi.HTTP.SFV.Bare
+        Okapi.HTTP.SFV.Parameters
+        Okapi.HTTP.SFV.Item
+        Okapi.HTTP.SFV.List
+        Okapi.HTTP.SFV.Dictionary
     build-depends:
         base                     ^>=4.20.0.0,
         aeson                    ^>=2.2,

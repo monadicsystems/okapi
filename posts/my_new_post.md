@@ -1,6 +1,8 @@
 # Elegant HTTP
 
-Haskell is the best language for elegantly describing HTTP APIs. Let me show you.
+## Introduction
+
+Haskell is the best language for elegantly describing HTTP APIs.
 
 ```haskell
 import qualified Okapi.HTTP
@@ -34,6 +36,8 @@ main = Warp.run 8080 (route helloServer backup) -- (7)
 7.
 
 This is the simplest server you can define with `okapi`. Let's dig deeper into the *contract* field since everything else in okapi, like servers, clients, documentation, and more, is derived from it.
+
+## Contracts for Great Good
 
 ```haskell
 Req.base :-> Res.base
@@ -115,7 +119,7 @@ myRequest = Req.base
   }
 ```
 
-We'll be using the record update syntax for the rest of this writing. Now, if we query the type of `myRequest` in ghci we'll see that the type is updated too.
+We'll be using the record update syntax for the rest of the examples. Now, if we query the type of `myRequest` in ghci we'll see that the type is updated too.
 
 ```haskell
 >>> :t myRequest
@@ -130,7 +134,7 @@ myRequest
 
 The method slot is fixed to `GET`, and the path slot is of type `Text`. The other slots remain unconstrained.
 
-Response contracts can be updated in the same way.
+Response contracts are updated in the same way.
 
 ```haskell
 myResponse = Res.base
@@ -167,27 +171,83 @@ myResponse' = Res.ok
   }
 ```
 
-
-There's a common misconception in the Haskell community that the more code you push into the type system, the better. The most popular example of this mindset is `servant`, a library that provides a type-level DSL for describing HTTP APIs.
+Like we did with the base contracts, we can associate `myRequest` with `myResponse` to create a full end-to-end HTTP contract.
 
 ```haskell
-
+>>> :t myReqeust :-> myResponse
+myRequest :-> myResponse
+  :: HTTP
+       (Signature
+          Okapi.HTTP.Request.Method.GET
+          Data.Text.Text
+          Okapi.HTTP.Request.Query.Base
+          Okapi.HTTP.Headers.Base
+          Okapi.HTTP.Body.Base
+          (Okapi.Response.Data.Response
+             Okapi.HTTP.Response.Status.S200
+             ()
+             (IO Data.Text.Text)))
 ```
 
-`servant` uses type families and typeclasses to interpret these type definitions as servers, clients, type-safe URL builders, OpenAPI documentation, and more. The maintainers of `servant` have gone great lengths to hide the complexity needed to make these interpretations work, so the end user doesn't need to be an expert type-level programmer, but it can still leak and leads to frustration.
+The HTTP contract `Signature` is a combination of the types of the request and response contracts.
 
-- The more logic that's pushed to the type-level, the longer compile times are
-- Error messages are harder to understand
-- Harder to understand in general; 
+The form of HTTP contract used so far can only map a single request to a single response. What do we do if we want to return one of many responses? Use the split arrow constructor.
 
-When I first released `okapi` a while ago, I would get comments like
+```haskell
+>>> :t myReq :-< myRes
+<ERROR>
+```
 
-> i'd be reluctant to use something that didn't have Servant's ability to treat an API as a single type, just because you can do so much interesting stuff with it automatically.
+Using `:-<` with just a single response contract results in a type error. Instead of a single response contract, the RHS of `:-<` must be multiple response contracts. One for each possible response that can be returned.
 
+```haskell
+myResponses = 
+```
 
+Then the question is, how do we combine multiple response contracts together?
 
+1. Define a higher-kinded sum type that derives `Generic` and the `Responses` typeclass.
+2. Use the variadic `responses` method provided by the `Responses` typeclass to build a responses contract
 
+```haskell
+data MyResponses f
+	= IsOk (f Res.S200 Headers.Base Body.Base)
+	| IsNotFound (f Res.404 Headers.Base Body.Base)
+	| IsServerError (f Res.500 Headers.Base Body.Base)
+	deriving (Generic, Responses)
+```
 
+Then the HTTP contract can use `:-<` with `responses`. The user must pass in one response contract for each constructor, in order of the constructors in the type definition.
 
-Backend frameworks in other programming languages use comments, decorators, macros, or  Theoretically, it's a cool idea, but practically, there are
+```haskell
+myResponses = responses
+	Res.ok
+	Res.notFound
+	Res.serverError
+```
 
+Then, combining with `:-<`, we get the following.
+
+```haskell
+>>> :t myRequest :-< myResponses
+myRequest :-< myResponses
+  :: HTTP
+       (Signature
+          Okapi.HTTP.Request.Method.GET
+          Data.Text.Text
+          Okapi.HTTP.Request.Query.Base
+          Okapi.HTTP.Headers.Base
+          Okapi.HTTP.Body.Base
+          (MyResponses Okapi.Response.Data.Response))
+```
+## Using Contracts
+
+### Servers
+
+### Clients
+
+### Links
+
+### OpenAPI Documentation
+
+## Conclusion
