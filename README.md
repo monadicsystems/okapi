@@ -68,7 +68,6 @@ import Okapi.HTTP.Status qualified as Status
 data Operator = Add | Sub | Mul | Div deriving (Show, Eq)
 
 -- | A path segment leaf for "add"/"sub"/"mul"/"div".
-operatorLeaf :: Leaf Path.Path Operator
 operatorLeaf = Leaf
     { decode = \t -> case t of
         "add" -> Right Add
@@ -105,10 +104,8 @@ data CalcResponses f
     | DivByZero (f Status.S422 Types.ResponseHeaders (IO Text))
     deriving (Generic, Responses)
 
-successResponse :: Res.Codec Status.S200 Headers.Base (IO Integer)
 successResponse = Res.ok & Res.body (Body.json @Integer)
 
-divByZeroResponse :: Res.Codec Status.S422 Headers.Base (IO Text)
 divByZeroResponse = Res.unprocessableEntity & Res.body (Body.json @Text)
 
 calcResponses = responses @CalcResponses successResponse divByZeroResponse
