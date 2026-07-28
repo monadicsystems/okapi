@@ -17,7 +17,6 @@ import Data.Function ((&))
 import Okapi
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
-import Okapi.HTTP.Status qualified as Status
 import Network.Wai.Handler.Warp qualified as Warp
 
 helloRequest = Req.get & Req.path (Req.lit "hello")
@@ -28,7 +27,7 @@ helloContract = helloRequest :-> helloResponse
 
 helloFunction = fn \(_req, _raw) ->
     return Res.Data
-        { status = Status.S200
+        { status = 200
         , headers = []
         , body = pure "Hello, World!"
         }
@@ -118,8 +117,8 @@ calcContract = calcRequest :-< calcResponses
 
 calcFunction = fn \(req, _raw) ->
     let args = req.path
-        okResult n    = Res.Data { status = Status.S200, headers = [], body = pure n }
-        errResult msg = Res.Data { status = Status.S422, headers = [], body = pure msg }
+        okResult n    = Res.Data { status = 200, headers = [], body = pure n }
+        errResult msg = Res.Data { status = 422, headers = [], body = pure msg }
     in return case args.operator of
         Add -> Success (okResult (args.x + args.y))
         Sub -> Success (okResult (args.x - args.y))
