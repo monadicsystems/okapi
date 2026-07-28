@@ -1,4 +1,4 @@
-# 🦓🦒Okapi
+# Okapi
 
 Okapi is a bidirectional DSL for describing HTTP servers.
 
