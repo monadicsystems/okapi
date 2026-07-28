@@ -132,8 +132,7 @@ main = Warp.run 8080 (route calcServer catchAll)
 
 ## Composing Routes
 
-Both examples above run standalone, each with their own `main`. In a real
-application you'd serve them together instead — `route` produces an
+Both examples above run standalone, each with their own `main`. `route` produces an
 ordinary `Wai.Middleware`, so multiple routes compose with plain `(.)`,
 chained down onto one final fallback (`catchAll`, or your own):
 
@@ -148,6 +147,6 @@ main =
 
 Assuming `helloServer` and `calcServer` from the two examples above are
 both in scope, this serves `GET /hello` and `GET /calc/{operator}/{x}/{y}`
-from the same application — the first `route` whose contract matches the
+from the same application. The first `route` whose contract matches the
 incoming request handles it; anything neither recognizes falls through to
 `catchAll`.
