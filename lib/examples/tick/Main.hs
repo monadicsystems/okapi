@@ -15,7 +15,7 @@ import qualified Network.Wai as Wai
 import qualified Network.Wai.EventSource as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import Okapi.App
-import Okapi.Response
+import Okapi.Protocol.Response
 import qualified Web.HttpApiData as Web
 
 ticker :: Chan.Chan Wai.ServerEvent -> Node '[]
@@ -41,4 +41,4 @@ main = do
     Concurrent.forkIO $ tick source
     Warp.run 8003
         . withDefault (ticker source)
-        $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+        $ \_ resp -> resp $ Wai.responseLBS HTTP.response404 [] "Not Found..."

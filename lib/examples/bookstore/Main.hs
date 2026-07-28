@@ -14,7 +14,7 @@ import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import Okapi.App
-import Okapi.Response
+import Okapi.Protocol.Response
 import qualified Web.HttpApiData as Web
 
 -- Data types representing books, authors, genres, and user preferences
@@ -108,4 +108,4 @@ getUserPreferences userId
 -- Run the API on port 8009
 main :: IO ()
 main = Warp.run 8009 . withDefault api $ \req resp ->
-    resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+    resp $ Wai.responseLBS HTTP.response404 [] "Not Found..."

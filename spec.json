@@ -1,1 +1,59 @@
-{"info":{"title":"API","version":"0.1.0"},"paths":{"/users":{"post":{"requestBody":{"content":{"application/json":{"schema":{"properties":{"email":{"type":"string"},"username":{"type":"string"}},"required":["username","email"],"type":"object"}}}},"responses":{"200":{"content":{"application/json":{"schema":{"properties":{"email":{"type":"string"},"username":{"type":"string"}},"required":["username","email"],"type":"object"}}},"description":"200"}}}}},"components":{},"openapi":"3.0.0"}
+{
+    "info": {
+        "title": "API",
+        "version": "0.1.0"
+    },
+    "paths": {
+        "/users": {
+            "post": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "email": {
+                                        "type": "string"
+                                    },
+                                    "username": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "username",
+                                    "email"
+                                ],
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "email": {
+                                            "type": "string"
+                                        },
+                                        "username": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "username",
+                                        "email"
+                                    ],
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "description": "200"
+                    }
+                }
+            }
+        }
+    },
+    "components": {},
+    "openapi": "3.0.0"
+}

@@ -9,7 +9,7 @@ import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Warp
 import Okapi.App
-import Okapi.Response
+import Okapi.Protocol.Response
 import qualified Web.HttpApiData as Web
 
 data Operator
@@ -76,4 +76,4 @@ calc =
 main =
     Warp.run 8003
         . withDefault calc
-        $ \_ resp -> resp $ Wai.responseLBS HTTP.status404 [] "Not Found..."
+        $ \_ resp -> resp $ Wai.responseLBS HTTP.response404 [] "Not Found..."

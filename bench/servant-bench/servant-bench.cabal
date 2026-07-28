@@ -1,0 +1,14 @@
+cabal-version:  3.0
+name:           servant-bench
+version:        0.1.0.0
+
+executable servant-bench
+    main-is:            Main.hs
+    build-depends:
+          base
+        , servant
+        , servant-server
+        , aeson
+        , text
+    default-language:   GHC2021
+    ghc-options:        -O2

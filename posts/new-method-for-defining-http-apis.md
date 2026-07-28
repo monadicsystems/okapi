@@ -33,38 +33,38 @@ I spent a lot of time experimenting with different combinations of language feat
 ```haskell
 -- Request
 getUserReq
-  = Req.get
-  & Req.path do -- /users/{userId:Text}
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+  = mGet
+  & path do -- /users/{userId:Text}
+      seg_ @Text "users"
+      userId <- seg @Text "userId"
       pure userId
-  & Req.query do
-      Req.param' @Text "filter"
+  & query do
+      param' @Text "filter"
 
 -- Responses Sum Type
 data GetUserRes f
-  = OkRes       (Res f S200 (Text, Text) LBS.ByteString)
-  | NotFoundRes (Res f S404 Int LBS.ByteString)
-  deriving (Generic, GenericResAlt)
+  = OkRes       (Response f S200 (Text, Text) LBS.ByteString)
+  | NotFoundRes (Response f S404 Int LBS.ByteString)
+  deriving (Generic, ResponseEnum)
 
 -- Ok Response
 okResponse
-  = Res.s200
-  & Res.headers do
-      ct  <- fst =. Res.header "content-type"
-      loc <- snd =. Res.header "location"
+  = s200
+  & headers do
+      ct  <- fst =. header @Text "content-type"
+      loc <- snd =. header @Text "location"
       pure (ct, loc)
 
 -- Not Found Response
 notFoundResponse
-  = Res.s404
-  & Res.headers do
-      Res.header @Int "retry-after"
+  = s404
+  & headers do
+      header @Int "retry-after"
 
 -- Response Choices
-getUserResponses = resCase @GetUserRes
-  notFoundResponse
+getUserResponses = responsesOf @GetUserRes
   okResponse
+  notFoundResponse
 
 -- Endpoint
 getUserEndpoint = getUserReq :-> getUserResponses
@@ -97,9 +97,9 @@ I got this idea from [Li-yao Xia](https://blog.poisson.chat/posts/2017-01-01-mon
 The most basic request and response codecs are `Req.any` and `Res.any`. These codecs represent the most general HTTP request, and the most general HTTP response, respectively.
 
 ```haskell
-aRequest = Req.any
+aRequest = req
 
-aResponse = Res.any
+aResponse = res
 ```
 
 ### Request
@@ -108,11 +108,10 @@ Codecs that describe anything provide no information. We can add constraints, an
 
 ```haskell
 aRequest
-  = Req.any
-  & Req.method DELETE
-  & Req.path do -- Requires BlockArguments language extension
-      Req.lit @Text "account"
-      acctId <- Req.seg @Int "accountId"
+  = mDelete
+  & path do -- Requires BlockArguments language extension
+      seg_ @Text "account"
+      acctId <- seg @Int "accountId"
       pure acctId
 ```
 
@@ -120,46 +119,46 @@ The `Req.method` combinator is used to specify the method, and the `Req.path` co
 
 ```haskell
 myReq
-  = Req.any
-  & Req.method GET
-  & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+  = req
+  & method GET
+  & path do
+      seg_ @Text "users"
+      userId <- seg @Text "userId"
       pure userId
-  & Req.query (Req.param' @Text "filter")
-  & Req.headers (Req.header' @Text "x-header")
-  & Req.json @Value
+  & query (param' @Text "filter")
+  & headers (header' @Text "x-header")
+  & body (json @Value)
 ```
 
 Okapi provides codec values where the request method is fixed, so you don't have to start with `Req.any` and then modify it with the `method` combinator every time. You can just start with the method itself.
 
 ```haskell
 myReq
-  = Req.get
-  & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+  = mGet
+  & path do
+      seg_ @Text "users"
+      userId <- seg @Text "userId"
       pure userId
-  & Req.query do
-      Req.param' @Text "filter"
-  & Req.headers do
-      Req.header' @Text "x-header"
-  & Req.json @Value
+  & query do
+      param' @Text "filter"
+  & headers do
+      header' @Text "x-header"
+  & body (json @Value)
 ```
 
 The order in which you pipe your codec through combinators does not matter; for example, the following rewrite is equivalent to the original above.
 
 ```haskell
 myReq
-  = Req.get
-  & Req.headers do
-      Req.header' @Text "x-header"
-  & Req.query do
-      Req.param' @Text "filter"
-  & Req.json @Value
-  & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+  = mGet
+  & headers do
+      header' @Text "x-header"
+  & query do
+      param' @Text "filter"
+  & body (json @Value)
+  & path do
+      seg_ @Text "users"
+      userId <- seg @Text "userId"
       pure userId
 ```
 
@@ -167,16 +166,16 @@ While the order in which you apply combinators doesn't matter, the number of tim
 
 ```haskell
 myReq
-  = Req.get
-  & Req.headers do
-      Req.header' @Text "x-header"
-  & Req.query do
-      Req.param' @Text "filter"
-  & Req.json @Value
-  & Req.method PUT -- Compile-time error. Method already fixed by `Req.get`
-  & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+  = mGet
+  & headers do
+      header' @Text "x-header"
+  & query do
+      param' @Text "filter"
+  & body (json @Value)
+  & method PUT -- Compile-time error. Method already fixed by `mGet`
+  & path do
+      seg_ @Text "users"
+      userId <- seg @Text "userId"
       pure userId
 ```
 
@@ -186,12 +185,12 @@ Response codecs are just like request codecs, but instead of a `method` you have
 
 ```haskell
 myRes
-  = Res.s200
-  & Res.headers do
-      ct  <- fst =. Res.header "content-type"
-      loc <- snd =. Res.header "location"
+  = s200
+  & headers do
+      ct  <- fst =. header @Text "content-type"
+      loc <- snd =. header @Text "location"
       pure (ct, loc)
-  & Res.json @Value
+  & body (json @Value)
 ```
 
 Unlike most web frameworks, in Okapi, the description of a response is just as important as the description of a request.
@@ -208,27 +207,27 @@ Instead of introducing the `(<|>)` combinator from the `Alternative` typeclass i
 
 ```haskell
 data GetUserRes f
-  = OkRes       (Res f S200 (Text, Text) LBS.ByteString)
-  | NotFoundRes (Res f S404 Int LBS.ByteString)
-  | ErrorRes    (Res f S500 HTTP.ResponseHeaders LBS.ByteString)
-  deriving (Generic, GenericResAlt)
+  = OkRes       (Response f S200 (Text, Text) LBS.ByteString)
+  | NotFoundRes (Response f S404 Int LBS.ByteString)
+  | ErrorRes    (Response f S500 HTTP.ResponseHeaders LBS.ByteString)
+  deriving (Generic, ResponseEnum)
 
 okResponse
-  = Res.s200
-  & Res.headers do
-      ct  <- fst =. Res.header "content-type"
-      loc <- snd =. Res.header "location"
+  = s200
+  & headers do
+      ct  <- fst =. header @Text "content-type"
+      loc <- snd =. header @Text "location"
       pure (ct, loc)
 
 notFoundResponse
-  = Res.s404
-  & Res.headers do
-      Res.header @Int "retry-after"
+  = s404
+  & headers do
+      header @Int "retry-after"
 
-getUserResponses = resCase @GetUserRes
+getUserResponses = responsesOf @GetUserRes
   okResponse
   notFoundResponse
-  Res.s500
+  s500
 ```
 
 If your sum type isn't a valid shape, the compiler will reject it. Notice the response codecs for each constructor are passed to `resCase` in the same order they are defined in the data type declaration.
@@ -236,9 +235,12 @@ If your sum type isn't a valid shape, the compiler will reject it. Notice the re
 If there's only one possible response, we wrap the response codec with `only`.
 
 ```haskell
-aResponse = ...
+data SingleRes f = SingleRes (Response f S200 () LBS.ByteString)
+  deriving (Generic, ResponseEnum)
 
-onlyResponse = only aResponse
+aResponse = s200
+
+onlyResponse = responsesOf @SingleRes aResponse
 ```
 
 ## Endpoint
@@ -246,11 +248,14 @@ onlyResponse = only aResponse
 An association between a request codec and a responses codec is an **endpoint**.
 
 ```haskell
+data SingleRes f = SingleRes (Response f S200 () LBS.ByteString)
+  deriving (Generic, ResponseEnum)
+
 aRequest = ...
 
-aResponse = ...
+aResponse = s200
 
-anEndpoint = aRequest :-> only aResponse
+anEndpoint = aRequest :-> responsesOf @SingleRes aResponse
 ```
 
 It looks like a lambda expression. It describes what the endpoint consumes, and what it produces in terms of HTTP.

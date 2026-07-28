@@ -1,0 +1,2 @@
+packages: .
+store-dir: /tmp/bench-store-servant-256

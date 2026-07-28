@@ -1,0 +1,13 @@
+cabal-version:  3.0
+name:           okapi-bench
+version:        0.1.0.0
+
+executable okapi-bench
+    main-is:            Main.hs
+    build-depends:
+          base
+        , okapi
+        , http-types
+        , bytestring
+    default-language:   GHC2024
+    ghc-options:        -O2

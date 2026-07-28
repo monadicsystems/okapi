@@ -2,17 +2,18 @@ cabal-version: 3.6
 
 name:           okapi
 version:        0.2.0.0
-synopsis:       A micro web framework based on monadic parsing
+synopsis:       A bidirectional HTTP description language
 description:    Please see the README on GitHub at <https://github.com/monadicsystems/okapi#readme>
 category:       Web
 homepage:       https://github.com/monadicsystems/okapi#readme
 bug-reports:    https://github.com/monadicsystems/okapi/issues
 author:         Monadic Systems LLC
-maintainer:     tech@monadic.systems
-copyright:      2022 Monadic Systems LLC
+maintainer:     info@monadic.systems
+copyright:      2026 Monadic Systems LLC
 license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
+tested-with:    GHC ==9.10.1
 extra-source-files:
     README.md
     ChangeLog.md
@@ -24,158 +25,97 @@ source-repository head
 common warnings
     ghc-options: -Wall
 
+common ghc-extensions
+    default-extensions:
+        TypeFamilies
+        OverloadedStrings
+        OverloadedRecordDot
+
 library
-    import:           warnings
+    import:           warnings, ghc-extensions
     exposed-modules:
         Okapi
         Okapi.Client
-        Okapi.Codec
-        Okapi.Data
-        Okapi.Group
-        Okapi.Mode
+        Okapi.Server
+        Okapi.Function
+        Okapi.Link
         Okapi.OpenApi
-        Okapi.Pattern
-        Okapi.Request
-        Okapi.Request.Body
-        Okapi.Request.Headers
-        Okapi.Request.Method
-        Okapi.Request.Path
-        Okapi.Request.Query
-        Okapi.Response
-        Okapi.Response.Alt
-        Okapi.Response.Body
-        Okapi.Response.Headers
-        Okapi.Response.Status
+        Okapi.Transformer
+        Okapi.Contract
+        Okapi.Tree
+        Okapi.HTTP.Headers
+        Okapi.HTTP.Body
+        Okapi.HTTP.Request
+        Okapi.HTTP.Method
+        Okapi.HTTP.Path
+        Okapi.HTTP.Query
+        Okapi.HTTP.Cookie
+        Okapi.HTTP.Response
+        Okapi.HTTP.Status
+        Okapi.HTTP.SetCookie
+        Okapi.HTTP.Attributes
+        Okapi.HTTP.Responses
+        Okapi.HTTP.SFV
+        Okapi.HTTP.SFV.Scan
+        Okapi.HTTP.SFV.Bare
+        Okapi.HTTP.SFV.Parameters
+        Okapi.HTTP.SFV.Item
+        Okapi.HTTP.SFV.List
+        Okapi.HTTP.SFV.Dictionary
     build-depends:
-        base ^>=4.20.0.0,
-        aeson,
-        bytestring,
-        case-insensitive,
-        cookie,
-        http-client,
-        http-types,
-        insert-ordered-containers,
-        lens,
-        openapi3,
-        profunctors,
-        scientific,
-        text,
-        time,
-        uuid,
-        vector,
-        wai
+        base                     ^>=4.20.0.0,
+        aeson                    ^>=2.2,
+        base64-bytestring        ^>=1.2,
+        bytestring               ^>=0.12,
+        case-insensitive         ^>=1.2,
+        cookie                   ^>=0.5,
+        http-api-data            ^>=0.7,
+        http-client              ^>=0.7,
+        http-media               ^>=0.8,
+        http-types               ^>=0.12,
+        insert-ordered-containers ^>=0.2,
+        optics-core              ^>=0.4,
+        openapi3                 ^>=3.2,
+        profunctors              ^>=5.6,
+        scientific               ^>=0.3,
+        text                     ^>=2.1,
+        time                     ^>=1.12,
+        uuid                     ^>=1.3,
+        wai                      ^>=3.2
     hs-source-dirs:   src
     default-language: GHC2024
 
-test-suite okapi-examples
-    import:           warnings
+test-suite okapi-doctests
+    import:           warnings, ghc-extensions
     type:             exitcode-stdio-1.0
-    main-is:          Main.hs
+    main-is:          Doctests.hs
     hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
-        bytestring,
-        http-types,
-        text,
+        doctest-parallel,
+        QuickCheck,
+        quickcheck-instances,
+        time,
         okapi
     default-language: GHC2024
 
-test-suite okapi-infer
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          Infer.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        cookie,
-        http-types,
-        text,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-openapi
-    import:           warnings
-    type:             exitcode-stdio-1.0
-    main-is:          OpenApi.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        aeson,
-        bytestring,
-        http-types,
-        text,
-        okapi,
-        openapi3
-    default-language: GHC2024
-
-test-suite okapi-roundtrip
-    import:           warnings
+-- Deliberately an `executable`, not a `test-suite` — this example calls a
+-- real external API with a real credential, and must never be swept up in
+-- an automatic `cabal test all` run.
+executable okapi-ex1
+    import:           warnings, ghc-extensions
     ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
-    main-is:          RoundTrip.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-client,
-        http-types,
-        text,
-        wai,
-        warp,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-ex1
-    import:           warnings
-    ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
     main-is:          Ex1.hs
     hs-source-dirs:   test
     build-depends:
         base ^>=4.20.0.0,
         aeson,
-        aeson-pretty,
         bytestring,
         http-client,
+        http-client-tls,
+        http-types,
         openapi3,
         text,
-        warp,
         okapi
     default-language: GHC2024
 
-test-suite okapi-ex3
-    import:           warnings
-    ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
-    main-is:          Ex3.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        aeson,
-        bytestring,
-        http-client,
-        http-types,
-        mtl,
-        openapi3,
-        sqlite-simple,
-        text,
-        warp,
-        okapi
-    default-language: GHC2024
-
-test-suite okapi-ex2
-    import:           warnings
-    ghc-options:      -threaded
-    type:             exitcode-stdio-1.0
-    main-is:          Ex2.hs
-    hs-source-dirs:   test
-    build-depends:
-        base ^>=4.20.0.0,
-        bytestring,
-        http-client,
-        http-types,
-        text,
-        warp,
-        okapi
-    default-language: GHC2024
