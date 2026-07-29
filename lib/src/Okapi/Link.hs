@@ -47,6 +47,16 @@ data Link shape where
         (path -> query -> URI) ->
         Link (Signature method path query headers body result)
 
+-- | Lets a 'Link' value's wrapped function be reached as @.build@ via
+--   'OverloadedRecordDot' instead of pattern-matching 'Builder' — e.g.
+--   @myLinks.calc.build pathVal queryVal@. Purely additive; pattern-matching
+--   'Builder' directly still works.
+instance HasField "build"
+    (Link (Signature method path query headers body result))
+    (path -> query -> URI)
+  where
+    getField (Builder f) = f
+
 build ::
     Req.Codec method path query headers body ->
     path ->

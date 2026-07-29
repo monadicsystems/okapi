@@ -291,7 +291,8 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> :set -XOverloadedLabels
 -- >>> import Okapi.Contract qualified as Contract
 -- >>> import Okapi.HTTP.Request qualified as Req
--- >>> import Okapi.HTTP.Path (Path, seg)
+-- >>> import Okapi.HTTP.Path (Path)
+-- >>> import Okapi.HTTP.Path qualified as Path
 -- >>> import Okapi.HTTP.Query qualified as Query
 -- >>> import Okapi.HTTP.Method qualified as Method
 -- >>> import Okapi.HTTP.Headers qualified as Headers
@@ -301,7 +302,7 @@ setMethod _           op pi_ = pi_{_pathItemGet    = Just op}
 -- >>> import Data.HashMap.Strict.InsOrd qualified as IHM
 -- >>> import Data.OpenApi (Referenced (..))
 -- >>> import Optics.Core ((^.))
--- >>> let reqTree = Req.Codec { Req.method = Method.method Method.Get, Req.path = annotate [Description "the user id"] (seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.base, Req.headers = Headers.base, Req.body = Body.base }
+-- >>> let reqTree = Req.Codec { Req.method = Method.method Method.Get, Req.path = annotate [Description "the user id"] (Path.seg "userId" (integer :: Leaf Path Integer)), Req.query = Query.base, Req.headers = Headers.base, Req.body = Body.base }
 -- >>> let contract = Contract.annotate [Description "Get a user", Group "users"] (reqTree Contract.:-> Res.ok)
 -- >>> let oa = contractToOpenApi contract
 -- >>> let Just pi_ = IHM.lookup "/{userId}" (oa ^. #paths)

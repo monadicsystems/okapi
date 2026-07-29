@@ -53,7 +53,7 @@ module Okapi
     , Handle (..)
     , handle
     , mount
-    , run
+    , mountAll
     , toOpenApi
     , servers
     , Transformer (..)
@@ -103,7 +103,7 @@ module Okapi
 
 import Okapi.Contract (Contract (..), Signature, Base, METHOD, PATH, QUERY, HEADERS, BODY, STATUS, RESPONSES, type (:&), annotate, stripTags, collectTags, Morph (..), morph)
 import Okapi.Function (Function, fn)
-import Okapi.Server (Server (..), server, normalize, scope, route, catchAll, Handle (..), handle, mount, run, toOpenApi, servers, serversVia, handles)
+import Okapi.Server (Server (..), server, normalize, scope, route, catchAll, Handle (..), handle, mount, mountAll, toOpenApi, servers, serversVia, handles)
 import Okapi.Transformer (type (~>), Transformer (..))
 import Okapi.Client (Client, pattern Fn, ClientError (..), ClientSettings (..), fetch, clientFor, client, clientVia)
 import Okapi.Link (URI (..), Link (..), links, linksVia)

@@ -25,6 +25,7 @@ import GHC.Generics
     , Generic (..), Rep
     , (:*:) (..)
     )
+import GHC.Records (HasField (..))
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Types qualified as Types
 import Network.Wai qualified as Wai
@@ -49,6 +50,15 @@ pattern Fn ::
     (Req.Data method path query headers body -> IO (Either ClientError result)) ->
     Client (Signature method path query headers body result)
 pattern Fn f <- Function f
+
+-- | Lets a 'Client' value's wrapped function be reached as @.fetch@ via
+--   'OverloadedRecordDot' instead of pattern-matching 'Fn' — e.g.
+--   @routesClient.calc.fetch reqVal@. Purely additive; 'Fn' still works.
+instance HasField "fetch"
+    (Client (Signature method path query headers body result))
+    (Req.Data method path query headers body -> IO (Either ClientError result))
+  where
+    getField (Function f) = f
 
 fetch ::
     HC.Manager ->

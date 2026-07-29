@@ -294,6 +294,7 @@ import Okapi -- generic mode layer + Tree engine; safe to leave bare
 import Okapi.HTTP.Request qualified as Req -- everything Request-specific
 import Okapi.HTTP.Response qualified as Res -- everything Response-specific
 import Okapi.HTTP.Request.Method qualified as Method -- the smart constructor itself
+import Okapi.HTTP.Request.Path qualified as Path -- seg/seg_/segs/lit, their true home
 import Okapi.HTTP.Request.Query qualified as Query -- ArrayStyle constructors
 import Okapi.HTTP.Headers qualified as Headers -- shared header combinators, their true home
 import Okapi.HTTP.Body qualified as Body -- shared body combinators, their true home
@@ -322,22 +323,22 @@ clientToken = fromMaybe (error "bad literal token") (BareItem.mkToken "okapi-v2"
 -- narrowing functions left to right; projection helpers (`hp1` etc.) are a leading `let`.
 getReview = Req.base
     & Req.path do
-        Req.seg_ int 2
-        Req.lit "products"
-        pid <- fst =. Req.seg "productId" uuid
-        Req.lit "reviews"
-        rid <- snd =. Req.seg "reviewId" int
+        Path.seg_ int 2
+        Path.lit "products"
+        pid <- fst =. Path.seg "productId" uuid
+        Path.lit "reviews"
+        rid <- snd =. Path.seg "reviewId" int
         pure (pid, rid)
     & Req.query do
         let qp1 (a,_,_,_) = a
             qp2 (_,b,_,_) = b
             qp3 (_,_,c,_) = c
             qp4 (_,_,_,d) = d
-        verbose <- qp1 =. Req.flag' "verbose"
-        limit <- qp2 =. Req.param' "limit" int
-        tagFilter <- qp3 =. Req.list' Query.Exploded "tag" text
+        verbose <- qp1 =. Query.flag' "verbose"
+        limit <- qp2 =. Query.param' "limit" int
+        tagFilter <- qp3 =. Query.list' Query.Exploded "tag" text
         Req.param_ "api" int 2
-        fixedFmt <- qp4 =. Req.param "format" text
+        fixedFmt <- qp4 =. Query.param "format" text
         pure (verbose, limit, tagFilter, fixedFmt)
     & Req.headers do
         let hp1 (a,_,_,_,_,_) = a
@@ -346,7 +347,7 @@ getReview = Req.base
             hp4 (_,_,_,d,_,_) = d
             hp5 (_,_,_,_,e,_) = e
             hp6 (_,_,_,_,_,f) = f
-        Headers.field_ "x-service" "reviews" -- field-family combinators are `Headers.`; only cookie/cookie' stay `Req.`
+        Headers.field_ "x-service" "reviews" -- field-family combinators are `Headers.`; cookie/cookie' are too
         Headers.contentType Headers.JSON
         apiKey <- hp1 =. Headers.fieldBareItem "x-api-key" (BareItem.token :: Leaf BareItem.BareItem BareItem.Token)
         buildNum <- hp2 =. Headers.fieldItem "x-client" do -- fixed marker token + a real parameter riding with it
@@ -358,8 +359,8 @@ getReview = Req.base
             a <- fst =. Dict.member "compact" (Item.bareItem bool)
             b <- snd =. Dict.member' "notes" (Item.bareItem bool)
             pure (a, b)
-        sid <- hp5 =. Req.cookie' "sid" uuid
-        lang <- hp6 =. Req.cookie "lang" text
+        sid <- hp5 =. Headers.cookie' "sid" uuid
+        lang <- hp6 =. Headers.cookie "lang" text
         pure (apiKey, buildNum, traceId, prefs, sid, lang)
     & Req.body Body.none
 -- Endpoint 1's responses -- List-shaped headers: a flat list of scalars,
@@ -393,7 +394,7 @@ reviewOk = Res.ok
             pure (n, params)
         tags <- rp4 =. Headers.fieldList "cache-tags" cacheTags
         groups <- rp5 =. Headers.fieldList "x-batch-groups" batchGroups
-        session <- rp6 =. Res.setCookie "session" uuid do
+        session <- rp6 =. Headers.setCookie "session" uuid do
             let ap1 (a,_,_,_) = a
                 ap2 (_,b,_,_) = b
                 ap3 (_,_,c,_) = c
@@ -414,11 +415,11 @@ getReviewContract = getReview :-> reviewOk
 listReviews = Req.base
     & Req.method Method.Get
     & Req.path do
-        Req.lit "products"
-        pid <- fst =. Req.seg "productId" uuid
-        Req.lit "reviews"
-        Req.lit "tags"
-        tags <- snd =. Req.segs text
+        Path.lit "products"
+        pid <- fst =. Path.seg "productId" uuid
+        Path.lit "reviews"
+        Path.lit "tags"
+        tags <- snd =. Path.segs text
         pure (pid, tags)
     & Req.body Body.none
 listOk = Res.ok & Res.body (Body.json @[Review])
@@ -428,10 +429,10 @@ listReviewsContract = listReviews :-> listOk
 -- `&`-pipe fix for the `path`/`URI` collision (Part 3).
 deleteReviewReq = Req.delete
     & Req.path do
-        Req.lit "products"
-        pid <- fst =. Req.seg "productId" uuid
-        Req.lit "reviews"
-        rid <- snd =. Req.seg "reviewId" int
+        Path.lit "products"
+        pid <- fst =. Path.seg "productId" uuid
+        Path.lit "reviews"
+        rid <- snd =. Path.seg "reviewId" int
         pure (pid, rid)
 deletedRes = Res.noContent
 notFoundRes = Res.notFound & Res.body (Body.json @Text)

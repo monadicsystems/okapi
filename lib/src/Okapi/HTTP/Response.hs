@@ -63,9 +63,6 @@ module Okapi.HTTP.Response (
     Result (..),
     parser,
     printer,
-
-    -- * Side-pinned header combinator (re-exported from "Okapi.HTTP.Headers")
-    setCookie,
 ) where
 
 import Data.ByteString.Builder qualified as Builder
@@ -73,7 +70,6 @@ import Data.ByteString.Lazy qualified as LBS
 import Network.Wai qualified as Wai
 import Network.Wai.Internal qualified as WaiI
 import Okapi.HTTP.Body qualified as Body
-import Okapi.HTTP.Headers (setCookie)
 import Okapi.HTTP.Headers (Headers)
 import Okapi.HTTP.Headers qualified as Headers
 import Okapi.HTTP.Status (

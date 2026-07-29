@@ -19,7 +19,7 @@ import Network.HTTP.Types qualified as Types
 import Network.HTTP.Client qualified as HC
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Okapi
-import Okapi.HTTP.Request
+import Okapi.HTTP.Path qualified as Path
 import Okapi.HTTP.Request qualified as Req
 import Okapi.HTTP.Response qualified as Res
 import Okapi.HTTP.Method qualified as Method
@@ -44,8 +44,8 @@ data InnerMessage = InnerMessage
 createMessageReq =
     Req.post
         & Req.path do
-            seg_ text "v1"
-            seg_ text "messages"
+            Path.seg_ text "v1"
+            Path.seg_ text "messages"
             pure ()
         & Req.headers do
             Headers.contentType Headers.JSON

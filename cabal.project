@@ -1,2 +1,9 @@
 packages: lib
 write-ghc-environment-files: always
+
+optimization: False
+jobs: 6
+semaphore: True
+
+package okapi
+  ghc-options: +RTS -A64m -RTS

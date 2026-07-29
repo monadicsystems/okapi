@@ -1,1 +1,3 @@
 dist*
+.claude/settings.json
+.ghc.environment.*

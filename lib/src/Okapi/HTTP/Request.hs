@@ -28,28 +28,6 @@ module Okapi.HTTP.Request (
     resultToError,
     parser,
     printer,
-
-    -- * Side-pinned header combinators (re-exported from "Okapi.HTTP.Headers")
-    cookie,
-    cookie',
-
-    -- * Side-pinned body combinator (re-exported from "Okapi.HTTP.Body")
-    form,
-
-    -- * Path combinators (re-exported from "Okapi.HTTP.Path")
-    seg,
-    seg_,
-    lit,
-    segs,
-
-    -- * Query combinators (re-exported from "Okapi.HTTP.Query")
-    param,
-    param',
-    flag,
-    flag',
-    list,
-    list',
-    ArrayStyle (..),
 ) where
 
 import Prelude hiding (head)
@@ -57,15 +35,14 @@ import Data.ByteString qualified as BS
 import Data.ByteString.Lazy qualified as LBS
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Network.Wai qualified as Wai
-import Okapi.HTTP.Headers (cookie, cookie', coalesceCookies)
+import Okapi.HTTP.Headers (coalesceCookies)
 import Okapi.HTTP.Headers (Headers)
 import Okapi.HTTP.Headers qualified as Headers
-import Okapi.HTTP.Body (form)
 import Okapi.HTTP.Body qualified as Body
 import Okapi.HTTP.Method qualified as Method
-import Okapi.HTTP.Path (Path, seg, seg_, lit, segs)
+import Okapi.HTTP.Path (Path)
 import Okapi.HTTP.Path qualified as Path
-import Okapi.HTTP.Query (Query, ArrayStyle (..), param, param', flag, flag', list, list')
+import Okapi.HTTP.Query (Query)
 import Okapi.HTTP.Query qualified as Query
 import Okapi.Tree (SymTree, ForRequest)
 import Okapi.Tree qualified as Tree

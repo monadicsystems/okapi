@@ -11,7 +11,7 @@ module Okapi.Server (
     Handle (..),
     handle,
     mount,
-    run,
+    mountAll,
     toOpenApi,
     GServer,
     servers,
@@ -183,11 +183,14 @@ mount :: Handle -> Wai.Middleware
 mount (Handle ep) = route ep
 
 -- | Fold a list of 'Handle's into one 'Wai.Middleware' via 'mount' — the
---   final runnable artifact:
+--   final runnable artifact. Named to pair with 'mount' the way 'handles'
+--   pairs with 'handle' — 'mount' is one, 'mountAll' is the whole list —
+--   and deliberately not @run@, to avoid colliding with e.g. @Warp.run@
+--   wherever both appear in the same example:
 --
--- > app = run [handle ep1, handle ep2] $ catchAll
-run :: [Handle] -> Wai.Middleware
-run = foldr (.) id . map mount
+-- > app = mountAll [handle ep1, handle ep2] $ catchAll
+mountAll :: [Handle] -> Wai.Middleware
+mountAll = foldr (.) id . map mount
 
 -- | Recover the 'Contract' inside a 'Handle' as an OpenAPI document —
 --   ignores the middleware and handler entirely — so a whole @[Handle]@ can
@@ -400,7 +403,7 @@ instance
 > handles myServers ++ [handle oneOffServer]
 
   From here, everything is the same ordinary list code the foundational
-  mechanism already uses: 'run' for the app, @foldMap 'toOpenApi'@ for docs
+  mechanism already uses: 'mountAll' for the app, @foldMap 'toOpenApi'@ for docs
   derived from a fully-built record of servers (contract-only docs
   without needing handlers built at all still go through
   'Okapi.OpenApi.openApiVia' directly on the contracts record

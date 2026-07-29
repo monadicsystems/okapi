@@ -59,11 +59,11 @@ I spent a lot of time experimenting with different combinations of language feat
 getUserReq
   = Req.get
   & Req.path do -- /users/{userId:Text}
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+      Path.lit @Text "users"
+      userId <- Path.seg @Text "userId"
       pure userId
   & Req.query do
-		  Req.param' @Text "filter"
+		  Query.param' @Text "filter"
 
 -- Responses
 data GetUserRes f
@@ -127,8 +127,8 @@ aRequest
   = Req.any
   & Req.method DELETE
   & Req.path do -- Requires BlockArguments language extension
-      Req.lit @Text "account"
-      acctId <- Req.seg @Int "accountId"
+      Path.lit @Text "account"
+      acctId <- Path.seg @Int "accountId"
       pure acctId
 ```
 
@@ -139,10 +139,10 @@ myReq
   = Req.any
   & Req.method GET
   & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+      Path.lit @Text "users"
+      userId <- Path.seg @Text "userId"
       pure userId
-  & Req.query (Req.param' @Text "filter")
+  & Req.query (Query.param' @Text "filter")
   & Req.headers (Req.header' @Text "x-header")
   & Req.json @Value
 ```
@@ -153,10 +153,10 @@ Okapi provides base codecs where the request method is fixed, so you don't have 
 myReq
   = Req.get
   & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Int "userId"
+      Path.lit @Text "users"
+      userId <- Path.seg @Int "userId"
       pure userId
-  & Req.query (Req.param' @Text "filter")
+  & Req.query (Query.param' @Text "filter")
   & Req.headers (Req.header' @Text "x-header")
   & Req.json @Value
 ```
@@ -167,11 +167,11 @@ The order in which you pipe your codec through combinators does not matter; for 
 myReq
   = Req.get
   & Req.headers (Req.header' @Text "x-header")
-  & Req.query (Req.param' @Text "filter")
+  & Req.query (Query.param' @Text "filter")
   & Req.json @Value
   & Req.path do
-      Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+      Path.lit @Text "users"
+      userId <- Path.seg @Text "userId"
       pure userId
 ```
 
@@ -185,8 +185,8 @@ myReq
   & Req.json @Value
   & Req.method PUT -- Compile-time error. Method already fixed by `Req.get`
   & Req.path do
-      _      <- Req.lit @Text "users"
-      userId <- Req.seg @Text "userId"
+      _      <- Path.lit @Text "users"
+      userId <- Path.seg @Text "userId"
       pure userId
 ```
 
