@@ -9,20 +9,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
--- | Every definition from README.md, in one loadable module, so you can
---   poke at real types instead of reading them off the page.
---
---   Load it with:
---
---   > cabal repl lib:okapi
---   > :load lib/test/ReadmeExamples.hs
---   > :t calcServer
---   > :t myOpenApi
---
---   Deliberately excludes every @main@\/@Warp.run@ line from the README.
---   @warp@ isn't a dependency of the @okapi@ library itself, so those lines
---   can't compile against this package's own environment. Everything else
---   here is real, and this whole file is checked to load clean as one unit.
 module ReadmeExamples where
 
 import Data.Aeson qualified as Aeson
@@ -43,8 +29,6 @@ import Okapi.HTTP.Response qualified as Res
 import Okapi.HTTP.Status qualified as Status
 import Okapi.Link qualified as Link
 
--- * Hello World
-
 helloRequest = Req.get & Req.path (Path.lit "hello")
 
 helloResponse = Res.ok
@@ -60,11 +44,8 @@ helloFunction = fn \(_req, _raw) ->
 
 helloServer = server id id helloContract helloFunction
 
--- * Calculator
-
 data Operator = Add | Sub | Mul | Div deriving (Show, Eq)
 
--- | A path segment leaf for "add"/"sub"/"mul"/"div".
 operatorLeaf = Leaf
     { decode = \t -> case t of
         "add" -> Right Add
@@ -86,7 +67,6 @@ data CalcArgs = CalcArgs
     , y        :: Integer
     }
 
--- | Matches /calc/{operator}/{x}/{y}, e.g. /calc/add/3/4.
 calcPath = do
     Path.lit "calc"
     operator <- (.operator) =. Path.seg "operator" operatorLeaf
@@ -123,17 +103,11 @@ calcFunction = fn \(req, _raw) ->
 
 calcServer = server id id calcContract calcFunction
 
--- * Generating Links (single route)
-
 calcLink :: URI
 calcLink = Link.build calcRequest (CalcArgs { operator = Add, x = 3, y = 4 }) []
 
--- * Generating an OpenAPI Document (single route)
-
 printCalcOpenApi :: IO ()
 printCalcOpenApi = LBS8.putStrLn (Aeson.encode (contractToOpenApi calcContract))
-
--- * Client (single route)
 
 calcClientSettings :: IO ClientSettings
 calcClientSettings = do
@@ -158,8 +132,6 @@ runCalcClient = do
         Right (Success resData)   -> resData.body >>= print
         Right (DivByZero resData) -> resData.body >>= print
 
--- * Reverse
-
 reversePath = do
     Path.lit "reverse"
     word <- Path.seg "word" text
@@ -175,8 +147,6 @@ reverseFunction = fn \(req, _raw) ->
     return Res.Data { status = 200, headers = [], body = pure (T.reverse req.path) }
 
 reverseServer = server id id reverseContract reverseFunction
-
--- * Record-Based Servers
 
 type HelloShape =
     Base
@@ -208,8 +178,6 @@ handlers = Routes { hello = helloFunction, calc = calcFunction, reverse = revers
 
 myServers = servers id contracts handlers
 
--- * Record-Based Clients
-
 myClientSettings = do
     manager <- HC.newManager HC.defaultManagerSettings
     pure ClientSettings { manager, baseUrl = "http://localhost:8080" }
@@ -227,22 +195,15 @@ runRecordCalcClient = do
         Right (Success resData)   -> resData.body >>= print
         Right (DivByZero resData) -> resData.body >>= print
 
--- * Record-Based Links
-
 myLinks = links contracts
 
 calcURI = myLinks.calc.build (CalcArgs { operator = Add, x = 3, y = 4 }) []
-
--- * Record-Based OpenAPI (all routes)
 
 myOpenApi = openApi contracts
 
 printMyOpenApi :: IO ()
 printMyOpenApi = LBS8.putStrLn (Aeson.encode myOpenApi)
 
--- * Transformer: Per-Endpoint Monadic Contexts
-
--- | A minimal, hand-rolled Reader, using nothing beyond @base@.
 newtype AppM a = AppM (Text -> IO a)
 
 instance Functor AppM where
